@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Runtime data (recreated automatically)
+app.db
+backend/app.db
+
+# Logs
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
