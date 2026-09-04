@@ -1,9 +1,9 @@
-import io
 import json
 import logging
 import os
 import tempfile
 import uuid
+from collections.abc import Iterator
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -414,6 +414,13 @@ def generate(
     return GenerateResponse(code=code)
 
 
+def _csv_chunks(df: pd.DataFrame, chunk_rows: int = 50000) -> Iterator[str]:
+    """Yield a CSV in small pieces so downloads never buffer the whole file."""
+    yield df.iloc[0:0].to_csv(index=False)
+    for start in range(0, len(df), chunk_rows):
+        yield df.iloc[start : start + chunk_rows].to_csv(index=False, header=False)
+
+
 @app.get("/download/{session_id}")
 def download(
     session_id: str,
@@ -421,11 +428,9 @@ def download(
 ) -> StreamingResponse:
     evict_old_sessions()
     df: pd.DataFrame = get_result(_storage_key(x_api_key, session_id))
-    csv_text: str = df.to_csv(index=False)
-    stream: io.StringIO = io.StringIO(csv_text)
     logger.info("Download result for session %s shape %s", session_id, df.shape)
     return StreamingResponse(
-        stream,
+        _csv_chunks(df),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=cleaned_data.csv"},
     )

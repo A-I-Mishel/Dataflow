@@ -39,7 +39,10 @@ def _is_expired(stored_at: datetime) -> bool:
 
 
 def store_session(session_id: str, df: pd.DataFrame) -> None:
-    sessions[session_id] = (datetime.now(), df.copy(deep=True))
+    # Stored by reference (no copy): readers must go through get_session,
+    # which returns a deep copy, and execute_pipeline copies its input, so
+    # the stored frame is never mutated. This halves peak RAM on big files.
+    sessions[session_id] = (datetime.now(), df)
 
 
 def get_session(session_id: str) -> pd.DataFrame:
@@ -54,7 +57,9 @@ def get_session(session_id: str) -> pd.DataFrame:
 
 
 def store_result(session_id: str, df: pd.DataFrame) -> None:
-    results[session_id] = (datetime.now(), df.copy(deep=True))
+    # Same no-copy contract as store_session: get_result returns a copy
+    # and no caller mutates the stored frame afterwards.
+    results[session_id] = (datetime.now(), df)
 
 
 def get_result(session_id: str) -> pd.DataFrame:
