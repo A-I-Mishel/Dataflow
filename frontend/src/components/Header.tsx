@@ -21,6 +21,9 @@ import SaveLoadModal from './SaveLoadModal';
 
 const REQUIREMENTS_TXT = 'pandas\nnumpy\nscikit-learn\n';
 
+// Must stay in sync with backend MAX_UPLOAD_SIZE_BYTES.
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+
 function readmeText(): string {
   return [
     'DataFlow Cleaner export bundle',
@@ -86,6 +89,10 @@ export default function Header() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('File too large. Maximum 200MB.');
+      return;
+    }
     setIsUploading(true);
     setUploadProgress(0);
     uploadFile(file, (percent) => setUploadProgress(percent))
@@ -202,11 +209,16 @@ export default function Header() {
             <span className="hidden md:inline">Upload CSV</span>
           </button>
         {uploadProgress > 0 && uploadProgress < 100 && (
-          <div className="absolute top-full left-0 right-0 mt-1 h-1 rounded bg-slate-700">
-            <div
-              className="h-1 rounded bg-indigo-500 transition-all"
-              style={{ width: `${uploadProgress}%` }}
-            />
+          <div className="absolute top-full left-0 right-0 mt-1">
+            <div className="h-1 rounded bg-slate-700">
+              <div
+                className="h-1 rounded bg-indigo-500 transition-all"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <p className="mt-0.5 text-center text-[11px] text-slate-400">
+              {uploadProgress}%
+            </p>
           </div>
         )}
         </div>

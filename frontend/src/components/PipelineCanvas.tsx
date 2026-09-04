@@ -45,7 +45,11 @@ function minimapNodeColor(node: { type?: string }): string {
   return '#64748b';
 }
 
-export default function PipelineCanvas() {
+export default function PipelineCanvas({
+  onRequestPalette,
+}: {
+  onRequestPalette?: () => void;
+}) {
   const nodes = usePipelineStore((state) => state.nodes);
   const edges = usePipelineStore((state) => state.edges);
   const onNodesChangeAction = usePipelineStore((state) => state.onNodesChange);
@@ -114,8 +118,18 @@ export default function PipelineCanvas() {
     [addNode],
   );
 
+  const handleDoubleClick = useCallback((): void => {
+    // On touch screens double-tap is the fastest way to add a node:
+    // open the palette so the next tap drops a node onto the canvas.
+    // (Pinch-to-zoom is handled natively by React Flow via zoomOnPinch,
+    // and connection handles are enlarged for coarse pointers in index.css.)
+    if (isMobile) {
+      onRequestPalette?.();
+    }
+  }, [isMobile, onRequestPalette]);
+
   return (
-    <div ref={wrapperRef} className="absolute inset-0">
+    <div ref={wrapperRef} className="absolute inset-0" onDoubleClick={handleDoubleClick}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -127,6 +141,9 @@ export default function PipelineCanvas() {
         onPaneClick={() => setSelectedNodeId(null)}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
+        zoomOnPinch={true}
+        minZoom={0.2}
+        maxZoom={4}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -151,7 +168,9 @@ export default function PipelineCanvas() {
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
             <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-700 rounded-2xl px-8 py-6 text-center">
-              <p className="text-slate-400 text-lg mb-2">Drag a node from the palette to start</p>
+              <p className="text-slate-400 text-lg mb-2">
+                Drag or tap a node from the palette to start
+              </p>
               <p className="text-slate-600 text-sm">
                 Connect nodes with arrows to build your pipeline
               </p>

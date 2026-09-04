@@ -65,3 +65,53 @@ def execute_pipeline(
             ) from exc
         current = new_df
     return current
+
+
+def execute_pipeline_large_file(
+    file_path: str,
+    nodes: List[PipelineNode],
+    edges: List[Dict[str, str]],
+    chunk_size: int = 10000,
+    encoding: str = "utf-8",
+) -> pd.DataFrame:
+    """Execute a pipeline over a CSV that is too large to load at once.
+
+    The file is streamed in ``chunk_size``-row pieces and each piece runs
+    through :func:`execute_pipeline`; results are concatenated at the end.
+
+    Note: transforms with global state (normalize statistics, categorical
+    vocabularies, cross-chunk sort order) are computed per chunk, so results
+    on large files are approximate. Row-local transforms (drop-na, fill-na,
+    drop-column, rename-column, filter-rows) are exact.
+    """
+    # Validate the DAG once up front so a bad pipeline fails fast instead
+    # of after partially streaming a 200MB file.
+    sort_nodes(nodes, edges)
+
+    try:
+        chunk_iter = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Uploaded file no longer available") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed reading CSV: {exc}") from exc
+
+    result_chunks: List[pd.DataFrame] = []
+    try:
+        for chunk_df in chunk_iter:
+            chunk_df.columns = [str(c) for c in chunk_df.columns]
+            result_chunks.append(execute_pipeline(chunk_df, nodes, edges))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed processing CSV chunk: {exc}") from exc
+
+    if not result_chunks:
+        try:
+            header_df: pd.DataFrame = pd.read_csv(file_path, nrows=0, encoding=encoding)
+            header_df.columns = [str(c) for c in header_df.columns]
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed reading CSV: {exc}") from exc
+        return execute_pipeline(header_df, nodes, edges)
+    if len(result_chunks) == 1:
+        return result_chunks[0]
+    return pd.concat(result_chunks, ignore_index=True)

@@ -2,8 +2,9 @@ import io
 import json
 import logging
 import os
+import tempfile
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 import crud
 from database import Base, engine, get_db
-from engine import execute_pipeline
+from engine import execute_pipeline, execute_pipeline_large_file
 from generator import generate_script
 from models import (
     ExecuteRequest,
@@ -27,9 +28,13 @@ from models import (
 from models_db import SavedPipeline
 from profiler import profile_dataframe
 from session_store import (
+    discard_large_session,
     evict_old_sessions,
+    get_large_session,
     get_result,
     get_session,
+    is_large_session,
+    store_large_session,
     store_result,
     store_session,
 )
@@ -40,8 +45,14 @@ Base.metadata.create_all(bind=engine)
 
 logger = logging.getLogger(__name__)
 
-MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024
+MAX_UPLOAD_SIZE_BYTES: int = 200 * 1024 * 1024
 UPLOAD_CHUNK_SIZE_BYTES: int = 1024 * 1024
+# Uploads at or below this size are parsed fully into memory (previous
+# behaviour). Larger uploads stay on disk and are processed in chunks.
+LARGE_FILE_THRESHOLD_BYTES: int = 50 * 1024 * 1024
+PREVIEW_ROWS: int = 1000
+LARGE_SCAN_CHUNK_ROWS: int = 20000
+EXEC_CHUNK_ROWS: int = 10000
 
 
 class ProfileRequest(BaseModel):
@@ -142,6 +153,138 @@ def _storage_key(api_key: Optional[str], session_id: str) -> str:
     return f"{namespace}:{session_id}"
 
 
+def _unlink_upload_tmp(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _detect_csv_encoding(path: str) -> str:
+    try:
+        pd.read_csv(path, nrows=5)
+        return "utf-8"
+    except UnicodeDecodeError:
+        return "latin-1"
+    except Exception:
+        return "utf-8"
+
+
+def _read_preview_df(path: str, encoding: str) -> pd.DataFrame:
+    try:
+        df: pd.DataFrame = pd.read_csv(path, nrows=PREVIEW_ROWS, encoding=encoding)
+    except pd.errors.EmptyDataError as exc:
+        raise HTTPException(status_code=400, detail="CSV is empty or invalid") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
+    try:
+        df.columns = [str(c) for c in df.columns]
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV headers: {exc}") from exc
+    return df
+
+
+def _scan_large_file(path: str, encoding: str) -> Tuple[int, Dict[str, int]]:
+    """Single pass over a large CSV counting rows and per-column missing values."""
+    total_rows: int = 0
+    missing: Dict[str, int] = {}
+    try:
+        for chunk_df in pd.read_csv(path, chunksize=LARGE_SCAN_CHUNK_ROWS, encoding=encoding):
+            total_rows += int(chunk_df.shape[0])
+            for col in chunk_df.columns:
+                missing[str(col)] = missing.get(str(col), 0) + int(chunk_df[col].isna().sum())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed scanning CSV: {exc}") from exc
+    return total_rows, missing
+
+
+def _log_session_meta(
+    db: Session, session_id: str, filename: Optional[str], row_count: int, columns: List[str]
+) -> None:
+    try:
+        crud.create_session_meta(db, session_id, filename or "upload.csv", row_count, columns)
+    except Exception as exc:
+        logger.warning("Session metadata logging failed: %s", exc)
+
+
+def _handle_small_upload(
+    tmp_path: str,
+    key: str,
+    session_id: str,
+    filename: Optional[str],
+    db: Session,
+) -> UploadResponse:
+    try:
+        df: pd.DataFrame
+        try:
+            df = pd.read_csv(tmp_path)
+        except UnicodeDecodeError:
+            try:
+                df = pd.read_csv(tmp_path, encoding="latin-1")
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
+        except pd.errors.EmptyDataError as exc:
+            raise HTTPException(status_code=400, detail="CSV is empty or invalid") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
+
+        try:
+            df.columns = [str(c) for c in df.columns]
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid CSV headers: {exc}") from exc
+    finally:
+        _unlink_upload_tmp(tmp_path)
+
+    store_session(key, df)
+    logger.info("Stored session %s with shape %s", session_id, df.shape)
+    _log_session_meta(db, session_id, filename, int(df.shape[0]), [str(c) for c in df.columns.tolist()])
+
+    return UploadResponse(
+        session_id=session_id,
+        columns=[str(c) for c in df.columns.tolist()],
+        dtypes=_dtypes_dict(df),
+        row_count=int(df.shape[0]),
+        preview=_sanitize_records(df, 5),
+        missing_values=_missing_dict(df),
+    )
+
+
+def _handle_large_upload(
+    tmp_path: str,
+    key: str,
+    session_id: str,
+    filename: Optional[str],
+    db: Session,
+) -> UploadResponse:
+    try:
+        encoding: str = _detect_csv_encoding(tmp_path)
+        preview_df: pd.DataFrame = _read_preview_df(tmp_path, encoding)
+        total_rows, missing = _scan_large_file(tmp_path, encoding)
+        store_large_session(key, tmp_path, preview_df, total_rows, encoding)
+    except HTTPException:
+        _unlink_upload_tmp(tmp_path)
+        raise
+    except Exception as exc:
+        _unlink_upload_tmp(tmp_path)
+        raise HTTPException(status_code=400, detail=f"Failed processing CSV: {exc}") from exc
+
+    columns: List[str] = [str(c) for c in preview_df.columns.tolist()]
+    logger.info(
+        "Stored large-file session %s with %d rows at %s", session_id, total_rows, tmp_path
+    )
+    _log_session_meta(db, session_id, filename, total_rows, columns)
+
+    return UploadResponse(
+        session_id=session_id,
+        columns=columns,
+        dtypes=_dtypes_dict(preview_df),
+        row_count=total_rows,
+        preview=_sanitize_records(preview_df, 5),
+        # Missing-value counts are exact (computed in the scan pass above).
+        missing_values={col: missing.get(col, 0) for col in columns},
+    )
+
+
 @app.post("/upload", response_model=UploadResponse)
 async def upload_csv(
     request: Request,
@@ -156,27 +299,37 @@ async def upload_csv(
     if content_length:
         try:
             if int(content_length) > MAX_UPLOAD_SIZE_BYTES:
-                raise HTTPException(status_code=413, detail="Upload exceeds 50MB limit")
+                raise HTTPException(status_code=413, detail="File too large. Maximum 200MB.")
         except ValueError:
             pass
 
     session_id: str = x_session_id.strip() if x_session_id and x_session_id.strip() else uuid.uuid4().hex
+    key: str = _storage_key(x_api_key, session_id)
+    # A retried upload under the same session id must not orphan a temp file.
+    discard_large_session(key)
 
+    # Stream to a temp file instead of buffering the whole upload in RAM,
+    # so 200MB files cannot exhaust server memory.
+    tmp_path: Optional[str] = None
+    total_size: int = 0
     try:
-        chunks: List[bytes] = []
-        total_size: int = 0
-        while True:
-            chunk: bytes = await file.read(UPLOAD_CHUNK_SIZE_BYTES)
-            if not chunk:
-                break
-            total_size += len(chunk)
-            if total_size > MAX_UPLOAD_SIZE_BYTES:
-                raise HTTPException(status_code=413, detail="Upload exceeds 50MB limit")
-            chunks.append(chunk)
-        contents: bytes = b"".join(chunks)
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as tmp:
+            tmp_path = tmp.name
+            while True:
+                chunk: bytes = await file.read(UPLOAD_CHUNK_SIZE_BYTES)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE_BYTES:
+                    raise HTTPException(status_code=413, detail="File too large. Maximum 200MB.")
+                tmp.write(chunk)
     except HTTPException:
+        if tmp_path is not None:
+            _unlink_upload_tmp(tmp_path)
         raise
     except Exception as exc:
+        if tmp_path is not None:
+            _unlink_upload_tmp(tmp_path)
         raise HTTPException(status_code=400, detail=f"Failed reading upload: {exc}") from exc
     finally:
         try:
@@ -184,48 +337,14 @@ async def upload_csv(
         except Exception:
             pass
 
-    if not contents.strip():
+    assert tmp_path is not None
+    if total_size == 0:
+        _unlink_upload_tmp(tmp_path)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    df: pd.DataFrame
-    try:
-        df = pd.read_csv(io.BytesIO(contents))
-    except UnicodeDecodeError:
-        try:
-            df = pd.read_csv(io.BytesIO(contents), encoding="latin-1")
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
-    except pd.errors.EmptyDataError as exc:
-        raise HTTPException(status_code=400, detail="CSV is empty or invalid") from exc
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
-
-    try:
-        df.columns = [str(c) for c in df.columns]
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid CSV headers: {exc}") from exc
-
-    store_session(_storage_key(x_api_key, session_id), df)
-    logger.info("Stored session %s with shape %s", session_id, df.shape)
-    try:
-        crud.create_session_meta(
-            db,
-            session_id,
-            file.filename or "upload.csv",
-            int(df.shape[0]),
-            [str(c) for c in df.columns.tolist()],
-        )
-    except Exception as exc:
-        logger.warning("Session metadata logging failed: %s", exc)
-
-    return UploadResponse(
-        session_id=session_id,
-        columns=[str(c) for c in df.columns.tolist()],
-        dtypes=_dtypes_dict(df),
-        row_count=int(df.shape[0]),
-        preview=_sanitize_records(df, 5),
-        missing_values=_missing_dict(df),
-    )
+    if total_size <= LARGE_FILE_THRESHOLD_BYTES:
+        return _handle_small_upload(tmp_path, key, session_id, file.filename, db)
+    return _handle_large_upload(tmp_path, key, session_id, file.filename, db)
 
 
 @app.post("/execute", response_model=ExecuteResponse)
@@ -235,9 +354,18 @@ def execute(
     db: Session = Depends(get_db),
 ) -> ExecuteResponse:
     evict_old_sessions()
-    original: pd.DataFrame = get_session(_storage_key(x_api_key, request.session_id))
-    result: pd.DataFrame = execute_pipeline(original, request.nodes, request.edges)
-    store_result(_storage_key(x_api_key, request.session_id), result)
+    key: str = _storage_key(x_api_key, request.session_id)
+    result: pd.DataFrame
+    if is_large_session(key):
+        large = get_large_session(key)
+        result = execute_pipeline_large_file(
+            large.path, request.nodes, request.edges,
+            chunk_size=EXEC_CHUNK_ROWS, encoding=large.encoding,
+        )
+    else:
+        original: pd.DataFrame = get_session(key)
+        result = execute_pipeline(original, request.nodes, request.edges)
+    store_result(key, result)
     try:
         crud.log_execution(db, request.session_id, "custom", int(result.shape[0]))
     except Exception as exc:
@@ -260,8 +388,16 @@ def profile(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> ProfileResponse:
     evict_old_sessions()
-    df: pd.DataFrame = get_session(_storage_key(x_api_key, request.session_id))
-    profile_dict: Dict[str, Any] = profile_dataframe(df)
+    key: str = _storage_key(x_api_key, request.session_id)
+    if is_large_session(key):
+        # Profiling 200MB row-by-row would OOM; profile the stored preview
+        # but report the true row count. Column stats are estimates.
+        large = get_large_session(key)
+        profile_dict = profile_dataframe(large.preview_df)
+        profile_dict["shape"] = [large.total_rows, int(large.preview_df.shape[1])]
+        return ProfileResponse(**profile_dict)
+    df: pd.DataFrame = get_session(key)
+    profile_dict = profile_dataframe(df)
     return ProfileResponse(**profile_dict)
 
 
@@ -271,7 +407,9 @@ def generate(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> GenerateResponse:
     evict_old_sessions()
-    get_session(_storage_key(x_api_key, request.session_id))
+    key: str = _storage_key(x_api_key, request.session_id)
+    if not is_large_session(key):
+        get_session(key)
     code: str = generate_script(request.nodes, request.edges, filename="data.csv")
     return GenerateResponse(code=code)
 
