@@ -9,3 +9,14 @@ services:
       - key: FRONTEND_URLS
         # Replace with your Vercel URL after deploying the frontend.
         value: https://dataflow-cleaner.vercel.app
+      # Uncomment the DATABASE_URL block below together with the database
+      # below to keep saved pipelines across sleeps (free Postgres expires
+      # after 90 days; without it the app uses SQLite on ephemeral disk).
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: dataflow-db
+      #     property: connectionString
+
+#databases:
+#  - name: dataflow-db
+#    plan: free

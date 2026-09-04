@@ -50,6 +50,12 @@ and SQLite need a persistent process):
    `https://dataflow-cleaner.vercel.app`, then deploy.
 4. Note the backend URL, e.g. `https://dataflow-cleaner-api.onrender.com`.
 
+Render free-tier notes: the service sleeps after ~15 min idle (first
+request takes ~50s to wake it), and `app.db` lives on ephemeral disk, so
+uploads and saved pipelines reset on sleep/redeploy. For durable template
+storage, uncomment the `dataflow-db` block in `render.yaml` to attach free
+Postgres — the API picks up `DATABASE_URL` automatically, no code changes.
+
 **Frontend → Vercel:**
 
 1. Import the same GitHub repo.
