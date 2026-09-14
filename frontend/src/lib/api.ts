@@ -8,7 +8,10 @@ import type {
 } from '../types';
 
 const API_BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000';
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (typeof window !== 'undefined' && window.location.hostname.endsWith('vercel.app')
+    ? 'https://dataflow-cleaner-api.onrender.com'
+    : 'http://localhost:8000');
 
 const API_KEY_STORAGE = 'dataflow-api-key';
 

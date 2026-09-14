@@ -30,8 +30,8 @@ function toMessage(error: unknown, fallback: string): string {
 export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
   const [tab, setTab] = useState<ModalTab>('save');
   const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const nodes = usePipelineStore((state) => state.nodes);
-  const edges = usePipelineStore((state) => state.edges);
   const savedPipelines = usePipelineStore((state) => state.savedPipelines);
   const setSavedPipelines = usePipelineStore((state) => state.setSavedPipelines);
   const setCanvas = usePipelineStore((state) => state.setCanvas);
@@ -64,17 +64,22 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
 
   const handleSave = (): void => {
     const trimmed = name.trim();
-    if (trimmed === '' || nodes.length === 0) return;
-    savePipeline(trimmed, nodes, edges)
+    // Read fresh nodes/edges at click time to avoid stale closure if modal was open while canvas changed
+    const { nodes: freshNodes, edges: freshEdges } = usePipelineStore.getState();
+    if (trimmed === '' || freshNodes.length === 0 || isSaving) return;
+    setIsSaving(true);
+    savePipeline(trimmed, freshNodes, freshEdges)
       .then(() => getPipelines())
       .then((list) => {
         setSavedPipelines(list);
         setName('');
+        setTab('load');
         toast.success(`Saved pipeline "${trimmed}"`);
       })
       .catch((error: unknown) => {
         toast.error(toMessage(error, 'Save failed'));
-      });
+      })
+      .finally(() => setIsSaving(false));
   };
 
   const handleLoad = (id: string, pipelineName: string): void => {
@@ -157,14 +162,21 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={name.trim() === '' || nodes.length === 0}
-              className={`w-full rounded-full px-4 py-3 text-sm font-extrabold transition-all ${
-                name.trim() === '' || nodes.length === 0
+              disabled={name.trim() === '' || nodes.length === 0 || isSaving}
+              className={`w-full rounded-full px-4 py-3 text-sm font-extrabold transition-all inline-flex items-center justify-center gap-2 ${
+                name.trim() === '' || nodes.length === 0 || isSaving
                   ? 'bg-elevated text-ink3 cursor-not-allowed border border-line'
                   : 'bg-gradient-to-r from-accent to-accent2 text-white shadow-glow hover:shadow-glow-lg hover:scale-[1.01] active:scale-[0.99]'
               }`}
             >
-              Save Current Pipeline
+              {isSaving ? (
+                <>
+                  <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save Current Pipeline'
+              )}
             </button>
             {nodes.length === 0 && <p className="text-xs text-center text-amber-500 font-medium">Add at least one node to save</p>}
           </div>
