@@ -3,6 +3,8 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Table } from 'lucide-react';
 import { useMemo } from 'react';
 
+import { usePipelineStore } from '../stores/pipelineStore';
+import type { Theme } from '../stores/pipelineStore';
 import EmptyState from './EmptyState';
 
 interface DataTableProps {
@@ -11,33 +13,36 @@ interface DataTableProps {
   dtypes: Record<string, string>;
 }
 
-function dtypeBadgeClass(dtype: string): string {
+function dtypeBadgeClass(dtype: string, theme: Theme): string {
+  const dark = theme !== 'light';
   const lower = dtype.toLowerCase();
   if (lower.includes('int64') || lower.includes('float64')) {
-    return 'bg-blue-500/20 text-blue-300';
+    return dark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/15 text-blue-700';
   }
   if (lower.includes('object')) {
-    return 'bg-green-500/20 text-green-300';
+    return dark ? 'bg-green-500/20 text-green-300' : 'bg-green-500/15 text-green-700';
   }
   if (lower.includes('datetime64')) {
-    return 'bg-purple-500/20 text-purple-300';
+    return dark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-500/15 text-purple-700';
   }
-  return 'bg-slate-500/20 text-slate-300';
+  return dark ? 'bg-slate-500/20 text-slate-300' : 'bg-slate-500/15 text-slate-600';
 }
 
 const MAX_ROWS = 100;
 
 export default function DataTable({ data, columns, dtypes }: DataTableProps) {
+  const theme = usePipelineStore((state) => state.theme);
   const tableColumns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () =>
       columns.map((column) => ({
         id: column,
         header: () => (
           <span>
-            <span className="text-slate-200 font-medium">{column}</span>{' '}
+            <span className="text-ink font-medium">{column}</span>{' '}
             <span
               className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${dtypeBadgeClass(
                 dtypes[column] ?? '',
+                theme,
               )}`}
             >
               {dtypes[column] ?? 'unknown'}
@@ -47,7 +52,7 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
         accessorFn: (row) => row[column],
         cell: (info) => String(info.getValue() ?? ''),
       })),
-    [columns, dtypes],
+    [columns, dtypes, theme],
   );
 
   const visibleData = useMemo(() => data.slice(0, MAX_ROWS), [data]);
@@ -70,11 +75,11 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
 
   return (
     <div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+      <div className="overflow-x-auto rounded-lg border border-line">
+        <table className="w-full text-sm border-collapse bg-panel">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-slate-800 text-slate-300 font-medium">
+              <tr key={headerGroup.id} className="bg-card text-ink2 font-medium">
                 {headerGroup.headers.map((header) => (
                   <th key={header.id} className="text-left px-3 py-2">
                     {header.isPlaceholder
@@ -86,10 +91,15 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+            {table.getRowModel().rows.map((row, rowIndex) => (
+              <tr
+                key={row.id}
+                className={`border-b border-linesoft last:border-b-0 hover:bg-card ${
+                  rowIndex % 2 === 1 ? 'bg-canvas/60' : ''
+                }`}
+              >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2 text-slate-300">
+                  <td key={cell.id} className="px-3 py-2 text-ink2">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -99,7 +109,7 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
         </table>
       </div>
       {data.length > MAX_ROWS && (
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-ink3 mt-2">
           Showing first {MAX_ROWS} of {data.length} rows
         </p>
       )}

@@ -58,6 +58,7 @@ export default function PipelineCanvas({
   const addNode = usePipelineStore((state) => state.addNode);
   const setSelectedNodeId = usePipelineStore((state) => state.setSelectedNodeId);
   const isLoading = usePipelineStore((state) => state.isLoading);
+  const theme = usePipelineStore((state) => state.theme);
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -145,34 +146,36 @@ export default function PipelineCanvas({
         zoomOnPinch={true}
         minZoom={0.2}
         maxZoom={4}
+        defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
+        colorMode={theme}
       >
         <Background
           variant={BackgroundVariant.Dots}
           gap={12}
           size={1}
-          color="#1e293b"
-          className="bg-slate-950"
+          color={theme === 'light' ? '#94a3b8' : '#1e293b'}
+          className="bg-canvas"
         />
         <Controls
           showZoom={true}
           showFitView={true}
           showInteractive={true}
-          className="bg-slate-800 text-slate-200 border border-slate-700"
+          className="rounded-lg border border-line shadow-md"
         />
         {!isMobile && (
           <MiniMap
             nodeColor={minimapNodeColor}
-            maskColor="rgba(15, 23, 42, 0.8)"
-            className="bg-slate-900 border border-slate-700 rounded-lg"
+            maskColor={theme === 'light' ? 'rgba(241, 245, 249, 0.8)' : 'rgba(15, 23, 42, 0.8)'}
+            className="rounded-lg border border-line shadow-md"
           />
         )}
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-            <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-700 rounded-2xl px-8 py-6 text-center">
-              <p className="text-slate-400 text-lg mb-2">
+            <div className="bg-panel/90 backdrop-blur-sm border border-line rounded-2xl px-8 py-6 text-center shadow-xl">
+              <p className="text-ink2 text-lg mb-2">
                 Drag or tap a node from the palette to start
               </p>
-              <p className="text-slate-600 text-sm">
+              <p className="text-ink3 text-sm">
                 Connect nodes with arrows to build your pipeline
               </p>
             </div>
@@ -180,9 +183,9 @@ export default function PipelineCanvas({
         )}
       </ReactFlow>
       {isLoading && (
-        <div className="absolute inset-0 bg-slate-950/50 flex flex-col items-center justify-center gap-3 z-10">
-          <Loader2 size={32} className="text-indigo-400 animate-spin" />
-          <p className="text-sm text-slate-300">Processing pipeline...</p>
+        <div className="absolute inset-0 bg-canvas/60 backdrop-blur-[1px] flex flex-col items-center justify-center gap-3 z-10">
+          <Loader2 size={32} className="text-indigo-500 dark:text-indigo-400 animate-spin" />
+          <p className="text-sm text-ink2">Processing pipeline...</p>
         </div>
       )}
     </div>

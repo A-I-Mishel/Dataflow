@@ -30,7 +30,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export default function App() {
   const { run } = useRunPipeline();
   const isMobile = useMediaQuery('(max-width: 1023px)');
+  const theme = usePipelineStore((state) => state.theme);
   const [mobileView, setMobileView] = useState<MobileView>('canvas');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', theme === 'light');
+    document.documentElement.classList.toggle('dark', theme !== 'light');
+  }, [theme]);
 
   useEffect(() => {
     usePipelineStore.getState().checkSession();
@@ -74,7 +80,7 @@ export default function App() {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
+      <div className="flex flex-col min-h-screen bg-canvas text-ink">
         <Header />
         <div className="flex-1 pb-16">
           {mobileView === 'canvas' && (
@@ -96,7 +102,7 @@ export default function App() {
             </div>
           )}
         </div>
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-slate-900 border-t border-slate-800 flex flex-row z-20">
+        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-panel border-t border-linesoft flex flex-row z-20">
           {MOBILE_VIEWS.map((view) => {
             const Icon = view.icon;
             const isActive = mobileView === view.key;
@@ -108,7 +114,7 @@ export default function App() {
                 aria-label={`Show ${view.label}`}
                 aria-pressed={isActive}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 text-xs font-medium ${
-                  isActive ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'
+                  isActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-ink3 hover:text-ink2'
                 }`}
               >
                 <Icon size={20} />
@@ -122,12 +128,12 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen lg:h-screen bg-slate-950 text-slate-100">
+    <div className="flex flex-col min-h-screen lg:h-screen bg-canvas text-ink">
       <Header />
       <div className="flex flex-1 flex-col lg:flex-row lg:overflow-hidden">
-        <aside className="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900 flex flex-col shrink-0">
-          <div className="p-3 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+        <aside className="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-linesoft bg-panel flex flex-col shrink-0">
+          <div className="p-3 border-b border-linesoft">
+            <h2 className="text-sm font-semibold text-ink2 uppercase tracking-wider">
               Nodes
             </h2>
           </div>
@@ -136,13 +142,13 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="relative bg-slate-950 h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink">
+        <main className="relative bg-canvas h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink">
           <PipelineCanvas />
         </main>
 
-        <aside className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900 flex flex-col shrink-0">
-          <div className="p-3 border-b border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+        <aside className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-linesoft bg-panel flex flex-col shrink-0">
+          <div className="p-3 border-b border-linesoft">
+            <h2 className="text-sm font-semibold text-ink2 uppercase tracking-wider">
               Output
             </h2>
           </div>

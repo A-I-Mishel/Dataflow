@@ -1,4 +1,3 @@
-import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Type } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -7,6 +6,7 @@ import { useMemo } from 'react';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
+import NodeShell, { addBtnClass, fieldInput, hintClass, removeBtnClass } from './NodeShell';
 
 export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
@@ -65,23 +65,16 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   };
 
   return (
-    <div
-      className={`w-64 rounded-xl border shadow-lg transition-all ${
-        selected ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-slate-700'
-      } ${errors.length > 0 ? 'ring-2 ring-rose-500 border-rose-500' : ''} bg-slate-800`}
+    <NodeShell
+      title={label}
+      icon={Type}
+      tone="blue"
+      selected={selected}
+      errors={errors}
+      configured={entries.length > 0}
     >
-      <div className="flex items-center gap-2 rounded-t-xl px-3 py-2 border-b border-slate-700 bg-blue-500/20">
-        <Type size={16} className="text-blue-400" />
-        <span className="text-sm font-semibold text-slate-100">{label}</span>
-      </div>
-      {errors.length > 0 && (
-        <div className="px-3 py-1.5 bg-rose-500/20 border-b border-rose-500/30">
-          <p className="text-xs text-rose-300 font-medium">{errors[0]}</p>
-        </div>
-      )}
-      <div className="p-3 space-y-3">
         {entries.length === 0 && (
-          <p className="text-slate-500 text-xs">No mappings defined</p>
+            <p className={hintClass}>No mappings defined</p>
         )}
         {entries.map(([oldName, newName]) => (
           <div key={oldName} className="space-y-1">
@@ -91,20 +84,20 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
                 value={oldName}
                 onChange={(event) => handleOldNameChange(event, oldName)}
                 placeholder="Old name"
-                className="w-1/2 rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className={`${fieldInput} w-1/2`}
               />
               <input
                 type="text"
                 value={newName}
                 onChange={(event) => handleNewNameChange(event, oldName)}
                 placeholder="New name"
-                className="w-1/2 rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                className={`${fieldInput} w-1/2`}
               />
             </div>
             <button
               type="button"
               onClick={() => handleRemoveMapping(oldName)}
-              className="text-xs text-slate-400 hover:text-red-400"
+              className={removeBtnClass}
             >
               Remove
             </button>
@@ -113,21 +106,10 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
         <button
           type="button"
           onClick={handleAddMapping}
-          className="w-full rounded-md bg-slate-700 hover:bg-slate-600 px-2 py-1.5 text-xs font-medium text-slate-200"
+          className={addBtnClass}
         >
           Add Mapping
         </button>
-      </div>
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-slate-400 !w-3 !h-3 !-top-1.5"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-slate-400 !w-3 !h-3 !-bottom-1.5"
-      />
-    </div>
+    </NodeShell>
   );
 }

@@ -1,4 +1,3 @@
-import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Filter } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -7,15 +6,19 @@ import { useMemo } from 'react';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
+import NodeShell, {
+  addBtnClass,
+  fieldLabelClass,
+  hintClass,
+  inputClass,
+  removeBtnClass,
+} from './NodeShell';
 
 type Condition = NonNullable<NodeConfig['conditions']>[number];
 
 const OPERATORS = ['>', '<', '>=', '<=', '==', '!=', 'contains', 'startswith', 'endswith'];
 
 const LOGIC_OPTIONS = ['AND', 'OR'] as const;
-
-const inputClass =
-  'w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500';
 
 function stripFirstLogic(conditions: Condition[]): Condition[] {
   if (conditions.length === 0) return conditions;
@@ -96,28 +99,21 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
   };
 
   return (
-    <div
-      className={`w-64 rounded-xl border shadow-lg transition-all ${
-        selected ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-slate-700'
-      } ${errors.length > 0 ? 'ring-2 ring-rose-500 border-rose-500' : ''} bg-slate-800`}
+    <NodeShell
+      title={label}
+      icon={Filter}
+      tone="purple"
+      selected={selected}
+      errors={errors}
+      configured={conditions.length > 0}
     >
-      <div className="flex items-center gap-2 rounded-t-xl px-3 py-2 border-b border-slate-700 bg-purple-500/20">
-        <Filter size={16} className="text-purple-400" />
-        <span className="text-sm font-semibold text-slate-100">{label}</span>
-      </div>
-      {errors.length > 0 && (
-        <div className="px-3 py-1.5 bg-rose-500/20 border-b border-rose-500/30">
-          <p className="text-xs text-rose-300 font-medium">{errors[0]}</p>
-        </div>
-      )}
-      <div className="p-3 space-y-3">
         {conditions.length === 0 && (
-          <p className="text-slate-500 text-xs">No conditions defined</p>
+            <p className={hintClass}>No conditions defined</p>
         )}
         {conditions.map((condition, index) => (
-          <div key={index} className="space-y-2 rounded-md border border-slate-700 p-2">
+            <div key={index} className="space-y-2 rounded-md border border-line bg-panel p-2">
             <div>
-              <p className="text-xs font-medium text-slate-300 mb-1">Column</p>
+              <p className={fieldLabelClass}>Column</p>
               <select
                 value={condition.column ?? ''}
                 onChange={(event) => handleColumnChange(index, event)}
@@ -132,7 +128,7 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
               </select>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-300 mb-1">Operator</p>
+              <p className={fieldLabelClass}>Operator</p>
               <select
                 value={condition.operator ?? ''}
                 onChange={(event) => handleOperatorChange(index, event)}
@@ -147,7 +143,7 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
               </select>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-300 mb-1">Value</p>
+              <p className={fieldLabelClass}>Value</p>
               <input
                 type="text"
                 value={condition.value ?? ''}
@@ -158,7 +154,7 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
             </div>
             {index > 0 && (
               <div>
-                <p className="text-xs font-medium text-slate-300 mb-1">Logic</p>
+                <p className={fieldLabelClass}>Logic</p>
                 <select
                   value={condition.logic ?? 'AND'}
                   onChange={(event) => handleLogicChange(index, event)}
@@ -175,7 +171,7 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
             <button
               type="button"
               onClick={() => handleRemoveCondition(index)}
-              className="text-xs text-slate-400 hover:text-red-400"
+              className={removeBtnClass}
             >
               Remove
             </button>
@@ -184,21 +180,10 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
         <button
           type="button"
           onClick={handleAddCondition}
-          className="w-full rounded-md bg-slate-700 hover:bg-slate-600 px-2 py-1.5 text-xs font-medium text-slate-200"
+          className={addBtnClass}
         >
           Add Condition
         </button>
-      </div>
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!bg-slate-400 !w-3 !h-3 !-top-1.5"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!bg-slate-400 !w-3 !h-3 !-bottom-1.5"
-      />
-    </div>
+    </NodeShell>
   );
 }

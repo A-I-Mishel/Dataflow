@@ -19,7 +19,10 @@ import type { NodeConfig } from '../types';
 
 export type ActiveTab = 'preview' | 'profile' | 'code';
 
+export type Theme = 'dark' | 'light';
+
 interface PipelineState {
+  theme: Theme;
   nodes: PipelineNode[];
   edges: PipelineEdge[];
   sessionId: string | null;
@@ -42,6 +45,8 @@ interface PipelineState {
   setLoading: (loading: boolean) => void;
   setSelectedNodeId: (id: string | null) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   resetPipeline: () => void;
   checkSession: () => void;
   past: HistorySnapshot[];
@@ -152,6 +157,7 @@ const TEMPLATES: Record<string, { nodes: PipelineNode[]; edges: PipelineEdge[] }
 export const usePipelineStore = create<PipelineState>()(
   persist(
     (set, get) => ({
+  theme: 'dark',
   nodes: [],
   edges: [],
   sessionId: null,
@@ -246,6 +252,19 @@ export const usePipelineStore = create<PipelineState>()(
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
+  setTheme: (theme) => {
+    if (typeof document !== 'undefined') {
+      // Token colors key off .light; a few `dark:` variants key off .dark.
+      document.documentElement.classList.toggle('light', theme === 'light');
+      document.documentElement.classList.toggle('dark', theme !== 'light');
+    }
+    set({ theme });
+  },
+
+  toggleTheme: () => {
+    get().setTheme(get().theme === 'light' ? 'dark' : 'light');
+  },
+
   resetPipeline: () =>
     set((state) => ({
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
@@ -322,6 +341,7 @@ export const usePipelineStore = create<PipelineState>()(
     {
       name: 'dataflow-pipeline',
       partialize: (state) => ({
+        theme: state.theme,
         nodes: state.nodes,
         edges: state.edges,
         sessionId: state.sessionId,

@@ -12,8 +12,17 @@
       rel="stylesheet"
     />
   </head>
-  <body class="bg-slate-950 text-slate-100 antialiased">
+  <body class="bg-canvas text-ink antialiased">
     <div id="root"></div>
+    <script>
+      try {
+        var stored = JSON.parse(localStorage.getItem('dataflow-pipeline') || '{}');
+        if (stored && stored.state && stored.state.theme === 'light') {
+          document.documentElement.classList.add('light');
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

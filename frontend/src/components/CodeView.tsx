@@ -4,12 +4,14 @@ import { Code } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import EmptyState from './EmptyState';
+import { usePipelineStore } from '../stores/pipelineStore';
 
 interface CodeViewProps {
   code: string;
 }
 
 export default function CodeView({ code }: CodeViewProps) {
+  const theme = usePipelineStore((state) => state.theme);
   if (code === '') {
     return (
       <EmptyState
@@ -43,24 +45,24 @@ export default function CodeView({ code }: CodeViewProps) {
         <button
           type="button"
           onClick={handleCopy}
-          className="bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-1.5 text-xs font-medium"
         >
           Copy
         </button>
         <button
           type="button"
           onClick={handleDownload}
-          className="bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-1.5 text-xs font-medium"
         >
           Download .py
         </button>
       </div>
-      <div className="flex-1 min-h-[400px]">
+      <div className="flex-1 min-h-[400px] rounded-lg overflow-hidden border border-line">
         <Editor
           height="100%"
           language="python"
           value={code}
-          theme="vs-dark"
+          theme={theme === 'light' ? 'vs' : 'vs-dark'}
           options={{
             readOnly: true,
             minimap: { enabled: false },

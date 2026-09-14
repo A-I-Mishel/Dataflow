@@ -22,11 +22,11 @@ interface PaletteItem {
 }
 
 const CLEANING_BORDER = 'border-blue-500';
-const CLEANING_ICON = 'text-blue-400';
+const CLEANING_ICON = 'text-blue-600 dark:text-blue-400';
 const TRANSFORM_BORDER = 'border-purple-500';
-const TRANSFORM_ICON = 'text-purple-400';
+const TRANSFORM_ICON = 'text-purple-600 dark:text-purple-400';
 const ENCODE_BORDER = 'border-orange-500';
-const ENCODE_ICON = 'text-orange-400';
+const ENCODE_ICON = 'text-orange-600 dark:text-orange-400';
 
 const ITEMS: PaletteItem[] = [
   {
@@ -141,12 +141,12 @@ export default function NodePalette({
               onClick={() => handleAdd(item.type)}
               onKeyDown={(event) => handleKeyDown(event, item.type)}
               title="Drag onto the canvas, or tap to add"
-              className={`flex items-center gap-3 p-3 min-h-[3.5rem] rounded-lg bg-slate-800 hover:bg-slate-750 cursor-grab active:cursor-grabbing transition-colors border-l-4 ${item.borderClass}`}
+              className={`flex items-center gap-3 p-3 min-h-[3.5rem] rounded-lg bg-card hover:bg-btn cursor-grab active:cursor-grabbing transition-colors border border-line border-l-4 shadow-sm ${item.borderClass}`}
             >
               <Icon size={20} className={`${item.iconClass} shrink-0`} />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-200 truncate">{item.label}</p>
-                <p className="text-xs text-slate-500 hidden lg:block">
+                <p className="text-sm font-medium text-ink truncate">{item.label}</p>
+                <p className="text-xs text-ink3 hidden lg:block">
                   {item.description}
                 </p>
               </div>

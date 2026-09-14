@@ -5,9 +5,11 @@ import JSZip from 'jszip';
 import { Download } from 'lucide-react';
 import { LayoutTemplate } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { Moon } from 'lucide-react';
 import { Play } from 'lucide-react';
 import { Redo2 } from 'lucide-react';
 import { Save } from 'lucide-react';
+import { Sun } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
 import { Undo2 } from 'lucide-react';
 import { Upload } from 'lucide-react';
@@ -57,6 +59,8 @@ export default function Header() {
   const undo = usePipelineStore((state) => state.undo);
   const redo = usePipelineStore((state) => state.redo);
   const loadTemplate = usePipelineStore((state) => state.loadTemplate);
+  const theme = usePipelineStore((state) => state.theme);
+  const toggleTheme = usePipelineStore((state) => state.toggleTheme);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -139,10 +143,10 @@ export default function Header() {
   const exportDisabled = !resultData || generatedCode === '' || isExporting;
 
   return (
-    <header className="h-16 bg-slate-900 border-b border-slate-800 flex flex-row items-center justify-between gap-2 px-2 sm:px-4 shrink-0">
+    <header className="h-16 bg-panel border-b border-linesoft flex flex-row items-center justify-between gap-2 px-2 sm:px-4 shrink-0">
       <div className="flex items-center gap-2 min-w-0">
-        <Workflow size={24} className="text-indigo-400 shrink-0" />
-        <span className="truncate text-base sm:text-xl font-bold text-slate-100">
+        <Workflow size={24} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
+        <span className="truncate text-base sm:text-xl font-bold text-ink">
           DataFlow Cleaner
         </span>
       </div>
@@ -152,7 +156,8 @@ export default function Header() {
           type="button"
           onClick={handleRun}
           disabled={runDisabled}
-          className={`bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+          title="Run pipeline (Ctrl+Enter)"
+          className={`bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 shadow-sm ${
             runDisabled ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
@@ -162,7 +167,8 @@ export default function Header() {
         <button
           type="button"
           onClick={handleClear}
-          className="bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
+          title="Clear canvas"
+          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
         >
           <Trash2 size={16} />
           <span className="hidden md:inline">Clear Canvas</span>
@@ -172,7 +178,7 @@ export default function Header() {
           onClick={undo}
           disabled={pastLength === 0}
           title="Undo (Ctrl+Z)"
-          className={`bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-2.5 py-2 text-sm font-medium flex items-center ${
+          className={`bg-btn hover:bg-btnhover text-btnink rounded-lg px-2.5 py-2 text-sm font-medium flex items-center ${
             pastLength === 0 ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
@@ -183,7 +189,7 @@ export default function Header() {
           onClick={redo}
           disabled={futureLength === 0}
           title="Redo (Ctrl+Shift+Z)"
-          className={`bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-2.5 py-2 text-sm font-medium flex items-center ${
+          className={`bg-btn hover:bg-btnhover text-btnink rounded-lg px-2.5 py-2 text-sm font-medium flex items-center ${
             futureLength === 0 ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
@@ -192,12 +198,22 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-2.5 py-2 text-sm font-medium flex items-center"
+        >
+          {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+        </button>
         <div className="relative">
           <button
             type="button"
             onClick={handleUploadClick}
             disabled={isUploading}
-            className={`bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2 ${
+            title="Upload a CSV file (max 200MB)"
+            className={`bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2 ${
               isUploading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
@@ -210,13 +226,13 @@ export default function Header() {
           </button>
         {uploadProgress > 0 && uploadProgress < 100 && (
           <div className="absolute top-full left-0 right-0 mt-1">
-            <div className="h-1 rounded bg-slate-700">
+            <div className="h-1 rounded bg-btn">
               <div
                 className="h-1 rounded bg-indigo-500 transition-all"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>
-            <p className="mt-0.5 text-center text-[11px] text-slate-400">
+            <p className="mt-0.5 text-center text-[11px] text-ink3">
               {uploadProgress}%
             </p>
           </div>
@@ -233,8 +249,9 @@ export default function Header() {
           type="button"
           onClick={handleExport}
           disabled={exportDisabled}
-          className={`bg-slate-700 text-slate-400 rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2 ${
-            exportDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600'
+          title="Download cleaned CSV + Python script bundle"
+          className={`bg-btn text-btnink rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2 ${
+            exportDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-btnhover'
           }`}
         >
           {isExporting ? (
@@ -248,7 +265,8 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setIsTemplatesOpen((open) => !open)}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
+            title="Load a starter template"
+            className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
           >
             <LayoutTemplate size={16} />
             <span className="hidden md:inline">Templates</span>
@@ -261,7 +279,7 @@ export default function Header() {
                 onClick={() => setIsTemplatesOpen(false)}
                 className="fixed inset-0 z-10 cursor-default"
               />
-              <div className="absolute right-0 top-full mt-1 w-64 z-20 rounded-lg border border-slate-700 bg-slate-800 shadow-lg overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 w-64 z-20 rounded-lg border border-line bg-card shadow-xl overflow-hidden">
                 <button
                   type="button"
                   onClick={() => {
@@ -269,10 +287,10 @@ export default function Header() {
                     setIsTemplatesOpen(false);
                     toast.success('Loaded quick-clean template');
                   }}
-                  className="w-full text-left px-4 py-3 hover:bg-slate-700"
+                  className="w-full text-left px-4 py-3 hover:bg-btn"
                 >
-                  <p className="text-sm font-medium text-slate-200">Quick Clean</p>
-                  <p className="text-xs text-slate-500">Drop Missing → Fill Missing → Sort</p>
+                  <p className="text-sm font-medium text-ink">Quick Clean</p>
+                  <p className="text-xs text-ink3">Drop Missing → Fill Missing → Sort</p>
                 </button>
                 <button
                   type="button"
@@ -281,10 +299,10 @@ export default function Header() {
                     setIsTemplatesOpen(false);
                     toast.success('Loaded full-clean template');
                   }}
-                  className="w-full text-left px-4 py-3 hover:bg-slate-700 border-t border-slate-700"
+                  className="w-full text-left px-4 py-3 hover:bg-btn border-t border-line"
                 >
-                  <p className="text-sm font-medium text-slate-200">Full Clean</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-sm font-medium text-ink">Full Clean</p>
+                  <p className="text-xs text-ink3">
                     Drop Missing → Fill Missing → Normalize → Encode
                   </p>
                 </button>
@@ -295,7 +313,8 @@ export default function Header() {
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
+          title="Save or load pipelines"
+          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-2 text-sm font-medium flex items-center gap-2"
         >
           <Save size={16} />
           <span className="hidden md:inline">Save/Load</span>

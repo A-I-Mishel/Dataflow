@@ -2,22 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Theme tokens: dark is the default, .light overrides ---- */
+:root {
+  color-scheme: dark;
+  --canvas: 2 6 23;
+  --panel: 15 23 42;
+  --card: 30 41 59;
+  --btn: 51 65 85;
+  --btnhover: 71 85 97;
+  --btnink: 226 232 240;
+  --line: 51 65 85;
+  --linesoft: 30 41 59;
+  --ink: 241 245 249;
+  --ink2: 203 213 225;
+  --ink3: 148 163 184;
+  --muted: 100 116 139;
+  --scrollbar-track: 15 23 42;
+  --scrollbar-thumb: 51 65 85;
+  --scrollbar-thumb-hover: 71 85 97;
+
+  --xy-controls-button-background-color: #1e293b;
+  --xy-controls-button-background-color-hover: #334155;
+  --xy-controls-button-color: #e2e8f0;
+  --xy-controls-button-color-hover: #ffffff;
+  --xy-controls-button-border-color: #475569;
+  --xy-minimap-background-color: #0f172a;
+  --xy-attribution-background-color: rgba(15, 23, 42, 0.7);
+}
+
+.light {
+  color-scheme: light;
+  --canvas: 241 245 249;
+  --panel: 255 255 255;
+  --card: 255 255 255;
+  --btn: 226 232 240;
+  --btnhover: 203 213 225;
+  --btnink: 15 23 42;
+  --line: 203 213 225;
+  --linesoft: 226 232 240;
+  --ink: 15 23 42;
+  --ink2: 51 65 85;
+  --ink3: 100 116 139;
+  --muted: 148 163 184;
+  --scrollbar-track: 241 245 249;
+  --scrollbar-thumb: 203 213 225;
+  --scrollbar-thumb-hover: 148 163 184;
+
+  --xy-controls-button-background-color: #ffffff;
+  --xy-controls-button-background-color-hover: #f1f5f9;
+  --xy-controls-button-color: #475569;
+  --xy-controls-button-color-hover: #0f172a;
+  --xy-controls-button-border-color: #e2e8f0;
+  --xy-minimap-background-color: #f1f5f9;
+  --xy-attribution-background-color: rgba(255, 255, 255, 0.7);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: rgb(var(--scrollbar-track));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: rgb(var(--scrollbar-thumb));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: rgb(var(--scrollbar-thumb-hover));
 }
 
 html,
@@ -48,6 +103,25 @@ body,
   display: none !important;
 }
 
+/* Pipeline edge polish (theme-neutral indigo) */
+.react-flow__edge .react-flow__edge-path {
+  stroke: #818cf8;
+  stroke-width: 2;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #a5b4fc;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #6366f1;
+}
+
+.react-flow__connection-path {
+  stroke: #818cf8;
+  stroke-width: 2;
+}
+
 body {
-  @apply bg-slate-950 text-slate-100 font-sans;
+  @apply bg-canvas text-ink font-sans;
 }

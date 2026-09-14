@@ -109,17 +109,17 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
       onClick={onClose}
     >
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl w-[28rem] max-h-[80vh] flex flex-col"
+        className="bg-panel border border-line rounded-xl w-[28rem] max-h-[80vh] flex flex-col shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-row border-b border-slate-800">
+        <div className="flex flex-row border-b border-linesoft">
           <button
             type="button"
             onClick={() => setTab('save')}
             className={`flex-1 px-2 py-2.5 text-sm ${
               tab === 'save'
-                ? 'border-b-2 border-indigo-500 text-indigo-400 font-medium'
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
+                : 'text-ink3 hover:text-ink2'
             }`}
           >
             Save New
@@ -129,8 +129,8 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
             onClick={() => setTab('load')}
             className={`flex-1 px-2 py-2.5 text-sm ${
               tab === 'load'
-                ? 'border-b-2 border-indigo-500 text-indigo-400 font-medium'
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
+                : 'text-ink3 hover:text-ink2'
             }`}
           >
             Load Saved
@@ -149,7 +149,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                 }
               }}
               placeholder="Pipeline name"
-              className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full rounded-md bg-canvas border border-line px-3 py-2 text-sm text-ink focus:outline-none focus:border-indigo-500"
             />
             <button
               type="button"
@@ -167,7 +167,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
         ) : (
           <div className="p-4 overflow-y-auto">
             {savedPipelines.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-ink3">
                 No saved pipelines yet. Save one from the &apos;Save New&apos; tab.
               </p>
             ) : (
@@ -175,13 +175,13 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                 {savedPipelines.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-lg bg-card border border-line px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-200 truncate">
+                      <p className="text-sm font-medium text-ink truncate">
                         {item.name}
                       </p>
-                      <p className="text-xs text-slate-500">{timeAgo(item.created_at)}</p>
+                      <p className="text-xs text-ink3">{timeAgo(item.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
@@ -194,7 +194,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id, item.name)}
-                        className="rounded-md bg-slate-700 hover:bg-slate-600 px-2.5 py-1.5 text-xs font-medium text-slate-200"
+                        className="rounded-md bg-btn hover:bg-btnhover px-2.5 py-1.5 text-xs font-medium text-btnink"
                       >
                         Delete
                       </button>

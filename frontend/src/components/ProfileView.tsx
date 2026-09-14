@@ -1,20 +1,33 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import { usePipelineStore } from '../stores/pipelineStore';
+import type { Theme } from '../stores/pipelineStore';
 import type { ColumnProfile, ProfileData } from '../types';
 
 interface ProfileViewProps {
   profile: ProfileData;
 }
 
-function dtypeBadgeClass(dtype: string): string {
+function dtypeBadgeClass(dtype: string, theme: Theme): string {
+  const dark = theme !== 'light';
   const lower = dtype.toLowerCase();
   if (lower.includes('int') || lower.includes('float')) {
-    return 'bg-blue-500/20 text-blue-300';
+    return dark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/15 text-blue-700';
   }
   if (lower.includes('date') || lower.includes('time')) {
-    return 'bg-purple-500/20 text-purple-300';
+    return dark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-500/15 text-purple-700';
   }
-  return 'bg-green-500/20 text-green-300';
+  return dark ? 'bg-green-500/20 text-green-300' : 'bg-green-500/15 text-green-700';
+}
+
+function tooltipStyle(theme: Theme): Record<string, string> {
+  return theme === 'light'
+    ? { backgroundColor: '#ffffff', border: '1px solid #e2e8f0' }
+    : { backgroundColor: '#1e293b', border: '1px solid #334155' };
+}
+
+function tooltipLabelColor(theme: Theme): string {
+  return theme === 'light' ? '#0f172a' : '#f1f5f9';
 }
 
 function isNumericColumn(column: ColumnProfile): boolean {
@@ -22,6 +35,7 @@ function isNumericColumn(column: ColumnProfile): boolean {
 }
 
 function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
+  const theme = usePipelineStore((state) => state.theme);
   const stats: Array<{ label: string; value: number | undefined }> = [
     { label: 'Min', value: column.min },
     { label: 'Max', value: column.max },
@@ -32,21 +46,21 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
   const numericStats = stats.filter((stat) => stat.value !== undefined);
 
   return (
-    <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+    <div className="bg-card rounded-lg p-3 border border-line shadow-sm">
       <div className="flex flex-row justify-between items-center gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-slate-200 truncate">{name}</span>
+          <span className="text-sm font-semibold text-ink truncate">{name}</span>
           <span
-            className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${dtypeBadgeClass(column.dtype)}`}
+            className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${dtypeBadgeClass(column.dtype, theme)}`}
           >
             {column.dtype}
           </span>
         </div>
-        <span className="text-xs text-slate-400 shrink-0">
+        <span className="text-xs text-ink3 shrink-0">
           {column.null_count} null ({column.null_pct}%)
         </span>
       </div>
-      <div className="h-1.5 w-full bg-slate-700 rounded-full mt-1">
+      <div className="h-1.5 w-full bg-btn rounded-full mt-1">
         <div
           className={`h-1.5 rounded-full ${column.null_count > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}
           style={{ width: `${Math.min(100, Math.max(0, column.null_pct))}%` }}
@@ -57,8 +71,8 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 mt-2">
           {numericStats.map((stat) => (
             <div key={stat.label}>
-              <p className="text-[10px] text-slate-500 uppercase">{stat.label}</p>
-              <p className="text-xs text-slate-200">
+              <p className="text-[10px] text-ink3 uppercase">{stat.label}</p>
+              <p className="text-xs text-ink">
                 {typeof stat.value === 'number' ? stat.value.toFixed(2) : ''}
               </p>
             </div>
@@ -73,17 +87,17 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
               <XAxis dataKey="bin_start" hide={true} />
               <YAxis hide={true} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
-                labelStyle={{ color: '#f1f5f9' }}
+                contentStyle={tooltipStyle(theme)}
+                labelStyle={{ color: tooltipLabelColor(theme) }}
               />
-              <Bar dataKey="count" fill="#6366f1" />
+              <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
       {column.date_min !== undefined && column.date_max !== undefined && (
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-ink3 mt-2">
           {column.date_min} to {column.date_max}
         </p>
       )}
@@ -97,13 +111,13 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
                 type="category"
                 dataKey="value"
                 width={80}
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                tick={{ fill: theme === 'light' ? '#64748b' : '#94a3b8', fontSize: 11 }}
               />
               <Tooltip
-                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
-                labelStyle={{ color: '#f1f5f9' }}
+                contentStyle={tooltipStyle(theme)}
+                labelStyle={{ color: tooltipLabelColor(theme) }}
               />
-              <Bar dataKey="count" fill="#10b981" />
+              <Bar dataKey="count" fill="#10b981" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -116,21 +130,21 @@ export default function ProfileView({ profile }: ProfileViewProps) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-slate-800 rounded-lg p-3">
-          <p className="text-xs text-slate-500 uppercase">Rows</p>
-          <p className="text-xl font-bold text-slate-200">{profile.shape[0]}</p>
+        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
+          <p className="text-xs text-ink3 uppercase">Rows</p>
+          <p className="text-xl font-bold text-ink">{profile.shape[0]}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <p className="text-xs text-slate-500 uppercase">Columns</p>
-          <p className="text-xl font-bold text-slate-200">{profile.shape[1]}</p>
+        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
+          <p className="text-xs text-ink3 uppercase">Columns</p>
+          <p className="text-xl font-bold text-ink">{profile.shape[1]}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <p className="text-xs text-slate-500 uppercase">Missing Values</p>
-          <p className="text-xl font-bold text-slate-200">{profile.total_missing}</p>
+        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
+          <p className="text-xs text-ink3 uppercase">Missing Values</p>
+          <p className="text-xl font-bold text-ink">{profile.total_missing}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <p className="text-xs text-slate-500 uppercase">Memory</p>
-          <p className="text-xl font-bold text-slate-200">{profile.memory_usage_mb} MB</p>
+        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
+          <p className="text-xs text-ink3 uppercase">Memory</p>
+          <p className="text-xl font-bold text-ink">{profile.memory_usage_mb} MB</p>
         </div>
       </div>
 

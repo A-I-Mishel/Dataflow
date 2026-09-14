@@ -63,7 +63,7 @@ export default function RightPanel() {
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex flex-row border-b border-slate-800">
+      <div className="flex flex-row border-b border-linesoft">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -74,8 +74,8 @@ export default function RightPanel() {
               onClick={() => setActiveTab(tab.key)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm ${
                 isActive
-                  ? 'border-b-2 border-indigo-500 text-indigo-400 font-medium'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
+                  : 'text-ink3 hover:text-ink2'
               }`}
             >
               <Icon size={14} />
@@ -89,9 +89,9 @@ export default function RightPanel() {
         {activeTab === 'preview' &&
           (showSkeletons ? (
             <div className="space-y-2">
-              <div className="h-8 bg-slate-800 rounded animate-pulse" />
-              <div className="h-8 bg-slate-800 rounded animate-pulse" />
-              <div className="h-8 bg-slate-800 rounded animate-pulse" />
+              <div className="h-8 bg-btn rounded animate-pulse" />
+              <div className="h-8 bg-btn rounded animate-pulse" />
+              <div className="h-8 bg-btn rounded animate-pulse" />
             </div>
           ) : resultData ? (
             <DataTable
@@ -110,10 +110,10 @@ export default function RightPanel() {
         {activeTab === 'profile' &&
           (showSkeletons ? (
             <div className="grid grid-cols-2 gap-3">
-              <div className="h-20 bg-slate-800 rounded-lg animate-pulse" />
-              <div className="h-20 bg-slate-800 rounded-lg animate-pulse" />
-              <div className="h-20 bg-slate-800 rounded-lg animate-pulse" />
-              <div className="h-20 bg-slate-800 rounded-lg animate-pulse" />
+              <div className="h-20 bg-btn rounded-lg animate-pulse" />
+              <div className="h-20 bg-btn rounded-lg animate-pulse" />
+              <div className="h-20 bg-btn rounded-lg animate-pulse" />
+              <div className="h-20 bg-btn rounded-lg animate-pulse" />
             </div>
           ) : resultData ? (
             <ProfileView profile={resultData.profile} />
