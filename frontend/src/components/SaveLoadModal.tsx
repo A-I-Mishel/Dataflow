@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 
 import { deletePipeline, getPipelines, loadPipeline, savePipeline } from '../lib/api';
@@ -108,7 +109,8 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
       });
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+  const modal = (
     <div
       className="fixed inset-0 bg-[#050510]/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onClose}
@@ -222,8 +224,9 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
               </div>
             )}
           </div>
-        )}
+          )}
       </div>
     </div>
   );
+  return createPortal(modal, document.body);
 }
