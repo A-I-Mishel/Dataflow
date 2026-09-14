@@ -1,68 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
-/* ---- Modern SaaS v2 — muted professional ---- */
+/* ---- Mock palette — colours only (no layout/logic change) ---- */
 :root {
   color-scheme: dark;
-  --canvas: 15 16 27;
-  --panel: 22 23 38;
-  --card: 32 33 52;
-  --elevated: 42 43 68;
-  --btn: 52 53 82;
-  --btnhover: 66 67 103;
-  --btnink: 228 228 241;
-  --line: 48 50 78;
-  --linesoft: 36 37 62;
-  --ink: 237 237 245;
-  --ink2: 172 172 190;
-  --ink3: 128 128 148;
-  --muted: 102 102 124;
-  --accent: 92 92 210;
-  --accent-2: 118 88 200;
-  --scrollbar-track: 22 23 38;
-  --scrollbar-thumb: 52 50 78;
-  --scrollbar-thumb-hover: 66 67 103;
+  --canvas: 10 13 19;
+  --panel: 15 19 27;
+  --card: 19 24 38;
+  --elevated: 21 26 38;
+  --btn: 21 26 38;
+  --btnhover: 27 33 48;
+  --btnink: 152 162 184;
+  --line: 47 54 66;
+  --linesoft: 31 36 47;
+  --ink: 233 237 245;
+  --ink2: 152 162 184;
+  --ink3: 95 106 128;
+  --muted: 102 112 135;
+  --accent: 91 140 255;
+  --accent-2: 61 95 217;
+  --accent-soft: 91 140 255;
+  --ok: 61 220 151;
+  --warn: 255 180 84;
+  --danger: 255 107 122;
+  --cat-cleaning: 61 220 151;
+  --cat-transform: 167 139 250;
+  --cat-encode: 255 180 84;
+  --cat-input: 91 140 255;
+  --grid: 148 163 190;
+  --wire: 57 65 90;
+  --border: 148 163 190;
+  --r: 12px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --scrollbar-track: 15 19 27;
+  --scrollbar-thumb: 47 54 66;
+  --scrollbar-thumb-hover: 61 72 92;
 
-  --xy-controls-button-background-color: rgba(32, 33, 52, 0.92);
-  --xy-controls-button-background-color-hover: rgba(42, 43, 68, 1);
-  --xy-controls-button-color: #b8b8d0;
-  --xy-controls-button-color-hover: #ffffff;
-  --xy-controls-button-border-color: rgba(72, 72, 102, 0.4);
-  --xy-minimap-background-color: #1a1a2e;
-  --xy-attribution-background-color: rgba(22, 23, 38, 0.7);
+  --xy-controls-button-background-color: rgba(19, 24, 38, 0.92);
+  --xy-controls-button-background-color-hover: rgba(27, 33, 48, 1);
+  --xy-controls-button-color: #98a2b8;
+  --xy-controls-button-color-hover: #e9edf5;
+  --xy-controls-button-border-color: rgba(148, 163, 190, 0.14);
+  --xy-minimap-background-color: #0f131b;
+  --xy-attribution-background-color: rgba(15, 19, 27, 0.7);
 }
 
 .light {
   color-scheme: light;
-  --canvas: 245 247 250;
+  --canvas: 243 245 249;
   --panel: 255 255 255;
   --card: 255 255 255;
-  --elevated: 241 242 245;
-  --btn: 236 237 241;
-  --btnhover: 225 227 232;
-  --btnink: 32 32 48;
-  --line: 225 228 232;
-  --linesoft: 236 237 241;
-  --ink: 20 20 32;
-  --ink2: 82 82 100;
-  --ink3: 130 130 150;
-  --muted: 162 162 180;
-  --accent: 82 82 175;
-  --accent-2: 108 86 175;
-  --scrollbar-track: 245 247 250;
-  --scrollbar-thumb: 225 228 232;
-  --scrollbar-thumb-hover: 162 162 180;
+  --elevated: 245 247 251;
+  --btn: 245 247 251;
+  --btnhover: 236 239 245;
+  --btnink: 90 101 121;
+  --line: 198 202 210;
+  --linesoft: 221 224 230;
+  --ink: 24 32 47;
+  --ink2: 90 101 121;
+  --ink3: 152 161 179;
+  --muted: 160 170 188;
+  --accent: 91 140 255;
+  --accent-2: 61 95 217;
+  --accent-soft: 91 140 255;
+  --ok: 61 220 151;
+  --warn: 255 180 84;
+  --danger: 255 107 122;
+  --cat-cleaning: 61 220 151;
+  --cat-transform: 167 139 250;
+  --cat-encode: 255 180 84;
+  --cat-input: 91 140 255;
+  --grid: 20 30 55;
+  --wire: 195 203 219;
+  --border: 20 30 55;
+  --r: 12px;
+  --shadow: 0 8px 22px rgba(24, 32, 60, 0.1);
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --scrollbar-track: 243 245 249;
+  --scrollbar-thumb: 198 202 210;
+  --scrollbar-thumb-hover: 160 170 188;
 
   --xy-controls-button-background-color: rgba(255, 255, 255, 0.96);
-  --xy-controls-button-background-color-hover: #f8f9ff;
-  --xy-controls-button-color: #5a5a78;
-  --xy-controls-button-color-hover: #1a1a2e;
-  --xy-controls-button-border-color: rgba(225, 228, 232, 0.9);
-  --xy-minimap-background-color: #f1f0f5;
+  --xy-controls-button-background-color-hover: #f5f7fb;
+  --xy-controls-button-color: #5a6579;
+  --xy-controls-button-color-hover: #18202f;
+  --xy-controls-button-border-color: rgba(20, 30, 55, 0.1);
+  --xy-minimap-background-color: #f5f7fb;
   --xy-attribution-background-color: rgba(255, 255, 255, 0.7);
+}
+/* Support mock's [data-theme] attribute without breaking existing .light toggle */
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  color-scheme: light;
 }
 
 * {
@@ -112,28 +147,25 @@ body,
   display: none !important;
 }
 
-/* Edges — subtle muted stroke */
+/* Edges — mock palette, no layout change */
 .react-flow__edge .react-flow__edge-path {
-  stroke: url(#edgeGradient);
-  stroke: #8a8ac0;
+  stroke: rgb(var(--wire));
   stroke-width: 2;
-  filter: drop-shadow(0 0 3px rgba(92, 92, 180, 0.18));
 }
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #9a9ac8;
-  stroke-width: 2.5;
+  stroke: rgb(var(--accent));
+  stroke-width: 2.25;
 }
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #6c6cc0;
+  stroke: rgb(var(--accent));
   stroke-width: 2.5;
-  filter: drop-shadow(0 0 5px rgba(92, 92, 180, 0.35));
 }
 .react-flow__connection-path {
-  stroke: #8a8ac0;
+  stroke: rgb(var(--accent));
   stroke-width: 2;
 }
 
-/* Mesh background — subtle */
+/* Mesh background — mock's single radial glow, no layout change */
 .canvas-mesh {
   position: absolute;
   inset: 0;
@@ -143,31 +175,113 @@ body,
 .canvas-mesh::before {
   content: '';
   position: absolute;
-  width: 700px;
-  height: 700px;
-  left: -180px;
-  top: -220px;
-  background: radial-gradient(ellipse at center, rgba(92, 92, 180, 0.07) 0%, transparent 68%);
-  filter: blur(22px);
-}
-.canvas-mesh::after {
-  content: '';
-  position: absolute;
-  width: 800px;
-  height: 800px;
-  right: -240px;
-  bottom: -300px;
-  background: radial-gradient(ellipse at center, rgba(118, 88, 180, 0.05) 0%, transparent 65%);
-  filter: blur(24px);
+  width: 900px;
+  height: 420px;
+  left: 50%;
+  top: -8%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(91, 140, 255, 0.07), transparent 60%);
+  filter: none;
 }
 .light .canvas-mesh::before {
-  background: radial-gradient(ellipse at center, rgba(92, 92, 180, 0.04) 0%, transparent 68%);
+  background: radial-gradient(ellipse at center, rgba(91, 140, 255, 0.05), transparent 60%);
 }
-.light .canvas-mesh::after {
-  background: radial-gradient(ellipse at center, rgba(118, 88, 180, 0.03) 0%, transparent 65%);
+.canvas-mesh::after {
+  display: none;
 }
 
 body {
   @apply bg-canvas text-ink font-sans antialiased;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
+
+/* ---- Mock animations only (no DOM changes) ---- */
+.spin {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: rot 0.7s linear infinite;
+  display: inline-block;
+}
+.pulse-dot {
+  --pd: rgba(61, 220, 151, 0.5);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(var(--ok));
+  animation: pulse 2s infinite;
+  flex: none;
+}
+.pulse-dot.amber {
+  --pd: rgba(255, 180, 84, 0.5);
+  background: rgb(var(--warn));
+}
+.skel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.skel .row {
+  display: flex;
+  gap: 10px;
+}
+.skel .cell {
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgb(var(--elevated)), rgb(var(--panel)), rgb(var(--elevated)));
+  background-size: 200% 100%;
+  animation: shimmer 1.1s linear infinite;
+}
+.tbl {
+  animation: fadeUp 0.35s ease;
+}
+.node.new {
+  animation: pop 0.18s ease;
+}
+.wire-line.active {
+  stroke: rgb(var(--accent)) !important;
+  stroke-dasharray: 6 8;
+  animation: dashmove 0.5s linear infinite;
+}
+
+@keyframes rot {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--pd);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+@keyframes dashmove {
+  to {
+    stroke-dashoffset: -28;
+  }
 }
