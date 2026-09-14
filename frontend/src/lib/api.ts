@@ -7,7 +7,6 @@ import type {
   UploadResponse,
 } from '../types';
 
-// TODO: Change base URL for production (e.g. use import.meta.env or the deployed Render URL).
 const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000';
 

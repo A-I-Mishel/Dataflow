@@ -3,21 +3,10 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recha
 import { usePipelineStore } from '../stores/pipelineStore';
 import type { Theme } from '../stores/pipelineStore';
 import type { ColumnProfile, ProfileData } from '../types';
+import { dtypeBadgeClass } from '../lib/dtype';
 
 interface ProfileViewProps {
   profile: ProfileData;
-}
-
-function dtypeBadgeClass(dtype: string, theme: Theme): string {
-  const dark = theme !== 'light';
-  const lower = dtype.toLowerCase();
-  if (lower.includes('int') || lower.includes('float')) {
-    return dark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/15 text-blue-700';
-  }
-  if (lower.includes('date') || lower.includes('time')) {
-    return dark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-500/15 text-purple-700';
-  }
-  return dark ? 'bg-green-500/20 text-green-300' : 'bg-green-500/15 text-green-700';
 }
 
 function tooltipStyle(theme: Theme): Record<string, string> {
