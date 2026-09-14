@@ -140,7 +140,7 @@ export default function Header() {
       <div className="h-full flex items-center justify-between gap-3 px-3 lg:px-5">
         {/* Brand */}
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-accent to-accent2 flex items-center justify-center shadow-glow shrink-0">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-accent to-accent2 flex items-center justify-center shadow-sm shrink-0 opacity-90">
             <Sparkles size={18} className="text-white" />
           </div>
           <div className="min-w-0 hidden sm:block">
@@ -161,10 +161,10 @@ export default function Header() {
             onClick={handleRun}
             disabled={runDisabled}
             title="Run pipeline (Ctrl+Enter)"
-            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-lg transition-all ${
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm transition-all ${
               runDisabled
                 ? 'bg-white/10 text-ink3 opacity-50 cursor-not-allowed'
-                : 'bg-gradient-to-r from-accent to-accent2 text-white hover:shadow-glow-lg hover:scale-[1.02] active:scale-[0.98]'
+                : 'bg-gradient-to-r from-accent to-accent2 text-white hover:shadow-md hover:brightness-[1.05] active:scale-[0.98] opacity-95 hover:opacity-100'
             }`}
           >
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="fill-white" />}

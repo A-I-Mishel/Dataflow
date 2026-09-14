@@ -6,20 +6,20 @@ export type NodeTone = 'blue' | 'purple' | 'orange';
 
 const TONE_STYLES: Record<NodeTone, { gradient: string; iconWrap: string; icon: string; accent: string }> = {
   blue: {
-    gradient: 'from-sky-500/20 via-blue-500/20 to-indigo-500/20',
-    iconWrap: 'bg-gradient-to-br from-sky-500 to-indigo-600 shadow-[0_4px_16px_rgba(14,165,233,0.35)]',
+    gradient: 'from-sky-500/[0.07] via-blue-500/[0.07] to-indigo-500/[0.07]',
+    iconWrap: 'bg-gradient-to-br from-sky-600 to-indigo-600 shadow-[0_2px_10px_rgba(14,165,233,0.22)]',
     icon: 'text-white',
     accent: 'bg-sky-500',
   },
   purple: {
-    gradient: 'from-violet-500/20 via-purple-500/20 to-fuchsia-500/20',
-    iconWrap: 'bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-[0_4px_16px_rgba(139,92,246,0.35)]',
+    gradient: 'from-violet-500/[0.07] via-purple-500/[0.07] to-fuchsia-500/[0.07]',
+    iconWrap: 'bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-[0_2px_10px_rgba(110,80,180,0.22)]',
     icon: 'text-white',
     accent: 'bg-violet-500',
   },
   orange: {
-    gradient: 'from-amber-500/20 via-orange-500/20 to-red-500/20',
-    iconWrap: 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-[0_4px_16px_rgba(249,115,22,0.35)]',
+    gradient: 'from-amber-500/[0.07] via-orange-500/[0.07] to-red-500/[0.07]',
+    iconWrap: 'bg-gradient-to-br from-amber-600 to-orange-600 shadow-[0_2px_10px_rgba(180,100,20,0.20)]',
     icon: 'text-white',
     accent: 'bg-orange-500',
   },
@@ -49,17 +49,17 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
   const hasError = errors.length > 0;
   return (
     <div
-      className={`w-[300px] rounded-[20px] border bg-card/90 backdrop-blur-xl shadow-card overflow-hidden transition-all duration-200 hover:shadow-[0_12px_40px_rgba(0,0,0,0.32)] hover:-translate-y-1 ${
-        selected ? 'ring-2 ring-accent border-accent shadow-glow' : 'border-white/[0.08]'
+      className={`w-[300px] rounded-[20px] border bg-card/90 backdrop-blur-xl shadow-card overflow-hidden transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] hover:-translate-y-0.5 ${
+        selected ? 'ring-2 ring-accent/70 border-accent/50 shadow-glow' : 'border-white/[0.06]'
       } ${hasError ? 'ring-2 ring-rose-500 border-rose-500' : ''}`}
     >
-      <div className={`relative flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.06] bg-gradient-to-r ${s.gradient}`}>
+      <div className={`relative flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.05] bg-gradient-to-r ${s.gradient}`}>
         <div className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 ${s.iconWrap}`}>
           <Icon size={18} className={s.icon} />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-extrabold tracking-tight text-ink leading-none">{title}</p>
-          <p className="text-[11px] font-semibold tracking-wide text-ink3 mt-0.5 capitalize">{tone} • transform</p>
+          <p className="text-sm font-bold tracking-tight text-ink leading-none">{title}</p>
+          <p className="text-[11px] font-medium tracking-wide text-ink3 mt-0.5 capitalize">{tone} • transform</p>
         </div>
         <span
           title={hasError ? 'Needs attention' : configured ? 'Configured' : 'Default'}
@@ -72,9 +72,9 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
           <p className="text-xs font-semibold text-rose-500">{errors[0]}</p>
         </div>
       )}
-      <div className="p-4 space-y-3 bg-gradient-to-b from-transparent to-elevated/30">{children}</div>
-      <Handle type="target" position={Position.Top} className="!bg-white !border-2 !border-accent !w-3.5 !h-3.5 !-top-1.5 shadow-md" />
-      <Handle type="source" position={Position.Bottom} className="!bg-white !border-2 !border-accent !w-3.5 !h-3.5 !-bottom-1.5 shadow-md" />
+      <div className="p-4 space-y-3 bg-gradient-to-b from-transparent to-elevated/20">{children}</div>
+      <Handle type="target" position={Position.Top} className="!bg-white !border-2 !border-accent/70 !w-3.5 !h-3.5 !-top-1.5 shadow-sm" />
+      <Handle type="source" position={Position.Bottom} className="!bg-white !border-2 !border-accent/70 !w-3.5 !h-3.5 !-bottom-1.5 shadow-sm" />
     </div>
   );
 }

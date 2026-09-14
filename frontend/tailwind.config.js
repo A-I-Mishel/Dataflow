@@ -26,9 +26,9 @@ export default {
         accent2: 'rgb(var(--accent-2) / <alpha-value>)',
       },
       boxShadow: {
-        glow: '0 0 20px rgba(99,102,241,0.35)',
-        'glow-lg': '0 0 32px rgba(99,102,241,0.45)',
-        card: '0 8px 32px rgba(0,0,0,0.28), 0 1px 3px rgba(0,0,0,0.2)',
+        glow: '0 0 14px rgba(92,92,180,0.22)',
+        'glow-lg': '0 0 20px rgba(92,92,180,0.28)',
+        card: '0 4px 20px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.12)',
       },
     },
   },

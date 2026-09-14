@@ -32,9 +32,9 @@ const ITEMS: PaletteItem[] = [
 ];
 
 const GROUP_META = {
-  clean: { title: 'Cleaning', color: 'from-sky-500 to-indigo-500' },
-  transform: { title: 'Transform', color: 'from-violet-500 to-fuchsia-500' },
-  encode: { title: 'Encode', color: 'from-amber-500 to-orange-500' },
+  clean: { title: 'Cleaning', color: 'from-sky-600 to-indigo-600' },
+  transform: { title: 'Transform', color: 'from-violet-600 to-fuchsia-600' },
+  encode: { title: 'Encode', color: 'from-amber-600 to-orange-600' },
 } as const;
 
 function handleDragStart(event: DragEvent<HTMLDivElement>, type: NodeType): void {
@@ -83,10 +83,10 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
                   onClick={() => handleAdd(item.type)}
                   onKeyDown={(e) => handleKeyDown(e, item.type)}
                   title="Drag onto canvas or tap"
-                  className="group flex items-center gap-3 p-3 rounded-2xl bg-card border border-white/[0.06] hover:border-accent/30 hover:bg-elevated cursor-grab active:cursor-grabbing transition-all hover:shadow-lg hover:-translate-y-0.5"
+                  className="group flex items-center gap-3 p-3 rounded-2xl bg-card border border-white/[0.05] hover:border-accent/20 hover:bg-elevated/70 cursor-grab active:cursor-grabbing transition-all hover:shadow-md hover:-translate-y-0.5"
                 >
                   <div
-                    className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br ${GROUP_META[groupKey].color} shadow-md group-hover:shadow-lg transition-shadow`}
+                    className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br ${GROUP_META[groupKey].color} opacity-90 group-hover:opacity-100 shadow-sm transition-opacity`}
                   >
                     <Icon size={16} className="text-white" />
                   </div>
