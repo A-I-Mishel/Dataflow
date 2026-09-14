@@ -41,23 +41,23 @@ export default function CodeView({ code }: CodeViewProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex flex-row gap-2 mb-2">
+      <div className="flex flex-row gap-2 mb-3">
         <button
           type="button"
           onClick={handleCopy}
-          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="inline-flex items-center gap-1.5 rounded-full bg-ink text-panel px-4 py-2 text-xs font-bold hover:bg-ink/90 transition-colors"
         >
           Copy
         </button>
         <button
           type="button"
           onClick={handleDownload}
-          className="bg-btn hover:bg-btnhover text-btnink rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="inline-flex items-center gap-1.5 rounded-full bg-card border border-line px-4 py-2 text-xs font-bold text-ink2 hover:border-accent/30 hover:text-ink transition-colors"
         >
           Download .py
         </button>
       </div>
-      <div className="flex-1 min-h-[400px] rounded-lg overflow-hidden border border-line">
+      <div className="flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-white/[0.06] shadow-card bg-panel">
         <Editor
           height="100%"
           language="python"

@@ -5,12 +5,14 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
         canvas: 'rgb(var(--canvas) / <alpha-value>)',
         panel: 'rgb(var(--panel) / <alpha-value>)',
         card: 'rgb(var(--card) / <alpha-value>)',
+        elevated: 'rgb(var(--elevated) / <alpha-value>)',
         btn: 'rgb(var(--btn) / <alpha-value>)',
         btnhover: 'rgb(var(--btnhover) / <alpha-value>)',
         btnink: 'rgb(var(--btnink) / <alpha-value>)',
@@ -20,6 +22,13 @@ export default {
         ink2: 'rgb(var(--ink2) / <alpha-value>)',
         ink3: 'rgb(var(--ink3) / <alpha-value>)',
         muted: 'rgb(var(--muted) / <alpha-value>)',
+        accent: 'rgb(var(--accent) / <alpha-value>)',
+        accent2: 'rgb(var(--accent-2) / <alpha-value>)',
+      },
+      boxShadow: {
+        glow: '0 0 20px rgba(99,102,241,0.35)',
+        'glow-lg': '0 0 32px rgba(99,102,241,0.45)',
+        card: '0 8px 32px rgba(0,0,0,0.28), 0 1px 3px rgba(0,0,0,0.2)',
       },
     },
   },

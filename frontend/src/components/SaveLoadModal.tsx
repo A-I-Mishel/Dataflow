@@ -105,21 +105,21 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-[#050510]/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-panel border border-line rounded-xl w-[28rem] max-h-[80vh] flex flex-col shadow-2xl"
+        className="bg-panel border border-white/[0.08] rounded-[24px] w-[30rem] max-h-[82vh] flex flex-col shadow-card overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex flex-row border-b border-linesoft">
+        <div className="p-1 m-2 rounded-full bg-elevated border border-white/[0.06] flex">
           <button
             type="button"
             onClick={() => setTab('save')}
-            className={`flex-1 px-2 py-2.5 text-sm ${
+            className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-all ${
               tab === 'save'
-                ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
-                : 'text-ink3 hover:text-ink2'
+                ? 'bg-ink text-panel shadow-md'
+                : 'text-ink3 hover:text-ink'
             }`}
           >
             Save New
@@ -127,10 +127,10 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
           <button
             type="button"
             onClick={() => setTab('load')}
-            className={`flex-1 px-2 py-2.5 text-sm ${
+            className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-all ${
               tab === 'load'
-                ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
-                : 'text-ink3 hover:text-ink2'
+                ? 'bg-ink text-panel shadow-md'
+                : 'text-ink3 hover:text-ink'
             }`}
           >
             Load Saved
@@ -138,47 +138,53 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
         </div>
 
         {tab === 'save' ? (
-          <div className="p-4 space-y-3">
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  handleSave();
-                }
-              }}
-              placeholder="Pipeline name"
-              className="w-full rounded-md bg-canvas border border-line px-3 py-2 text-sm text-ink focus:outline-none focus:border-indigo-500"
-            />
+          <div className="p-5 space-y-4">
+            <div>
+              <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3 mb-2">Pipeline name</p>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    handleSave();
+                  }
+                }}
+                placeholder="e.g. My Churn Cleaning"
+                className="w-full rounded-2xl bg-elevated/60 border border-white/[0.06] px-4 py-3 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
+              />
+            </div>
             <button
               type="button"
               onClick={handleSave}
               disabled={name.trim() === '' || nodes.length === 0}
-              className={`w-full rounded-lg px-3 py-2 text-sm font-medium text-white ${
+              className={`w-full rounded-full px-4 py-3 text-sm font-extrabold transition-all ${
                 name.trim() === '' || nodes.length === 0
-                  ? 'bg-indigo-600 opacity-50 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
+                  ? 'bg-elevated text-ink3 cursor-not-allowed border border-line'
+                  : 'bg-gradient-to-r from-accent to-accent2 text-white shadow-glow hover:shadow-glow-lg hover:scale-[1.01] active:scale-[0.99]'
               }`}
             >
               Save Current Pipeline
             </button>
+            {nodes.length === 0 && <p className="text-xs text-center text-amber-500 font-medium">Add at least one node to save</p>}
           </div>
         ) : (
-          <div className="p-4 overflow-y-auto">
+          <div className="p-5 overflow-y-auto">
             {savedPipelines.length === 0 ? (
-              <p className="text-sm text-ink3">
-                No saved pipelines yet. Save one from the &apos;Save New&apos; tab.
-              </p>
+              <div className="text-center py-8">
+                <div className="mx-auto h-12 w-12 rounded-2xl bg-elevated border border-line grid place-items-center mb-3">📂</div>
+                <p className="text-sm font-bold text-ink">No saved pipelines yet</p>
+                <p className="text-xs text-ink3 mt-1">Save one from the Save New tab.</p>
+              </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {savedPipelines.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-card border border-line px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-card border border-white/[0.06] px-4 py-3 hover:border-accent/20 transition-colors"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink truncate">
+                      <p className="text-sm font-bold text-ink truncate">
                         {item.name}
                       </p>
                       <p className="text-xs text-ink3">{timeAgo(item.created_at)}</p>
@@ -187,14 +193,14 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                       <button
                         type="button"
                         onClick={() => handleLoad(item.id, item.name)}
-                        className="rounded-md bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1.5 text-xs font-medium text-white"
+                        className="rounded-full bg-ink text-panel hover:bg-ink/90 px-4 py-1.5 text-xs font-bold"
                       >
                         Load
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id, item.name)}
-                        className="rounded-md bg-btn hover:bg-btnhover px-2.5 py-1.5 text-xs font-medium text-btnink"
+                        className="rounded-full bg-elevated border border-line hover:border-red-500/30 px-3 py-1.5 text-xs font-bold text-ink3 hover:text-red-500"
                       >
                         Delete
                       </button>

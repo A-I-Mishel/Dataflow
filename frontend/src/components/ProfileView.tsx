@@ -22,8 +22,8 @@ function dtypeBadgeClass(dtype: string, theme: Theme): string {
 
 function tooltipStyle(theme: Theme): Record<string, string> {
   return theme === 'light'
-    ? { backgroundColor: '#ffffff', border: '1px solid #e2e8f0' }
-    : { backgroundColor: '#1e293b', border: '1px solid #334155' };
+    ? { backgroundColor: '#ffffff', border: '1px solid #e8e6f5', borderRadius: '12px' }
+    : { backgroundColor: '#1d1b36', border: '1px solid rgba(82,78,128,0.5)', borderRadius: '12px' };
 }
 
 function tooltipLabelColor(theme: Theme): string {
@@ -46,33 +46,33 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
   const numericStats = stats.filter((stat) => stat.value !== undefined);
 
   return (
-    <div className="bg-card rounded-lg p-3 border border-line shadow-sm">
+    <div className="bg-card/70 backdrop-blur-xl rounded-2xl p-4 border border-white/[0.06] shadow-card">
       <div className="flex flex-row justify-between items-center gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-ink truncate">{name}</span>
+          <span className="text-sm font-extrabold tracking-tight text-ink truncate">{name}</span>
           <span
-            className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${dtypeBadgeClass(column.dtype, theme)}`}
+            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${dtypeBadgeClass(column.dtype, theme)}`}
           >
             {column.dtype}
           </span>
         </div>
-        <span className="text-xs text-ink3 shrink-0">
+        <span className="text-xs font-semibold text-ink3 shrink-0">
           {column.null_count} null ({column.null_pct}%)
         </span>
       </div>
-      <div className="h-1.5 w-full bg-btn rounded-full mt-1">
+      <div className="h-2 w-full bg-elevated rounded-full mt-2 overflow-hidden">
         <div
-          className={`h-1.5 rounded-full ${column.null_count > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}
+          className={`h-2 rounded-full transition-all ${column.null_count > 0 ? 'bg-gradient-to-r from-rose-500 to-orange-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}
           style={{ width: `${Math.min(100, Math.max(0, column.null_pct))}%` }}
         />
       </div>
 
       {isNumericColumn(column) && numericStats.length > 0 && (
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 mt-2">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
           {numericStats.map((stat) => (
-            <div key={stat.label}>
-              <p className="text-[10px] text-ink3 uppercase">{stat.label}</p>
-              <p className="text-xs text-ink">
+            <div key={stat.label} className="rounded-xl bg-elevated/60 border border-white/[0.04] px-2 py-1.5">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-ink3">{stat.label}</p>
+              <p className="text-xs font-bold text-ink">
                 {typeof stat.value === 'number' ? stat.value.toFixed(2) : ''}
               </p>
             </div>
@@ -130,21 +130,21 @@ export default function ProfileView({ profile }: ProfileViewProps) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
-          <p className="text-xs text-ink3 uppercase">Rows</p>
-          <p className="text-xl font-bold text-ink">{profile.shape[0]}</p>
+        <div className="rounded-2xl p-4 border border-white/[0.06] bg-gradient-to-br from-accent/15 to-accent2/15 backdrop-blur-xl">
+          <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Rows</p>
+          <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.shape[0].toLocaleString()}</p>
         </div>
-        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
-          <p className="text-xs text-ink3 uppercase">Columns</p>
-          <p className="text-xl font-bold text-ink">{profile.shape[1]}</p>
+        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+          <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Columns</p>
+          <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.shape[1]}</p>
         </div>
-        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
-          <p className="text-xs text-ink3 uppercase">Missing Values</p>
-          <p className="text-xl font-bold text-ink">{profile.total_missing}</p>
+        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+          <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Missing Values</p>
+          <p className={`text-2xl font-extrabold tracking-tight mt-1 ${profile.total_missing > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{profile.total_missing}</p>
         </div>
-        <div className="bg-card border border-line rounded-lg p-3 shadow-sm">
-          <p className="text-xs text-ink3 uppercase">Memory</p>
-          <p className="text-xl font-bold text-ink">{profile.memory_usage_mb} MB</p>
+        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+          <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Memory</p>
+          <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.memory_usage_mb} <span className="text-sm font-bold text-ink3">MB</span></p>
         </div>
       </div>
 

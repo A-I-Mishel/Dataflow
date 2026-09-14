@@ -75,42 +75,44 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-lg border border-line">
-        <table className="w-full text-sm border-collapse bg-panel">
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-card text-ink2 font-medium">
-                {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="text-left px-3 py-2">
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row, rowIndex) => (
-              <tr
-                key={row.id}
-                className={`border-b border-linesoft last:border-b-0 hover:bg-card ${
-                  rowIndex % 2 === 1 ? 'bg-canvas/60' : ''
-                }`}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2 text-ink2">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-2xl border border-white/[0.06] shadow-card">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse bg-panel">
+            <thead>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id} className="bg-elevated/60 text-ink2 font-bold">
+                  {headerGroup.headers.map((header) => (
+                    <th key={header.id} className="text-left px-4 py-3 text-xs tracking-wide">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map((row, rowIndex) => (
+                <tr
+                  key={row.id}
+                  className={`border-t border-white/[0.04] hover:bg-elevated/40 transition-colors ${
+                    rowIndex % 2 === 1 ? 'bg-canvas/20' : 'bg-transparent'
+                  }`}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-4 py-2.5 text-ink2 text-[13px]">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       {data.length > MAX_ROWS && (
-        <p className="text-xs text-ink3 mt-2">
-          Showing first {MAX_ROWS} of {data.length} rows
+        <p className="text-xs font-medium text-ink3 mt-2.5 text-center">
+          Showing first {MAX_ROWS} of {data.length} rows • export for full CSV
         </p>
       )}
     </div>

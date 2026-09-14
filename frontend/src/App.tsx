@@ -80,7 +80,9 @@ export default function App() {
 
   if (isMobile) {
     return (
-      <div className="flex flex-col min-h-screen bg-canvas text-ink">
+      <div className="flex flex-col min-h-screen bg-canvas text-ink relative">
+        <div className="canvas-mesh" aria-hidden />
+        <Header />
         <Header />
         <div className="flex-1 pb-16">
           {mobileView === 'canvas' && (
@@ -128,31 +130,30 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen lg:h-screen bg-canvas text-ink">
+    <div className="flex flex-col min-h-screen lg:h-screen bg-canvas text-ink relative overflow-hidden">
+      <div className="canvas-mesh" aria-hidden />
       <Header />
-      <div className="flex flex-1 flex-col lg:flex-row lg:overflow-hidden">
-        <aside className="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-linesoft bg-panel flex flex-col shrink-0">
-          <div className="p-3 border-b border-linesoft">
-            <h2 className="text-sm font-semibold text-ink2 uppercase tracking-wider">
-              Nodes
-            </h2>
+      <div className="flex flex-1 flex-col lg:flex-row lg:overflow-hidden relative z-10">
+        <aside className="w-full lg:w-[280px] border-b lg:border-b-0 lg:border-r border-white/[0.06] bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
+          <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/[0.06]">
+            <h2 className="text-[11px] font-extrabold tracking-[0.16em] text-ink3 uppercase">Nodes</h2>
+            <span className="text-[11px] font-medium text-ink3 bg-elevated border border-line px-2 py-0.5 rounded-full">8</span>
           </div>
-          <div className="overflow-y-auto p-3 max-h-64 lg:max-h-none lg:flex-1">
+          <div className="overflow-y-auto p-3 max-h-64 lg:max-h-none lg:flex-1 custom-scroll">
             <NodePalette />
           </div>
         </aside>
 
-        <main className="relative bg-canvas h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink">
+        <main className="relative bg-transparent h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink lg:m-3 lg:rounded-2xl overflow-hidden border border-white/[0.06] lg:shadow-card">
           <PipelineCanvas />
         </main>
 
-        <aside className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-linesoft bg-panel flex flex-col shrink-0">
-          <div className="p-3 border-b border-linesoft">
-            <h2 className="text-sm font-semibold text-ink2 uppercase tracking-wider">
-              Output
-            </h2>
+        <aside className="w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l-0 border-white/[0.06] bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
+          <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/[0.06]">
+            <h2 className="text-[11px] font-extrabold tracking-[0.16em] text-ink3 uppercase">Output</h2>
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" title="live" />
           </div>
-          <div className="overflow-y-auto p-3 max-h-[70vh] lg:max-h-none lg:flex-1">
+          <div className="overflow-y-auto p-3 max-h-[70vh] lg:max-h-none lg:flex-1 custom-scroll">
             <RightPanel />
           </div>
         </aside>

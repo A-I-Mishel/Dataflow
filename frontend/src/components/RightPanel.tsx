@@ -63,35 +63,37 @@ export default function RightPanel() {
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex flex-row border-b border-linesoft">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm ${
-                isActive
-                  ? 'border-b-2 border-indigo-500 text-indigo-500 dark:text-indigo-400 font-medium'
-                  : 'text-ink3 hover:text-ink2'
-              }`}
-            >
-              <Icon size={14} />
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="p-2">
+        <div className="flex gap-1 p-1 rounded-full bg-elevated border border-line">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold tracking-wide transition-all ${
+                  isActive
+                    ? 'bg-ink text-panel shadow-md'
+                    : 'text-ink3 hover:text-ink hover:bg-card'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3">
         {activeTab === 'preview' &&
           (showSkeletons ? (
             <div className="space-y-2">
-              <div className="h-8 bg-btn rounded animate-pulse" />
-              <div className="h-8 bg-btn rounded animate-pulse" />
-              <div className="h-8 bg-btn rounded animate-pulse" />
+              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
             </div>
           ) : resultData ? (
             <DataTable
@@ -110,10 +112,10 @@ export default function RightPanel() {
         {activeTab === 'profile' &&
           (showSkeletons ? (
             <div className="grid grid-cols-2 gap-3">
-              <div className="h-20 bg-btn rounded-lg animate-pulse" />
-              <div className="h-20 bg-btn rounded-lg animate-pulse" />
-              <div className="h-20 bg-btn rounded-lg animate-pulse" />
-              <div className="h-20 bg-btn rounded-lg animate-pulse" />
+              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
             </div>
           ) : resultData ? (
             <ProfileView profile={resultData.profile} />
