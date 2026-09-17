@@ -402,14 +402,10 @@ def profile(
 
 
 @app.post("/generate", response_model=GenerateResponse)
-def generate(
-    request: ExecuteRequest,
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-) -> GenerateResponse:
-    evict_old_sessions()
-    key: str = _storage_key(x_api_key, request.session_id)
-    if not is_large_session(key):
-        get_session(key)
+def generate(request: ExecuteRequest) -> GenerateResponse:
+    # Sessionless by design: code generation only replays node configs
+    # against a dummy frame and never touches uploaded data, so an expired
+    # session must not block exporting code after a successful run.
     code: str = generate_script(request.nodes, request.edges, filename="data.csv")
     return GenerateResponse(code=code)
 

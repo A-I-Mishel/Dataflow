@@ -17,6 +17,7 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "drop-na": ("transforms.drop_na", "apply_drop_na"),
     "fill-na": ("transforms.fill_na", "apply_fill_na"),
     "drop-column": ("transforms.drop_column", "apply_drop_column"),
+    "drop-duplicates": ("transforms.drop_duplicates", "apply_drop_duplicates"),
     "rename-column": ("transforms.rename_column", "apply_rename_column"),
     "filter-rows": ("transforms.filter_rows", "apply_filter_rows"),
     "normalize": ("transforms.normalize", "apply_normalize"),
@@ -89,15 +90,31 @@ def generate_script(
     cur: pd.DataFrame = base_dummy.copy(deep=True)
     code_blocks: List[str] = []
     for node in sorted_nodes:
+        # Unknown node types are real errors (fail fast). Anything else is
+        # likely a dummy-frame artifact (every referenced column is [1, 2, 3],
+        # so dtype-sensitive configs can fail here while passing on real
+        # data) — emit the step with a warning instead of 400ing the whole
+        # request after a successful /execute.
         fn: TransformFn = _load_transform(node.type)
         try:
             cur, code = fn(cur, node.config)
-        except HTTPException:
-            raise
+        except HTTPException as exc:
+            detail: str = str(exc.detail) if exc.detail else "validation failed"
+            code = (
+                f"# WARNING: could not auto-validate node '{node.id}' "
+                f"({node.type}): {detail}\n"
+                f"# Config was: {node.config.model_dump_json()}\n"
+                "df = df.copy()  # no-op fallback; adjust manually if needed"
+            )
+            logger.warning("Dummy-frame validation failed for node %s: %s", node.id, detail)
         except Exception as exc:
-            raise HTTPException(
-                status_code=400, detail=f"Node '{node.id}' ({node.type}) failed: {exc}"
-            ) from exc
+            code = (
+                f"# WARNING: could not auto-validate node '{node.id}' "
+                f"({node.type}): {exc}\n"
+                f"# Config was: {node.config.model_dump_json()}\n"
+                "df = df.copy()  # no-op fallback; adjust manually if needed"
+            )
+            logger.warning("Dummy-frame validation failed for node %s: %s", node.id, exc)
         code_blocks.append(code)
 
     lines: List[str] = []

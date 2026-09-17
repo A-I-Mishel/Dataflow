@@ -117,6 +117,37 @@ def test_generate_script_runs(tmp_path: Path) -> None:
     )
 
 
+def test_generate_is_sessionless() -> None:
+    # Codegen never touches uploaded data, so an unknown/expired session
+    # must not block it (previously 404).
+    response = client.post(
+        "/generate", json={"session_id": "does-not-exist", "nodes": [], "edges": []}
+    )
+    assert response.status_code == 200, response.text
+    assert "pd.read_csv" in response.json()["code"]
+
+
+def test_generate_dummy_failure_warns_instead_of_400() -> None:
+    nodes: List[PipelineNode] = [
+        PipelineNode(
+            id="g1", type="normalize", config=NodeConfig(method="bogus", columns=["Age"])
+        )
+    ]
+    script: str = generate_script(nodes, [], filename="data.csv")
+    assert "could not auto-validate" in script
+    assert "g1" in script
+    ast.parse(script)
+
+
+def test_generate_drop_duplicates_step() -> None:
+    nodes: List[PipelineNode] = [
+        PipelineNode(id="d1", type="drop-duplicates", config=NodeConfig())
+    ]
+    script: str = generate_script(nodes, [], filename="data.csv")
+    assert "drop_duplicates" in script
+    ast.parse(script)
+
+
 def test_download_endpoint() -> None:
     upload = client.post(
         "/upload", files={"file": ("d.csv", "X,Y\n1,a\n2,b\n", "text/csv")}

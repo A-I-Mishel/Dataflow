@@ -15,6 +15,7 @@ import { usePipelineStore } from '../stores/pipelineStore';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { NodeType } from '../types';
 import DropColumnNode from './nodes/DropColumnNode';
+import DropDuplicatesNode from './nodes/DropDuplicatesNode';
 import DropNaNode from './nodes/DropNaNode';
 import EncodeNode from './nodes/EncodeNode';
 import FillNaNode from './nodes/FillNaNode';
@@ -27,6 +28,7 @@ const NODE_TYPES: NodeType[] = [
   'drop-na',
   'fill-na',
   'drop-column',
+  'drop-duplicates',
   'rename-column',
   'filter-rows',
   'normalize',
@@ -34,7 +36,13 @@ const NODE_TYPES: NodeType[] = [
   'sort',
 ];
 
-const CLEANING_TYPES: NodeType[] = ['drop-na', 'fill-na', 'drop-column', 'rename-column'];
+const CLEANING_TYPES: NodeType[] = [
+  'drop-na',
+  'fill-na',
+  'drop-column',
+  'drop-duplicates',
+  'rename-column',
+];
 const TRANSFORM_TYPES: NodeType[] = ['filter-rows', 'normalize', 'sort'];
 
 function minimapNodeColor(node: { type?: string }): string {
@@ -67,6 +75,7 @@ export default function PipelineCanvas({
       'drop-na': DropNaNode,
       'fill-na': FillNaNode,
       'drop-column': DropColumnNode,
+      'drop-duplicates': DropDuplicatesNode,
       'rename-column': RenameColumnNode,
       'filter-rows': FilterRowsNode,
       normalize: NormalizeNode,

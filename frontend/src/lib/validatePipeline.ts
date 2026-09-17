@@ -42,6 +42,60 @@ export function hasCycle(nodes: PipelineNode[], edges: PipelineEdge[]): boolean 
   return false;
 }
 
+/**
+ * The engine applies nodes sequentially in topological order — it does not
+ * branch or merge dataframes. Reject fork/merge/multi-root shapes up front
+ * with messages that name the offending nodes.
+ * Returns an error message, or null when the pipeline is a single chain.
+ */
+export function validateLinearChain(
+  nodes: PipelineNode[],
+  edges: PipelineEdge[],
+): string | null {
+  if (nodes.length <= 1) return null;
+  const labelOf = (id: string): string => {
+    const node = nodes.find((n) => n.id === id);
+    if (node === undefined) return `"${id}"`;
+    return node.data.label !== '' ? `"${node.data.label}"` : `"${node.id}"`;
+  };
+  const inDegree = new Map<string, number>();
+  const outDegree = new Map<string, number>();
+  const targetsOf = new Map<string, string[]>();
+  for (const node of nodes) {
+    inDegree.set(node.id, 0);
+    outDegree.set(node.id, 0);
+    targetsOf.set(node.id, []);
+  }
+  for (const edge of edges) {
+    // Dangling refs are the backend/toposort's complaint, not ours.
+    if (!inDegree.has(edge.source) || !inDegree.has(edge.target)) continue;
+    outDegree.set(edge.source, (outDegree.get(edge.source) ?? 0) + 1);
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+    targetsOf.get(edge.source)?.push(edge.target);
+  }
+  const roots = nodes.filter((n) => (inDegree.get(n.id) ?? 0) === 0);
+  if (roots.length > 1) {
+    const names = roots.map((n) => labelOf(n.id)).join(', ');
+    return `Pipeline must be a single chain: ${roots.length} starting nodes (${names}). Connect them in one sequence.`;
+  }
+  const fork = nodes.find((n) => (outDegree.get(n.id) ?? 0) > 1);
+  if (fork !== undefined) {
+    const targets = (targetsOf.get(fork.id) ?? []).map(labelOf).join(', ');
+    return `Node ${labelOf(fork.id)} splits into multiple branches (${targets}). Only linear chains are supported — remove the extra connections.`;
+  }
+  const merge = nodes.find((n) => (inDegree.get(n.id) ?? 0) > 1);
+  if (merge !== undefined) {
+    return `Node ${labelOf(merge.id)} has multiple incoming connections. Only linear chains are supported — keep one.`;
+  }
+  if (edges.length !== nodes.length - 1) {
+    return (
+      `Pipeline must be a single chain of ${nodes.length} nodes ` +
+      `(${nodes.length - 1} connections), but found ${edges.length} connections.`
+    );
+  }
+  return null;
+}
+
 export function getDisconnectedNodes(nodes: PipelineNode[], edges: PipelineEdge[]): string[] {
   if (nodes.length === 0) return [];
   const adjacency = new Map<string, string[]>();
@@ -156,6 +210,9 @@ export function getNodeErrors(node: PipelineNode, columnList: string[]): string[
     case 'drop-column':
       if (!cfg.columns || cfg.columns.length === 0) errors.push('Select at least one column');
       break;
+    case 'drop-duplicates':
+      // Empty columns = whole-row dedup; always valid.
+      break;
     case 'rename-column':
       if (!cfg.mapping || Object.keys(cfg.mapping).length === 0)
         errors.push('Add at least one mapping');
@@ -174,8 +231,9 @@ export function getNodeErrors(node: PipelineNode, columnList: string[]): string[
       if (!cfg.method) errors.push('Select a normalization method');
       break;
     case 'encode-categorical':
+      // Empty columns = auto mode (backend encodes all object/category
+      // columns), so it must not raise an error ring.
       if (!cfg.method) errors.push('Select an encoding method');
-      if (!cfg.columns || cfg.columns.length === 0) errors.push('Select at least one column');
       break;
     case 'sort':
       if (!cfg.by || cfg.by.length === 0) errors.push('Select at least one sort column');

@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 
 import { useRunPipeline } from '../hooks/useRunPipeline';
 import { downloadCSV, uploadFile } from '../lib/api';
-import { usePipelineStore } from '../stores/pipelineStore';
+import { selectIsResultStale, usePipelineStore } from '../stores/pipelineStore';
 import SaveLoadModal from './SaveLoadModal';
 
 const REQUIREMENTS_TXT = 'pandas\nnumpy\nscikit-learn\n';
@@ -58,6 +58,7 @@ export default function Header() {
   const loadTemplate = usePipelineStore((state) => state.loadTemplate);
   const theme = usePipelineStore((state) => state.theme);
   const toggleTheme = usePipelineStore((state) => state.toggleTheme);
+  const isStale = usePipelineStore(selectIsResultStale);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -160,8 +161,8 @@ export default function Header() {
             type="button"
             onClick={handleRun}
             disabled={runDisabled}
-            title="Run pipeline (Ctrl+Enter)"
-            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm transition-all ${
+            title={isStale ? 'Result is stale — re-run to refresh (Ctrl+Enter)' : 'Run pipeline (Ctrl+Enter)'}
+            className={`relative inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm transition-all ${
               runDisabled
                 ? 'bg-white/10 text-ink3 opacity-50 cursor-not-allowed'
                 : 'bg-gradient-to-r from-accent to-accent2 text-white hover:shadow-md hover:brightness-[1.05] active:scale-[0.98] opacity-95 hover:opacity-100'
@@ -169,6 +170,12 @@ export default function Header() {
           >
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="fill-white" />}
             <span className="hidden md:inline">{isLoading ? 'Running…' : 'Run Pipeline'}</span>
+            {isStale && !isLoading && (
+              <span
+                title="Result is stale"
+                className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-400 ring-2 ring-panel animate-pulse"
+              />
+            )}
           </button>
           <div className="hidden md:flex items-center gap-1 rounded-full bg-card border border-line p-1">
             <button

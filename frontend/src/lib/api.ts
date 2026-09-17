@@ -143,6 +143,9 @@ export async function executePipeline(
   });
 }
 
+// Note: /generate is sessionless server-side (pure function of the
+// pipeline). session_id is still sent for request-shape compat but the
+// server ignores it, so code export works even after session expiry.
 export async function generateCode(
   sessionId: string,
   nodes: PipelineNode[],

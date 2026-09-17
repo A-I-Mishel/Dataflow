@@ -1,4 +1,5 @@
 from transforms.drop_column import apply_drop_column
+from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.fill_na import apply_fill_na
@@ -11,6 +12,7 @@ __all__: list[str] = [
     "apply_drop_na",
     "apply_fill_na",
     "apply_drop_column",
+    "apply_drop_duplicates",
     "apply_rename_column",
     "apply_filter_rows",
     "apply_normalize",

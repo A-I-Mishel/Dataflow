@@ -2,7 +2,12 @@ import { useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 import { executePipeline, generateCode } from '../lib/api';
-import { getDisconnectedNodes, hasCycle, validateNodeConfigs } from '../lib/validatePipeline';
+import {
+  getDisconnectedNodes,
+  hasCycle,
+  validateLinearChain,
+  validateNodeConfigs,
+} from '../lib/validatePipeline';
 import { usePipelineStore } from '../stores/pipelineStore';
 
 function toMessage(error: unknown, fallback: string): string {
@@ -28,6 +33,11 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     }
     if (hasCycle(nodes, edges)) {
       toast.error('Pipeline has a cycle. Remove circular connections to continue.');
+      return;
+    }
+    const linearError = validateLinearChain(nodes, edges);
+    if (linearError !== null) {
+      toast.error(linearError);
       return;
     }
     const disconnected = getDisconnectedNodes(nodes, edges);
@@ -60,13 +70,24 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
 
     usePipelineStore.getState().setLoading(true);
     try {
+      // /generate is sessionless (pure function of nodes/edges), so both
+      // requests run in parallel. Codegen never blocks the result: if it
+      // fails the preview still lands and the failure gets its own toast.
+      const genSettled = generateCode(sessionId, nodes, edges).then(
+        (value) => ({ ok: true as const, value }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
       const result = await executePipeline(sessionId, nodes, edges);
       usePipelineStore.getState().setResult(result);
       toast.success(
         `Pipeline executed — ${result.shape[0]} rows, ${result.shape[1]} columns`,
       );
-      const generated = await generateCode(sessionId, nodes, edges);
-      usePipelineStore.getState().setGeneratedCode(generated.code);
+      const gen = await genSettled;
+      if (gen.ok) {
+        usePipelineStore.getState().setGeneratedCode(gen.value.code);
+      } else {
+        toast.error(`Pipeline ran, but code export failed: ${toMessage(gen.error, 'unknown error')}`);
+      }
       usePipelineStore.getState().setActiveTab('preview');
     } catch (error: unknown) {
       toast.error(toMessage(error, 'Pipeline execution failed.'));

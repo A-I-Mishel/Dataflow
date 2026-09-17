@@ -1,4 +1,5 @@
 import { ArrowUpDown } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { Droplets } from 'lucide-react';
 import { Filter } from 'lucide-react';
 import { Scale } from 'lucide-react';
@@ -20,10 +21,11 @@ interface PaletteItem {
   group: 'clean' | 'transform' | 'encode';
 }
 
-const ITEMS: PaletteItem[] = [
+export const ITEMS: PaletteItem[] = [
   { type: 'drop-na', icon: Trash2, label: 'Drop Missing', description: 'Remove rows with nulls', group: 'clean' },
   { type: 'fill-na', icon: Droplets, label: 'Fill Missing', description: 'Impute nulls', group: 'clean' },
   { type: 'drop-column', icon: XCircle, label: 'Drop Columns', description: 'Remove columns', group: 'clean' },
+  { type: 'drop-duplicates', icon: Copy, label: 'Deduplicate', description: 'Remove duplicate rows', group: 'clean' },
   { type: 'rename-column', icon: Type, label: 'Rename', description: 'Map column names', group: 'clean' },
   { type: 'filter-rows', icon: Filter, label: 'Filter Rows', description: 'Keep matching rows', group: 'transform' },
   { type: 'normalize', icon: Scale, label: 'Normalize', description: 'Scale numerics', group: 'transform' },

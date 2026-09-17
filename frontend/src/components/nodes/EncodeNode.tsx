@@ -67,7 +67,7 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
           </select>
         </div>
         <div>
-          <p className={fieldLabelClass}>Columns</p>
+          <p className={fieldLabelClass}>Columns (empty = auto-detect all)</p>
             <select
               multiple
               value={columns}

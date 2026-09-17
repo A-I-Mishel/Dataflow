@@ -33,6 +33,8 @@ interface PipelineState {
   isLoading: boolean;
   columnList: string[];
   activeTab: ActiveTab;
+  resultVersion: number;
+  editVersion: number;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
   removeNode: (id: string) => void;
   updateNodeConfig: (id: string, config: Partial<NodeConfig>) => void;
@@ -63,6 +65,7 @@ const NODE_LABELS: Record<NodeType, string> = {
   'drop-na': 'Drop NA',
   'fill-na': 'Fill NA',
   'drop-column': 'Drop Column',
+  'drop-duplicates': 'Drop Duplicates',
   'rename-column': 'Rename Column',
   'filter-rows': 'Filter Rows',
   normalize: 'Normalize',
@@ -74,6 +77,7 @@ const NODE_DEFAULT_CONFIGS: Record<NodeType, NodeConfig> = {
   'drop-na': {},
   'fill-na': { strategy: 'mean' },
   'drop-column': {},
+  'drop-duplicates': {},
   'rename-column': {},
   'filter-rows': {},
   normalize: { method: 'min-max' },
@@ -90,6 +94,14 @@ export interface ServerPipelineSummary {
   id: string;
   name: string;
   created_at: string;
+}
+
+export function selectIsResultStale(state: {
+  resultData: ExecuteResponse | null;
+  resultVersion: number;
+  editVersion: number;
+}): boolean {
+  return state.resultData !== null && state.editVersion !== state.resultVersion;
 }
 
 const TEMPLATES: Record<string, { nodes: PipelineNode[]; edges: PipelineEdge[] }> = {
@@ -168,6 +180,8 @@ export const usePipelineStore = create<PipelineState>()(
   isLoading: false,
   columnList: [],
   activeTab: 'preview',
+  resultVersion: 0,
+  editVersion: 0,
   past: [],
   future: [],
   savedPipelines: [],
@@ -176,6 +190,7 @@ export const usePipelineStore = create<PipelineState>()(
     set((state) => ({
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
+      editVersion: state.editVersion + 1,
       nodes: [
         ...state.nodes,
         {
@@ -191,6 +206,7 @@ export const usePipelineStore = create<PipelineState>()(
     set((state) => ({
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
+      editVersion: state.editVersion + 1,
       nodes: state.nodes.filter((node) => node.id !== id),
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
@@ -200,6 +216,7 @@ export const usePipelineStore = create<PipelineState>()(
     set((state) => ({
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
+      editVersion: state.editVersion + 1,
       nodes: state.nodes.map((node) =>
         node.id === id
           ? { ...node, data: { ...node.data, config: { ...node.data.config, ...config } } }
@@ -217,19 +234,33 @@ export const usePipelineStore = create<PipelineState>()(
       return {
         past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
         future: [],
+        editVersion: state.editVersion + 1,
         edges: [...state.edges, { id, source: connection.source, target: connection.target }],
       };
     }),
 
   onNodesChange: (changes) =>
-    set((state) => ({
-      nodes: applyNodeChanges(changes, state.nodes) as PipelineNode[],
-    })),
+    set((state) => {
+      // Position drags and selection fire constantly — only structural
+      // add/remove changes invalidate the last run result.
+      const structural = changes.some(
+        (change) => change.type === 'remove' || change.type === 'add',
+      );
+      return {
+        nodes: applyNodeChanges(changes, state.nodes) as PipelineNode[],
+        ...(structural ? { editVersion: state.editVersion + 1 } : {}),
+      };
+    }),
 
   onEdgesChange: (changes) =>
-    set((state) => ({
-      edges: applyEdgeChanges(changes, state.edges) as PipelineEdge[],
-    })),
+    set((state) => {
+      // Selection-only changes must not mark the result stale.
+      const structural = changes.some((change) => change.type !== 'select');
+      return {
+        edges: applyEdgeChanges(changes, state.edges) as PipelineEdge[],
+        ...(structural ? { editVersion: state.editVersion + 1 } : {}),
+      };
+    }),
 
   setSession: (data) =>
     set({
@@ -241,10 +272,12 @@ export const usePipelineStore = create<PipelineState>()(
     }),
 
   setResult: (data) =>
-    set({
+    set((state) => ({
       resultData: data,
       columnList: data.columns,
-    }),
+      // Sync versions: the result now reflects all edits so far.
+      resultVersion: state.editVersion,
+    })),
 
   setGeneratedCode: (code) => set({ generatedCode: code }),
 
@@ -296,6 +329,7 @@ export const usePipelineStore = create<PipelineState>()(
         nodes: previous.nodes,
         edges: previous.edges,
         selectedNodeId: null,
+        editVersion: state.editVersion + 1,
       };
     }),
 
@@ -309,6 +343,7 @@ export const usePipelineStore = create<PipelineState>()(
         nodes: next.nodes,
         edges: next.edges,
         selectedNodeId: null,
+        editVersion: state.editVersion + 1,
       };
     }),
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import Header from './components/Header';
-import NodePalette from './components/NodePalette';
+import NodePalette, { ITEMS as PALETTE_ITEMS } from './components/NodePalette';
 import PipelineCanvas from './components/PipelineCanvas';
 import RightPanel from './components/RightPanel';
 import { useRunPipeline } from './hooks/useRunPipeline';
@@ -138,7 +138,7 @@ export default function App() {
         <aside className="w-full lg:w-[280px] border-b lg:border-b-0 lg:border-r border-white/[0.06] bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
           <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/[0.06]">
             <h2 className="text-[11px] font-extrabold tracking-[0.16em] text-ink3 uppercase">Nodes</h2>
-            <span className="text-[11px] font-medium text-ink3 bg-elevated border border-line px-2 py-0.5 rounded-full">8</span>
+            <span className="text-[11px] font-medium text-ink3 bg-elevated border border-line px-2 py-0.5 rounded-full">{PALETTE_ITEMS.length}</span>
           </div>
           <div className="overflow-y-auto p-3 max-h-64 lg:max-h-none lg:flex-1 custom-scroll">
             <NodePalette />

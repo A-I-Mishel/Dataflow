@@ -2,7 +2,7 @@ import { BarChart3 } from 'lucide-react';
 import { Code } from 'lucide-react';
 import { Table } from 'lucide-react';
 
-import { usePipelineStore } from '../stores/pipelineStore';
+import { selectIsResultStale, usePipelineStore } from '../stores/pipelineStore';
 import type { ActiveTab } from '../stores/pipelineStore';
 import type { ProfileData } from '../types';
 import CodeView from './CodeView';
@@ -48,6 +48,7 @@ export default function RightPanel() {
   const originalData = usePipelineStore((state) => state.originalData);
   const generatedCode = usePipelineStore((state) => state.generatedCode);
   const isLoading = usePipelineStore((state) => state.isLoading);
+  const isStale = usePipelineStore(selectIsResultStale);
 
   const fallbackProfile =
     resultData === null && originalData !== null
@@ -96,11 +97,18 @@ export default function RightPanel() {
               <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
             </div>
           ) : resultData ? (
-            <DataTable
-              data={resultData.preview}
-              columns={resultData.columns}
-              dtypes={resultData.dtypes}
-            />
+            <div>
+              {isStale && (
+                <p className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-500">
+                  Result is stale — re-run to refresh
+                </p>
+              )}
+              <DataTable
+                data={resultData.preview}
+                columns={resultData.columns}
+                dtypes={resultData.dtypes}
+              />
+            </div>
           ) : (
             <EmptyState
               icon={Table}

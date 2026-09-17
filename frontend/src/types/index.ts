@@ -2,6 +2,7 @@ export type NodeType =
   | 'drop-na'
   | 'fill-na'
   | 'drop-column'
+  | 'drop-duplicates'
   | 'rename-column'
   | 'filter-rows'
   | 'normalize'

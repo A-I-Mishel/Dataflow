@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from models import NodeConfig, PipelineNode
 from toposort import topological_sort
 from transforms.drop_column import apply_drop_column
+from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.fill_na import apply_fill_na
@@ -23,6 +24,7 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "drop-na": apply_drop_na,
     "fill-na": apply_fill_na,
     "drop-column": apply_drop_column,
+    "drop-duplicates": apply_drop_duplicates,
     "rename-column": apply_rename_column,
     "filter-rows": apply_filter_rows,
     "normalize": apply_normalize,

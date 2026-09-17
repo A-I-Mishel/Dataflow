@@ -8,8 +8,10 @@ import pandas as pd
 import pytest
 from fastapi import HTTPException
 
-from models import NodeConfig
+from engine import execute_pipeline
+from models import NodeConfig, PipelineNode
 from transforms.drop_column import apply_drop_column
+from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.fill_na import apply_fill_na
@@ -310,6 +312,38 @@ def test_single_row() -> None:
         result, code = fn(df, cfg)
         _assert_valid_code(code)
         assert result.shape[0] <= 1
+
+
+def test_drop_duplicates_basic() -> None:
+    df: pd.DataFrame = pd.DataFrame({"A": [1, 1, 2], "B": ["x", "x", "y"]})
+    result, code = apply_drop_duplicates(df, NodeConfig())
+    _assert_valid_code(code)
+    assert "drop_duplicates" in code
+    assert result.shape == (2, 2)
+
+
+def test_drop_duplicates_subset() -> None:
+    df: pd.DataFrame = pd.DataFrame({"A": [1, 1, 2], "B": ["x", "y", "y"]})
+    result, code = apply_drop_duplicates(df, NodeConfig(columns=["A"]))
+    _assert_valid_code(code)
+    assert result.shape[0] == 2
+    assert list(result["A"]) == [1, 2]
+
+
+def test_drop_duplicates_unknown_column() -> None:
+    df: pd.DataFrame = pd.DataFrame({"A": [1]})
+    with pytest.raises(HTTPException):
+        apply_drop_duplicates(df, NodeConfig(columns=["Nope"]))
+
+
+def test_drop_duplicates_engine_integration(sample_df: pd.DataFrame) -> None:
+    doubled: pd.DataFrame = pd.concat([sample_df, sample_df], ignore_index=True)
+    result: pd.DataFrame = execute_pipeline(
+        doubled,
+        [PipelineNode(id="d1", type="drop-duplicates", config=NodeConfig())],
+        [],
+    )
+    assert result.shape[0] == sample_df.shape[0]
 
 
 def test_pure_no_mutation(sample_df: pd.DataFrame) -> None:
