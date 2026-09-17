@@ -148,6 +148,18 @@ export default function RightPanel() {
                 />
               )}
             </div>
+          ) : originalData ? (
+            <div>
+              <p className="mb-2 rounded-xl border border-line bg-elevated px-3 py-2 text-xs font-semibold text-ink2">
+                Original data (first {originalData.preview.length} rows) — run a
+                pipeline to transform it
+              </p>
+              <DataTable
+                data={originalData.preview}
+                columns={originalData.columns}
+                dtypes={originalData.dtypes}
+              />
+            </div>
           ) : (
             <EmptyState
               icon={Table}

@@ -14,6 +14,7 @@ import { Sun } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
 import { Undo2 } from 'lucide-react';
 import { Upload } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useRunPipeline } from '../hooks/useRunPipeline';
@@ -52,6 +53,8 @@ export default function Header() {
   const isLoading = usePipelineStore((state) => state.isLoading);
   const resetPipeline = usePipelineStore((state) => state.resetPipeline);
   const setSession = usePipelineStore((state) => state.setSession);
+  const originalData = usePipelineStore((state) => state.originalData);
+  const clearSession = usePipelineStore((state) => state.clearSession);
   const pastLength = usePipelineStore((state) => state.past.length);
   const futureLength = usePipelineStore((state) => state.future.length);
   const undo = usePipelineStore((state) => state.undo);
@@ -108,6 +111,10 @@ export default function Header() {
         setIsUploading(false);
         setUploadProgress(0);
       });
+  };
+  const handleUnload = (): void => {
+    clearSession();
+    toast.success('Dataset removed');
   };
   const handleExport = (): void => {
     if (sessionId === null || !resultData || generatedCode === '') return;
@@ -220,6 +227,29 @@ export default function Header() {
           >
             {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
           </button>
+
+          {originalData !== null && (
+            <span
+              title={originalData.filename ?? 'Uploaded file'}
+              className="inline-flex max-w-[8rem] sm:max-w-[16rem] items-center gap-2 rounded-full bg-card border border-line px-3.5 py-2 text-xs font-semibold text-ink2"
+            >
+              <span className="truncate">
+                {originalData.filename ?? 'Uploaded file'}
+              </span>
+              <span className="hidden shrink-0 text-ink3 sm:inline">
+                {originalData.row_count} rows · {originalData.columns.length} cols
+              </span>
+              <button
+                type="button"
+                onClick={handleUnload}
+                title="Remove dataset"
+                aria-label="Remove dataset"
+                className="shrink-0 rounded-full p-0.5 text-ink3 hover:text-red-500 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </span>
+          )}
 
           <div className="relative">
             <button

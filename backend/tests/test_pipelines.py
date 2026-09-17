@@ -76,6 +76,7 @@ def test_upload_and_execute_are_logged() -> None:
         "/upload", files={"file": ("logged.csv", "A,B\n1,x\n2,y\n", "text/csv")}
     )
     assert upload.status_code == 200
+    assert upload.json()["filename"] == "logged.csv"
     session_id: str = upload.json()["session_id"]
 
     db: Session = _db_session()

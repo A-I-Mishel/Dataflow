@@ -30,6 +30,7 @@ def test_large_upload_execute_profile_generate_download(
     assert up.status_code == 200, up.text
     body = up.json()
     assert body["row_count"] == 4
+    assert body["filename"] == "big.csv"
     assert body["columns"] == ["A", "B", "C"]
     assert body["missing_values"] == {"A": 0, "B": 1, "C": 1}
     sid: str = body["session_id"]

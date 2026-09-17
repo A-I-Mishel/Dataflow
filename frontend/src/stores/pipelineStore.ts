@@ -56,6 +56,7 @@ interface PipelineState {
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   resetPipeline: () => void;
+  clearSession: () => void;
   checkSession: () => void;
   past: HistorySnapshot[];
   future: HistorySnapshot[];
@@ -364,6 +365,23 @@ export const usePipelineStore = create<PipelineState>()(
       viewingNodeId: null,
       nodeStatus: {},
     })),
+
+  clearSession: () =>
+    // Unload the dataset. Canvas nodes/edges are kept deliberately so a
+    // fresh upload can re-run the same pipeline; dropdowns fall back to
+    // empty and the run gate asks for an upload.
+    set({
+      sessionId: null,
+      originalData: null,
+      columnList: [],
+      resultData: null,
+      generatedCode: '',
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      viewingNodeId: null,
+      nodeStatus: {},
+      isLargeFile: false,
+    }),
 
   checkSession: () => {
     const state = get();

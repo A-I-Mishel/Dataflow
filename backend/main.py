@@ -210,6 +210,7 @@ def _handle_small_upload(
 
     return UploadResponse(
         session_id=session_id,
+        filename=filename or "upload.csv",
         columns=[str(c) for c in df.columns.tolist()],
         dtypes=_dtypes_dict(df),
         row_count=int(df.shape[0]),
@@ -245,6 +246,7 @@ def _handle_large_upload(
 
     return UploadResponse(
         session_id=session_id,
+        filename=filename or "upload.csv",
         columns=columns,
         dtypes=_dtypes_dict(preview_df),
         row_count=total_rows,

@@ -42,6 +42,7 @@ class ExecuteRequest(BaseModel):
 
 class UploadResponse(BaseModel):
     session_id: str
+    filename: str = "upload.csv"
     columns: List[str]
     dtypes: Dict[str, str]
     row_count: int

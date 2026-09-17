@@ -46,6 +46,8 @@ export interface DataPreview {
   preview: Record<string, unknown>[];
   missing_values: Record<string, number>;
   large?: boolean;
+  // Optional: sessions persisted before the filename field existed lack it.
+  filename?: string;
 }
 
 export interface ColumnProfile {
@@ -80,6 +82,8 @@ export interface UploadResponse {
   preview: Record<string, unknown>[];
   missing_values: Record<string, number>;
   large?: boolean;
+  // Optional: sessions persisted before the filename field existed lack it.
+  filename?: string;
 }
 
 export interface NodePreview {
