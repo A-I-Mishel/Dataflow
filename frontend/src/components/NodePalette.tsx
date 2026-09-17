@@ -34,9 +34,9 @@ export const ITEMS: PaletteItem[] = [
 ];
 
 const GROUP_META = {
-  clean: { title: 'Cleaning', color: 'from-sky-600 to-indigo-600' },
-  transform: { title: 'Transform', color: 'from-violet-600 to-fuchsia-600' },
-  encode: { title: 'Encode', color: 'from-amber-600 to-orange-600' },
+  clean: { title: 'Cleaning', dot: 'bg-sky-500', icon: 'text-sky-500' },
+  transform: { title: 'Transform', dot: 'bg-violet-500', icon: 'text-violet-500' },
+  encode: { title: 'Encode', dot: 'bg-orange-500', icon: 'text-orange-500' },
 } as const;
 
 function handleDragStart(event: DragEvent<HTMLDivElement>, type: NodeType): void {
@@ -69,7 +69,7 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
       {(Object.keys(grouped) as Array<keyof typeof grouped>).map((groupKey) => (
         <div key={groupKey}>
           <div className="flex items-center gap-2 px-1 mb-2">
-            <div className={`h-1 w-6 rounded-full bg-gradient-to-r ${GROUP_META[groupKey].color}`} />
+            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${GROUP_META[groupKey].dot}`} />
             <p className="text-[11px] font-extrabold tracking-[0.14em] text-ink3 uppercase">{GROUP_META[groupKey].title}</p>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
@@ -85,12 +85,12 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
                   onClick={() => handleAdd(item.type)}
                   onKeyDown={(e) => handleKeyDown(e, item.type)}
                   title="Drag onto canvas or tap"
-                  className="group flex items-center gap-3 p-3 rounded-2xl bg-card border border-line hover:border-accent/20 hover:bg-elevated/70 cursor-grab active:cursor-grabbing transition-all hover:shadow-md hover:-translate-y-0.5"
+                  className="group flex items-center gap-3 p-2.5 rounded-xl border border-transparent hover:border-line hover:bg-elevated/70 cursor-grab active:cursor-grabbing transition-colors"
                 >
                   <div
-                    className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br ${GROUP_META[groupKey].color} opacity-90 group-hover:opacity-100 shadow-sm transition-opacity`}
+                    className="h-8 w-8 rounded-lg grid place-items-center shrink-0 bg-elevated border border-line"
                   >
-                    <Icon size={16} className="text-white" />
+                    <Icon size={15} className={GROUP_META[groupKey].icon} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[13px] font-bold tracking-tight text-ink leading-none">{item.label}</p>

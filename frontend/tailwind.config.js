@@ -32,6 +32,9 @@ export default {
         'line-strong': 'rgb(var(--line-strong) / <alpha-value>)',
         'ok-text': 'rgb(var(--ok-text) / <alpha-value>)',
         'warn-soft': 'rgb(var(--warn-soft) / <alpha-value>)',
+        ok: 'rgb(var(--ok) / <alpha-value>)',
+        warn: 'rgb(var(--warn) / <alpha-value>)',
+        danger: 'rgb(var(--danger) / <alpha-value>)',
       },
       boxShadow: {
         glow: '0 0 14px rgba(99,102,241,0.22)',
