@@ -30,6 +30,7 @@ interface PipelineState {
   resultData: ExecuteResponse | null;
   generatedCode: string;
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
   isLoading: boolean;
   columnList: string[];
   activeTab: ActiveTab;
@@ -40,6 +41,7 @@ interface PipelineState {
   isLargeFile: boolean;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
   removeNode: (id: string) => void;
+  removeEdge: (id: string) => void;
   updateNodeConfig: (id: string, config: Partial<NodeConfig>) => void;
   onConnect: (connection: { source: string; target: string }) => void;
   onNodesChange: (changes: NodeChange[]) => void;
@@ -49,6 +51,7 @@ interface PipelineState {
   setGeneratedCode: (code: string) => void;
   setLoading: (loading: boolean) => void;
   setSelectedNodeId: (id: string | null) => void;
+  setSelectedEdgeId: (id: string | null) => void;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
@@ -182,6 +185,7 @@ export const usePipelineStore = create<PipelineState>()(
   resultData: null,
   generatedCode: '',
   selectedNodeId: null,
+  selectedEdgeId: null,
   isLoading: false,
   columnList: [],
   activeTab: 'preview',
@@ -213,15 +217,36 @@ export const usePipelineStore = create<PipelineState>()(
     })),
 
   removeNode: (id) =>
+    set((state) => {
+      const edges = state.edges.filter(
+        (edge) => edge.source !== id && edge.target !== id,
+      );
+      return {
+        past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
+        future: [],
+        editVersion: state.editVersion + 1,
+        viewingNodeId: state.viewingNodeId === id ? null : state.viewingNodeId,
+        nodeStatus: {},
+        nodes: state.nodes.filter((node) => node.id !== id),
+        edges,
+        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+        selectedEdgeId:
+          state.selectedEdgeId !== null &&
+          edges.some((edge) => edge.id === state.selectedEdgeId)
+            ? state.selectedEdgeId
+            : null,
+      };
+    }),
+
+  removeEdge: (id) =>
     set((state) => ({
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
       editVersion: state.editVersion + 1,
-      viewingNodeId: state.viewingNodeId === id ? null : state.viewingNodeId,
+      viewingNodeId: null,
       nodeStatus: {},
-      nodes: state.nodes.filter((node) => node.id !== id),
-      edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
-      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+      edges: state.edges.filter((edge) => edge.id !== id),
+      selectedEdgeId: state.selectedEdgeId === id ? null : state.selectedEdgeId,
     })),
 
   updateNodeConfig: (id, config) =>
@@ -309,6 +334,8 @@ export const usePipelineStore = create<PipelineState>()(
 
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
+  setSelectedEdgeId: (id) => set({ selectedEdgeId: id }),
+
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   setTheme: (theme) => {
@@ -333,6 +360,7 @@ export const usePipelineStore = create<PipelineState>()(
       resultData: null,
       generatedCode: '',
       selectedNodeId: null,
+      selectedEdgeId: null,
       viewingNodeId: null,
       nodeStatus: {},
     })),
@@ -355,6 +383,7 @@ export const usePipelineStore = create<PipelineState>()(
         nodes: previous.nodes,
         edges: previous.edges,
         selectedNodeId: null,
+        selectedEdgeId: null,
         editVersion: state.editVersion + 1,
         viewingNodeId: null,
         nodeStatus: {},
@@ -371,6 +400,7 @@ export const usePipelineStore = create<PipelineState>()(
         nodes: next.nodes,
         edges: next.edges,
         selectedNodeId: null,
+        selectedEdgeId: null,
         editVersion: state.editVersion + 1,
         viewingNodeId: null,
         nodeStatus: {},
@@ -389,6 +419,7 @@ export const usePipelineStore = create<PipelineState>()(
         resultData: null,
         generatedCode: '',
         selectedNodeId: null,
+        selectedEdgeId: null,
         viewingNodeId: null,
         nodeStatus: {},
       };
@@ -417,6 +448,7 @@ export const usePipelineStore = create<PipelineState>()(
       resultData: null,
       generatedCode: '',
       selectedNodeId: null,
+      selectedEdgeId: null,
       viewingNodeId: null,
       nodeStatus: {},
     })),

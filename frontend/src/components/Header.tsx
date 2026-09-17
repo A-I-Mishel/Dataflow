@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 
 import { useRunPipeline } from '../hooks/useRunPipeline';
 import { downloadCSV, uploadFile } from '../lib/api';
+import { confirmDiscardResult } from '../lib/confirmDiscard';
 import { selectIsResultStale, usePipelineStore } from '../stores/pipelineStore';
 import SaveLoadModal from './SaveLoadModal';
 
@@ -289,6 +290,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!confirmDiscardResult()) return;
                       loadTemplate('quick-clean');
                       setIsTemplatesOpen(false);
                       toast.success('Loaded quick-clean template');
@@ -301,6 +303,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!confirmDiscardResult()) return;
                       loadTemplate('full-clean');
                       setIsTemplatesOpen(false);
                       toast.success('Loaded full-clean template');

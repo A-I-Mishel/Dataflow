@@ -1,8 +1,82 @@
-import type { PipelineEdge, PipelineNode } from '../types';
+import type { NodeType, PipelineEdge, PipelineNode } from '../types';
 
 export interface NodeConfigError {
   nodeId: string;
   message: string;
+}
+
+// Local whitelist for saved-pipeline validation. NOTE: third copy of the
+// node-type list (see NodeType in types/ and NODE_TYPES in PipelineCanvas) —
+// consolidate to one exported constant if a tenth type is ever added.
+const KNOWN_NODE_TYPES: readonly NodeType[] = [
+  'drop-na',
+  'fill-na',
+  'drop-column',
+  'drop-duplicates',
+  'rename-column',
+  'filter-rows',
+  'normalize',
+  'encode-categorical',
+  'sort',
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Validate a saved pipeline payload before it touches the canvas. Throws a
+ * plain Error describing the first problem — callers toast and refuse the
+ * load, leaving the current canvas untouched. Shape + type whitelist + edge
+ * references only; deep config checks already happen at run time.
+ */
+export function validateLoadedPipeline(data: unknown): {
+  nodes: PipelineNode[];
+  edges: PipelineEdge[];
+} {
+  if (!isRecord(data)) throw new Error('Saved pipeline is corrupt: not an object');
+  const { nodes, edges } = data;
+  if (!Array.isArray(nodes)) throw new Error('Saved pipeline is corrupt: nodes missing');
+  if (!Array.isArray(edges)) throw new Error('Saved pipeline is corrupt: edges missing');
+  const ids = new Set<string>();
+  for (const [index, node] of nodes.entries()) {
+    if (!isRecord(node)) throw new Error(`Saved pipeline is corrupt: node ${index} malformed`);
+    if (typeof node.id !== 'string' || node.id === '') {
+      throw new Error(`Saved pipeline is corrupt: node ${index} has no id`);
+    }
+    if (ids.has(node.id)) throw new Error(`Saved pipeline is corrupt: duplicate node id "${node.id}"`);
+    ids.add(node.id);
+    if (typeof node.type !== 'string' || !(KNOWN_NODE_TYPES as readonly string[]).includes(node.type)) {
+      throw new Error(
+        `Saved pipeline uses unknown node type "${String(node.type)}" — it may come from a newer app version`,
+      );
+    }
+    if (!isRecord(node.data) || !isRecord(node.data.config)) {
+      throw new Error(`Saved pipeline is corrupt: node "${node.id}" has no config`);
+    }
+  }
+  for (const [index, edge] of edges.entries()) {
+    if (!isRecord(edge)) throw new Error(`Saved pipeline is corrupt: edge ${index} malformed`);
+    if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
+      throw new Error(`Saved pipeline is corrupt: edge ${index} has no endpoints`);
+    }
+    if (!ids.has(edge.source) || !ids.has(edge.target)) {
+      throw new Error(
+        `Saved pipeline is corrupt: edge ${index} references a missing node`,
+      );
+    }
+  }
+  return {
+    nodes: nodes as PipelineNode[],
+    edges: edges.map((edge) => {
+      const record = edge as Record<string, unknown>;
+      return {
+        id: typeof record.id === 'string' ? record.id : `${record.source}-${record.target}`,
+        source: record.source as string,
+        target: record.target as string,
+      };
+    }),
+  };
 }
 
 export function hasCycle(nodes: PipelineNode[], edges: PipelineEdge[]): boolean {

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 
 import { deletePipeline, getPipelines, loadPipeline, savePipeline } from '../lib/api';
+import { confirmDiscardResult } from '../lib/confirmDiscard';
+import { validateLoadedPipeline } from '../lib/validatePipeline';
 import { usePipelineStore } from '../stores/pipelineStore';
 
 interface SaveLoadModalProps {
@@ -84,9 +86,17 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
   };
 
   const handleLoad = (id: string, pipelineName: string): void => {
+    if (!confirmDiscardResult()) return;
     loadPipeline(id)
       .then((data) => {
-        setCanvas(data.nodes, data.edges);
+        let validated;
+        try {
+          validated = validateLoadedPipeline(data);
+        } catch (error: unknown) {
+          toast.error(toMessage(error, 'Saved pipeline is corrupt'));
+          return;
+        }
+        setCanvas(validated.nodes, validated.edges);
         toast.success(`Loaded pipeline "${pipelineName}"`);
         onClose();
       })

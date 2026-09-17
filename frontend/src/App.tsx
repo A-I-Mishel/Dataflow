@@ -65,10 +65,13 @@ export default function App() {
         usePipelineStore.getState().redo();
         toast.success('Redo');
       } else if (event.key === 'Delete') {
-        const selectedNodeId = usePipelineStore.getState().selectedNodeId;
+        const { selectedNodeId, selectedEdgeId } = usePipelineStore.getState();
         if (selectedNodeId !== null) {
           usePipelineStore.getState().removeNode(selectedNodeId);
           usePipelineStore.getState().setSelectedNodeId(null);
+        } else if (selectedEdgeId !== null) {
+          usePipelineStore.getState().removeEdge(selectedEdgeId);
+          usePipelineStore.getState().setSelectedEdgeId(null);
         }
       } else if (event.key === 'Escape') {
         usePipelineStore.getState().setSelectedNodeId(null);

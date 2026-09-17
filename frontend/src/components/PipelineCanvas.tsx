@@ -65,6 +65,7 @@ export default function PipelineCanvas({
   const onConnectAction = usePipelineStore((state) => state.onConnect);
   const addNode = usePipelineStore((state) => state.addNode);
   const setSelectedNodeId = usePipelineStore((state) => state.setSelectedNodeId);
+  const setSelectedEdgeId = usePipelineStore((state) => state.setSelectedEdgeId);
   const setViewingNodeId = usePipelineStore((state) => state.setViewingNodeId);
   const setActiveTab = usePipelineStore((state) => state.setActiveTab);
   const isLoading = usePipelineStore((state) => state.isLoading);
@@ -109,6 +110,21 @@ export default function PipelineCanvas({
       }
     },
     [onConnectAction],
+  );
+
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedNodes, edges: selectedEdges }: { nodes: { id: string }[]; edges: { id: string }[] }) => {
+      // Single-selection UX: track the first selected node, else the first
+      // selected edge, so Delete can remove either. Agrees with onNodeClick
+      // (same node id) and pane-click clearing (empty selection).
+      setSelectedNodeId(selectedNodes.length > 0 ? (selectedNodes[0]?.id ?? null) : null);
+      setSelectedEdgeId(
+        selectedNodes.length === 0 && selectedEdges.length > 0
+          ? (selectedEdges[0]?.id ?? null)
+          : null,
+      );
+    },
+    [setSelectedNodeId, setSelectedEdgeId],
   );
 
   const handleNodeClick = useCallback(
@@ -173,7 +189,11 @@ export default function PipelineCanvas({
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
         onNodeClick={handleNodeClick}
-        onPaneClick={() => setSelectedNodeId(null)}
+        onSelectionChange={handleSelectionChange}
+        onPaneClick={() => {
+          setSelectedNodeId(null);
+          setSelectedEdgeId(null);
+        }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         zoomOnDoubleClick={!isMobile}
