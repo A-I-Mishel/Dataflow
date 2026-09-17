@@ -24,19 +24,26 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   const mapping = config.mapping ?? {};
   const entries = Object.entries(mapping);
 
+  // Read mapping fresh from the store: handlers that close over render-scope
+  // snapshots can rebuild from stale entries under rapid keystrokes.
+  const getFreshMapping = (): Record<string, string> =>
+    usePipelineStore.getState().nodes.find((node) => node.id === id)?.data.config
+      .mapping ?? {};
+
   const handleAddMapping = (): void => {
+    const fresh = getFreshMapping();
     const base = 'new_column';
     let key = base;
     let counter = 1;
-    while (Object.prototype.hasOwnProperty.call(mapping, key)) {
+    while (Object.prototype.hasOwnProperty.call(fresh, key)) {
       counter += 1;
       key = `${base}_${counter}`;
     }
-    updateNodeConfig(id, { mapping: { ...mapping, [key]: '' } });
+    updateNodeConfig(id, { mapping: { ...fresh, [key]: '' } });
   };
 
   const handleRemoveMapping = (oldKey: string): void => {
-    const next = { ...mapping };
+    const next = { ...getFreshMapping() };
     delete next[oldKey];
     updateNodeConfig(id, { mapping: next });
   };
@@ -47,7 +54,7 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   ): void => {
     const newKey = event.target.value;
     const next: Record<string, string> = {};
-    for (const [key, value] of entries) {
+    for (const [key, value] of Object.entries(getFreshMapping())) {
       if (key === oldKey) {
         next[newKey] = value;
       } else {
@@ -61,7 +68,9 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
     event: ChangeEvent<HTMLInputElement>,
     key: string,
   ): void => {
-    updateNodeConfig(id, { mapping: { ...mapping, [key]: event.target.value } });
+    updateNodeConfig(id, {
+      mapping: { ...getFreshMapping(), [key]: event.target.value },
+    });
   };
 
   return (
@@ -77,8 +86,12 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
         {entries.length === 0 && (
             <p className={hintClass}>No mappings defined</p>
         )}
-        {entries.map(([oldName, newName]) => (
-          <div key={oldName} className="space-y-1">
+        {entries.map(([oldName, newName], index) => (
+          // Stable positional key: the old name is the edited value itself,
+          // so keying by it would remount (and unfocus) the input on every
+          // keystroke. Order is preserved on rename; delete re-keys rows,
+          // which is acceptable for a discrete click action.
+          <div key={index} className="space-y-1">
             <div className="flex gap-2">
               <input
                 type="text"
