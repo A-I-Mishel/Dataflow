@@ -2,9 +2,13 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 from fastapi import HTTPException
-from sklearn.preprocessing import LabelEncoder
 
 from models import NodeConfig
+
+# NOTE: sklearn is intentionally NOT imported at module top. It costs
+# ~100MB+ RSS on import, and this backend runs on a 512MB instance where
+# most requests never touch label encoding. Imported lazily in the branch
+# below; first label-encode pays a one-time ~1-2s import cost.
 
 
 def apply_encode_categorical(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFrame, str]:
@@ -37,6 +41,8 @@ def apply_encode_categorical(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.D
         return result, code
 
     if method == "label":
+        from sklearn.preprocessing import LabelEncoder
+
         result = df.copy(deep=True)
         for col in target:
             encoder: LabelEncoder = LabelEncoder()

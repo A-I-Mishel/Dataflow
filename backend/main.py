@@ -40,6 +40,7 @@ from session_store import (
     get_result,
     get_session,
     is_large_session,
+    log_memory_usage,
     store_large_session,
     store_result,
     store_session,
@@ -206,6 +207,7 @@ def _handle_small_upload(
 
     store_session(key, df)
     logger.info("Stored session %s with shape %s", session_id, df.shape)
+    log_memory_usage("upload")
     _log_session_meta(db, session_id, filename, int(df.shape[0]), [str(c) for c in df.columns.tolist()])
 
     return UploadResponse(
@@ -242,6 +244,7 @@ def _handle_large_upload(
     logger.info(
         "Stored large-file session %s with %d rows at %s", session_id, total_rows, tmp_path
     )
+    log_memory_usage("upload-large")
     _log_session_meta(db, session_id, filename, total_rows, columns)
 
     return UploadResponse(
@@ -355,6 +358,7 @@ def execute(
             original, request.nodes, request.edges
         )
     store_result(key, result)
+    log_memory_usage("execute")
     try:
         crud.log_execution(db, request.session_id, "custom", int(result.shape[0]))
     except Exception as exc:
