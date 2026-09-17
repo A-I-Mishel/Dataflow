@@ -135,7 +135,7 @@ export default function Header() {
   const exportDisabled = !resultData || generatedCode === '' || isExporting;
 
   return (
-    <header className="h-[64px] shrink-0 relative z-30 border-b border-white/[0.07] bg-panel/80 backdrop-blur-xl">
+    <header className="h-[64px] shrink-0 relative z-30 border-b border-linesoft bg-panel/80 backdrop-blur-xl">
       {/* gradient hairline */}
       <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
       <div className="h-full flex items-center justify-between gap-3 px-3 lg:px-5">
@@ -164,7 +164,7 @@ export default function Header() {
             title={isStale ? 'Result is stale — re-run to refresh (Ctrl+Enter)' : 'Run pipeline (Ctrl+Enter)'}
             className={`relative inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm transition-all ${
               runDisabled
-                ? 'bg-white/10 text-ink3 opacity-50 cursor-not-allowed'
+                ? 'bg-elevated text-ink3 opacity-50 cursor-not-allowed'
                 : 'bg-gradient-to-r from-accent to-accent2 text-white hover:shadow-md hover:brightness-[1.05] active:scale-[0.98] opacity-95 hover:opacity-100'
             }`}
           >

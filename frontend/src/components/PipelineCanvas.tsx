@@ -194,18 +194,18 @@ export default function PipelineCanvas({
           showZoom={true}
           showFitView={true}
           showInteractive={true}
-          className="rounded-2xl border border-white/[0.06] shadow-card backdrop-blur-md overflow-hidden opacity-90"
+          className="rounded-2xl border border-line shadow-card backdrop-blur-md overflow-hidden opacity-90"
         />
         {!isMobile && (
           <MiniMap
             nodeColor={minimapNodeColor}
             maskColor={theme === 'light' ? 'rgba(245, 247, 250, 0.9)' : 'rgba(15, 16, 27, 0.82)'}
-            className="rounded-2xl border border-white/[0.06] shadow-card overflow-hidden backdrop-blur-md opacity-90"
+            className="rounded-2xl border border-line shadow-card overflow-hidden backdrop-blur-md opacity-90"
           />
         )}
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 pointer-events-none z-10">
-            <div className="max-w-[420px] w-full rounded-[28px] border border-white/[0.06] bg-panel/75 backdrop-blur-xl shadow-card p-8 text-center">
+            <div className="max-w-[420px] w-full rounded-[28px] border border-line bg-panel/75 backdrop-blur-xl shadow-card p-8 text-center">
               <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-accent/90 to-accent2/90 grid place-items-center shadow-sm mb-5 opacity-90">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
               </div>

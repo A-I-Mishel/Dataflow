@@ -57,7 +57,7 @@ export default function CodeView({ code }: CodeViewProps) {
           Download .py
         </button>
       </div>
-      <div className="flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-white/[0.06] shadow-card bg-panel">
+      <div className="flex-1 min-h-[420px] rounded-2xl overflow-hidden border border-line shadow-card bg-panel">
         <Editor
           height="100%"
           language="python"

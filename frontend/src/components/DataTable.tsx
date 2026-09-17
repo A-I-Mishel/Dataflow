@@ -56,7 +56,7 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
 
   return (
     <div>
-      <div className="overflow-hidden rounded-2xl border border-white/[0.06] shadow-card">
+      <div className="overflow-hidden rounded-2xl border border-line shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse bg-panel">
             <thead>
@@ -76,7 +76,7 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
               {table.getRowModel().rows.map((row, rowIndex) => (
                 <tr
                   key={row.id}
-                  className={`border-t border-white/[0.04] hover:bg-elevated/40 transition-colors ${
+                  className={`border-t border-linesoft hover:bg-elevated/40 transition-colors ${
                     rowIndex % 2 === 1 ? 'bg-canvas/20' : 'bg-transparent'
                   }`}
                 >

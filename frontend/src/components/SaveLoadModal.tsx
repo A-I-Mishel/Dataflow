@@ -116,10 +116,10 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
       onClick={onClose}
     >
       <div
-        className="bg-panel border border-white/[0.08] rounded-[24px] w-[30rem] max-h-[82vh] flex flex-col shadow-card overflow-hidden"
+        className="bg-panel border border-line rounded-[24px] w-[30rem] max-h-[82vh] flex flex-col shadow-card overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="p-1 m-2 rounded-full bg-elevated border border-white/[0.06] flex">
+        <div className="p-1 m-2 rounded-full bg-elevated border border-line flex">
           <button
             type="button"
             onClick={() => setTab('save')}
@@ -158,7 +158,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                   }
                 }}
                 placeholder="e.g. My Churn Cleaning"
-                className="w-full rounded-2xl bg-elevated/60 border border-white/[0.06] px-4 py-3 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
+                className="w-full rounded-2xl bg-elevated/60 border border-line px-4 py-3 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
               />
             </div>
             <button
@@ -195,7 +195,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                 {savedPipelines.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-card border border-white/[0.06] px-4 py-3 hover:border-accent/20 transition-colors"
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-card border border-line px-4 py-3 hover:border-accent/20 transition-colors"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-ink truncate">

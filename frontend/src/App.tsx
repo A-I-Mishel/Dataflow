@@ -135,8 +135,8 @@ export default function App() {
       <div className="canvas-mesh" aria-hidden />
       <Header />
       <div className="flex flex-1 flex-col lg:flex-row lg:overflow-hidden relative z-10">
-        <aside className="w-full lg:w-[280px] border-b lg:border-b-0 lg:border-r border-white/[0.06] bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
-          <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/[0.06]">
+        <aside className="w-full lg:w-[280px] border-b lg:border-b-0 lg:border-r border-line bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
+          <div className="px-4 py-3.5 flex items-center justify-between border-b border-linesoft">
             <h2 className="text-[11px] font-extrabold tracking-[0.16em] text-ink3 uppercase">Nodes</h2>
             <span className="text-[11px] font-medium text-ink3 bg-elevated border border-line px-2 py-0.5 rounded-full">{PALETTE_ITEMS.length}</span>
           </div>
@@ -145,12 +145,12 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="relative bg-transparent h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink lg:m-3 lg:rounded-2xl overflow-hidden border border-white/[0.06] lg:shadow-card">
+        <main className="relative bg-transparent h-[70vh] lg:h-auto lg:flex-1 shrink-0 lg:shrink lg:m-3 lg:rounded-2xl overflow-hidden border border-line lg:shadow-card">
           <PipelineCanvas />
         </main>
 
-        <aside className="w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l-0 border-white/[0.06] bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
-          <div className="px-4 py-3.5 flex items-center justify-between border-b border-white/[0.06]">
+        <aside className="w-full lg:w-[380px] border-t lg:border-t-0 lg:border-l-0 border-line bg-panel/70 backdrop-blur-xl flex flex-col shrink-0 lg:m-3 lg:rounded-2xl lg:border lg:shadow-card overflow-hidden">
+          <div className="px-4 py-3.5 flex items-center justify-between border-b border-linesoft">
             <h2 className="text-[11px] font-extrabold tracking-[0.16em] text-ink3 uppercase">Output</h2>
             <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" title="live" />
           </div>

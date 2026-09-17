@@ -35,7 +35,7 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
   const numericStats = stats.filter((stat) => stat.value !== undefined);
 
   return (
-    <div className="bg-card/70 backdrop-blur-xl rounded-2xl p-4 border border-white/[0.06] shadow-card">
+    <div className="bg-card/70 backdrop-blur-xl rounded-2xl p-4 border border-line shadow-card">
       <div className="flex flex-row justify-between items-center gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-extrabold tracking-tight text-ink truncate">{name}</span>
@@ -59,7 +59,7 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
       {isNumericColumn(column) && numericStats.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
           {numericStats.map((stat) => (
-            <div key={stat.label} className="rounded-xl bg-elevated/60 border border-white/[0.04] px-2 py-1.5">
+            <div key={stat.label} className="rounded-xl bg-elevated/60 border border-linesoft px-2 py-1.5">
               <p className="text-[10px] font-bold tracking-widest uppercase text-ink3">{stat.label}</p>
               <p className="text-xs font-bold text-ink">
                 {typeof stat.value === 'number' ? stat.value.toFixed(2) : ''}
@@ -119,19 +119,19 @@ export default function ProfileView({ profile }: ProfileViewProps) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl p-4 border border-white/[0.06] bg-gradient-to-br from-accent/15 to-accent2/15 backdrop-blur-xl">
+        <div className="rounded-2xl p-4 border border-line bg-gradient-to-br from-accent/15 to-accent2/15 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Rows</p>
           <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.shape[0].toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+        <div className="rounded-2xl p-4 border border-line bg-card/70 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Columns</p>
           <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.shape[1]}</p>
         </div>
-        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+        <div className="rounded-2xl p-4 border border-line bg-card/70 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Missing Values</p>
           <p className={`text-2xl font-extrabold tracking-tight mt-1 ${profile.total_missing > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{profile.total_missing}</p>
         </div>
-        <div className="rounded-2xl p-4 border border-white/[0.06] bg-card/70 backdrop-blur-xl">
+        <div className="rounded-2xl p-4 border border-line bg-card/70 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Memory</p>
           <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.memory_usage_mb} <span className="text-sm font-bold text-ink3">MB</span></p>
         </div>

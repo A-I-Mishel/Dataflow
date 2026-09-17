@@ -85,7 +85,7 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
                   onClick={() => handleAdd(item.type)}
                   onKeyDown={(e) => handleKeyDown(e, item.type)}
                   title="Drag onto canvas or tap"
-                  className="group flex items-center gap-3 p-3 rounded-2xl bg-card border border-white/[0.05] hover:border-accent/20 hover:bg-elevated/70 cursor-grab active:cursor-grabbing transition-all hover:shadow-md hover:-translate-y-0.5"
+                  className="group flex items-center gap-3 p-3 rounded-2xl bg-card border border-line hover:border-accent/20 hover:bg-elevated/70 cursor-grab active:cursor-grabbing transition-all hover:shadow-md hover:-translate-y-0.5"
                 >
                   <div
                     className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br ${GROUP_META[groupKey].color} opacity-90 group-hover:opacity-100 shadow-sm transition-opacity`}
