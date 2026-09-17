@@ -1,5 +1,5 @@
 import type { NodeType, PipelineEdge, PipelineNode } from '../types';
-import { computeNodeSchemas } from './schema';
+import { computeNodeSchemas, nonNumericSelected } from './schema';
 
 export interface NodeConfigError {
   nodeId: string;
@@ -234,6 +234,7 @@ export function validateNodeConfigs(
   nodes: PipelineNode[],
   edges: PipelineEdge[],
   columnList: string[],
+  dtypes?: Record<string, string>,
 ): NodeConfigError[] {
   const errors: NodeConfigError[] = [];
   // Each node is checked against its own input schema (base columns folded
@@ -251,6 +252,32 @@ export function validateNodeConfigs(
         nodeId: node.id,
         message: `Node "${node.data.label}" needs a fill strategy (mean, median, mode, or constant)`,
       });
+    }
+    if (
+      node.type === 'fill-na' &&
+      (config.strategy === 'mean' || config.strategy === 'median') &&
+      config.columns !== undefined
+    ) {
+      const bad = nonNumericSelected(config.columns, dtypes);
+      if (bad.length > 0) {
+        errors.push({
+          nodeId: node.id,
+          message: `Node "${node.data.label}" fills non-numeric columns with ${config.strategy}: ${bad.join(', ')}`,
+        });
+      }
+    }
+    if (
+      node.type === 'normalize' &&
+      config.method !== undefined &&
+      config.columns !== undefined
+    ) {
+      const bad = nonNumericSelected(config.columns, dtypes);
+      if (bad.length > 0) {
+        errors.push({
+          nodeId: node.id,
+          message: `Node "${node.data.label}" normalizes non-numeric columns: ${bad.join(', ')}`,
+        });
+      }
     }
     if (
       (node.type === 'normalize' || node.type === 'encode-categorical') &&
@@ -308,6 +335,7 @@ export function getNodeErrors(
   node: PipelineNode,
   columnList: string[],
   inputSchema?: string[],
+  dtypes?: Record<string, string>,
 ): string[] {
   const errors: string[] = [];
   const cfg = node.data.config;
@@ -316,9 +344,19 @@ export function getNodeErrors(
   const knownColumns = inputSchema ?? columnList;
 
   switch (node.type) {
-    case 'fill-na':
+    case 'fill-na': {
       if (!cfg.strategy) errors.push('Select a fill strategy');
+      if (
+        (cfg.strategy === 'mean' || cfg.strategy === 'median') &&
+        cfg.columns !== undefined
+      ) {
+        const bad = nonNumericSelected(cfg.columns, dtypes);
+        if (bad.length > 0) {
+          errors.push(`Fill ${cfg.strategy} needs numeric columns: ${bad.join(', ')}`);
+        }
+      }
       break;
+    }
     case 'drop-column':
       if (!cfg.columns || cfg.columns.length === 0) errors.push('Select at least one column');
       break;
@@ -346,9 +384,16 @@ export function getNodeErrors(
         });
       }
       break;
-    case 'normalize':
+    case 'normalize': {
       if (!cfg.method) errors.push('Select a normalization method');
+      if (cfg.columns !== undefined) {
+        const bad = nonNumericSelected(cfg.columns, dtypes);
+        if (bad.length > 0) {
+          errors.push(`Normalize needs numeric columns: ${bad.join(', ')}`);
+        }
+      }
       break;
+    }
     case 'encode-categorical':
       // Empty columns = auto mode (backend encodes all object/category
       // columns), so it must not raise an error ring.

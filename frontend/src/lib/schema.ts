@@ -119,6 +119,35 @@ export function isMissingOption(schema: string[], column: string): boolean {
   return column !== '' && !schema.includes(column);
 }
 
+/** Pandas-numeric dtype strings (int64, float64, …). Unknown dtype → false. */
+export function isNumericDtype(dtype: string | undefined): boolean {
+  if (!dtype) return false;
+  const lower = dtype.toLowerCase();
+  return (
+    lower.includes('int') ||
+    lower.includes('float') ||
+    lower.includes('double') ||
+    lower.includes('number')
+  );
+}
+
+/**
+ * Subset of `selected` proven non-numeric. Columns absent from the dtype
+ * map (e.g. rename outputs) are skipped, never flagged — the backend
+ * decides those at run time.
+ */
+export function nonNumericSelected(
+  selected: string[],
+  dtypes: Record<string, string> | undefined,
+): string[] {
+  if (!dtypes) return [];
+  return selected.filter(
+    (column) =>
+      Object.prototype.hasOwnProperty.call(dtypes, column) &&
+      !isNumericDtype(dtypes[column]),
+  );
+}
+
 /**
  * Columns available at the given node's input. Falls back to the global
  * list before any upload exists.

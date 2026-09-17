@@ -268,6 +268,27 @@ def test_encode_label(sample_df: pd.DataFrame) -> None:
     assert set(result["Dept"].unique()).issubset({0, 1})
 
 
+def test_encode_onehot_high_cardinality_refused() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"ID": [f"id-{i}" for i in range(20000)], "V": [1] * 20000}
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        apply_encode_categorical(df, NodeConfig(method="one-hot", columns=["ID"]))
+    assert "one-hot" in str(exc_info.value.detail)
+    assert "label" in str(exc_info.value.detail).lower()
+
+
+def test_encode_onehot_modest_cardinality_allowed() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"Dept": ["IT", "HR"] * 500, "V": list(range(1000))}
+    )
+    result, code = apply_encode_categorical(
+        df, NodeConfig(method="one-hot", columns=["Dept"])
+    )
+    _assert_valid_code(code)
+    assert result.shape == (1000, 3)
+
+
 def test_encode_empty(sample_df: pd.DataFrame) -> None:
     result, code = apply_encode_categorical(sample_df, NodeConfig(method="one-hot", columns=[]))
     _assert_valid_code(code)

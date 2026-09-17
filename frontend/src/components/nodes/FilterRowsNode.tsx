@@ -3,7 +3,12 @@ import { Filter } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
-import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
+import {
+  isMissingOption,
+  isNumericDtype,
+  useNodeColumns,
+  withSelected,
+} from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -25,14 +30,6 @@ function stripFirstLogic(conditions: Condition[]): Condition[] {
   if (conditions.length === 0) return conditions;
   const [first, ...rest] = conditions;
   return [{ column: first.column, operator: first.operator, value: first.value }, ...rest];
-}
-
-function isNumericDtype(dtype: string | undefined): boolean {
-  if (!dtype) return false;
-  const lower = dtype.toLowerCase();
-  return (
-    lower.includes('int') || lower.includes('float') || lower.includes('double') || lower.includes('number')
-  );
 }
 
 export default function FilterRowsNode({ id, data, selected }: NodeProps) {

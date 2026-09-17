@@ -15,17 +15,21 @@ const STRATEGIES = ['mean', 'median', 'mode', 'constant'] as const;
 export default function FillNaNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
+  const originalData = usePipelineStore((state) => state.originalData);
+  const resultData = usePipelineStore((state) => state.resultData);
   const label = typeof data.label === 'string' ? data.label : 'Fill NA';
   const config = (data.config ?? {}) as NodeConfig;
   const schemaCols = useNodeColumns(id);
+  const dtypes = originalData?.dtypes ?? resultData?.dtypes;
   const errors = useMemo(
     () =>
       getNodeErrors(
         { id, type: 'fill-na', position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
+        dtypes,
       ),
-    [id, label, config, columnList, schemaCols],
+    [id, label, config, columnList, schemaCols, dtypes],
   );
   const strategy = config.strategy ?? '';
   const value = config.value ?? '';

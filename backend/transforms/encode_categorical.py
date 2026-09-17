@@ -1,9 +1,15 @@
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from fastapi import HTTPException
 
 from models import NodeConfig
+
+# Above this estimated output size, one-hot is refused instead of risking
+# an OOM. 10M bool cells peak well under 100MB transient even at 3x during
+# get_dummies construction; the 25k-row x 25k-ID case (~640M cells) that
+# motivated this trips it by ~64x.
+ONE_HOT_MAX_CELLS: int = 10_000_000
 
 # NOTE: sklearn is intentionally NOT imported at module top. It costs
 # ~100MB+ RSS on import, and this backend runs on a 512MB instance where
@@ -30,6 +36,32 @@ def apply_encode_categorical(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.D
         raise HTTPException(status_code=400, detail=f"encode-categorical: unknown columns {missing}")
 
     if method == "one-hot":
+        # Guard against the classic one-hot memory bomb: an ID-like column
+        # with U unique values explodes into U dummy columns (rows × U
+        # cells). Refuse with a clear message instead of OOM-killing the
+        # server; label encoding or dropping is almost always what high-
+        # cardinality columns want.
+        uniques: Dict[str, int] = {}
+        for col in target:
+            try:
+                uniques[col] = int(df[col].nunique(dropna=True))
+            except Exception:
+                uniques[col] = 0
+        new_cols: int = sum(uniques.values())
+        kept_cols: int = max(len(df.columns) - len(target), 0)
+        est_cells: int = int(df.shape[0]) * (kept_cols + new_cols)
+        if est_cells > ONE_HOT_MAX_CELLS:
+            worst: str = max(uniques, key=lambda c: uniques[c])
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"encode-categorical: one-hot would create ~{new_cols} dummy "
+                    f"columns (~{est_cells} cells; '{worst}' alone has "
+                    f"{uniques[worst]} unique values). Refusing to protect "
+                    "server memory — use label encoding for high-cardinality "
+                    "columns like IDs, or drop the column."
+                ),
+            )
         result: pd.DataFrame = pd.get_dummies(df, columns=target)
         if auto:
             code: str = (

@@ -63,8 +63,10 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     // tracks the latest result instead, so using it here would flag valid
     // rename/drop pipelines on re-runs. Rename outputs are NOT merged in:
     // validateNodeConfigs folds them per-node itself, positionally.
+    // Dtypes come from the upload for the same reason (numeric checks).
     const baseColumns = originalData !== null ? originalData.columns : columnList;
-    const configErrors = validateNodeConfigs(nodes, edges, baseColumns);
+    const baseDtypes = originalData !== null ? originalData.dtypes : undefined;
+    const configErrors = validateNodeConfigs(nodes, edges, baseColumns, baseDtypes);
     if (configErrors.length > 0) {
       const message =
         configErrors.length === 1

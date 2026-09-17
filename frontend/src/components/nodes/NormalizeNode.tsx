@@ -15,17 +15,21 @@ const METHODS = ['min-max', 'z-score'];
 export default function NormalizeNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
+  const originalData = usePipelineStore((state) => state.originalData);
+  const resultData = usePipelineStore((state) => state.resultData);
   const label = typeof data.label === 'string' ? data.label : 'Normalize';
   const config = (data.config ?? {}) as NodeConfig;
   const schemaCols = useNodeColumns(id);
+  const dtypes = originalData?.dtypes ?? resultData?.dtypes;
   const errors = useMemo(
     () =>
       getNodeErrors(
         { id, type: 'normalize', position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
+        dtypes,
       ),
-    [id, label, config, columnList, schemaCols],
+    [id, label, config, columnList, schemaCols, dtypes],
   );
   const method = config.method ?? '';
   const columns = config.columns ?? [];
