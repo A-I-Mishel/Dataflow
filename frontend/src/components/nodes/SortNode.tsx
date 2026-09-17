@@ -3,6 +3,7 @@ import { ArrowUpDown } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -23,6 +24,8 @@ export default function SortNode({ id, data, selected }: NodeProps) {
   );
   const by = config.by ?? [];
   const ascending = config.ascending !== false;
+  const schemaCols = useNodeColumns(id);
+  const options = useMemo(() => withSelected(schemaCols, by), [schemaCols, by]);
 
   const handleByChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const selectedColumns = Array.from(event.target.selectedOptions).map(
@@ -53,9 +56,10 @@ export default function SortNode({ id, data, selected }: NodeProps) {
             onChange={handleByChange}
             className={`${inputClass} h-24`}
           >
-            {columnList.map((column) => (
+            {options.map((column) => (
               <option key={column} value={column}>
                 {column}
+                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
               </option>
             ))}
           </select>

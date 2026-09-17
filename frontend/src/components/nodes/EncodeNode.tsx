@@ -3,6 +3,7 @@ import { Tags } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -30,6 +31,8 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
   );
   const method = config.method ?? '';
   const columns = config.columns ?? [];
+  const schemaCols = useNodeColumns(id);
+  const options = useMemo(() => withSelected(schemaCols, columns), [schemaCols, columns]);
 
   const handleMethodChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     updateNodeConfig(id, { method: event.target.value });
@@ -75,9 +78,10 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
               onChange={handleColumnsChange}
               className={`${inputClass} h-24`}
             >
-            {columnList.map((column) => (
+            {options.map((column) => (
               <option key={column} value={column}>
                 {column}
+                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
               </option>
             ))}
           </select>

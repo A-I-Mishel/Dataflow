@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -37,6 +38,7 @@ function isNumericDtype(dtype: string | undefined): boolean {
 export default function FilterRowsNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
+  const schemaCols = useNodeColumns(id);
   const originalData = usePipelineStore((state) => state.originalData);
   const resultData = usePipelineStore((state) => state.resultData);
   const label = typeof data.label === 'string' ? data.label : 'Filter Rows';
@@ -143,9 +145,10 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
                 className={inputClass}
               >
                 <option value="">Select column</option>
-                {columnList.map((column) => (
+                {withSelected(schemaCols, condition.column ?? '').map((column) => (
                   <option key={column} value={column}>
                     {column}
+                    {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
                   </option>
                 ))}
               </select>

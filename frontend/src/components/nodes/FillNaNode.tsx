@@ -3,6 +3,7 @@ import { Droplets } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -26,6 +27,8 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
   const strategy = config.strategy ?? '';
   const value = config.value ?? '';
   const columns = config.columns ?? [];
+  const schemaCols = useNodeColumns(id);
+  const options = useMemo(() => withSelected(schemaCols, columns), [schemaCols, columns]);
 
   const handleStrategyChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const next = event.target.value;
@@ -93,9 +96,10 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
             onChange={handleColumnsChange}
               className={`${inputClass} h-24`}
           >
-            {columnList.map((column) => (
+            {options.map((column) => (
               <option key={column} value={column}>
                 {column}
+                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
               </option>
             ))}
           </select>

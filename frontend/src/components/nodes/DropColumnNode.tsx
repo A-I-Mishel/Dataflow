@@ -3,6 +3,7 @@ import { XCircle } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -22,6 +23,8 @@ export default function DropColumnNode({ id, data, selected }: NodeProps) {
     [id, label, config, columnList],
   );
   const columns = config.columns ?? [];
+  const schemaCols = useNodeColumns(id);
+  const options = useMemo(() => withSelected(schemaCols, columns), [schemaCols, columns]);
 
   const handleColumnsChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const selectedColumns = Array.from(event.target.selectedOptions).map(
@@ -48,9 +51,10 @@ export default function DropColumnNode({ id, data, selected }: NodeProps) {
             onChange={handleColumnsChange}
               className={`${inputClass} h-24`}
           >
-            {columnList.map((column) => (
+            {options.map((column) => (
               <option key={column} value={column}>
                 {column}
+                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
               </option>
             ))}
           </select>
