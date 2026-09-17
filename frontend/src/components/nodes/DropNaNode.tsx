@@ -3,11 +3,12 @@ import { Trash2 } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
-import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
+import { useNodeColumns } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
-import NodeShell, { fieldLabelClass, inputClass } from './NodeShell';
+import ColumnChecklist from './ColumnChecklist';
+import NodeShell from './NodeShell';
 
 export default function DropNaNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
@@ -25,17 +26,22 @@ export default function DropNaNode({ id, data, selected }: NodeProps) {
   const subset = config.subset ?? false;
   const columns = config.columns ?? [];
   const schemaCols = useNodeColumns(id);
-  const options = useMemo(() => withSelected(schemaCols, columns), [schemaCols, columns]);
 
   const handleSubsetChange = (event: ChangeEvent<HTMLInputElement>): void => {
     updateNodeConfig(id, { subset: event.target.checked });
   };
 
-  const handleColumnsChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    const selectedColumns = Array.from(event.target.selectedOptions).map(
-      (option) => option.value,
-    );
-    updateNodeConfig(id, { columns: selectedColumns });
+  const handleToggleColumn = (column: string): void => {
+    const next = columns.includes(column)
+      ? columns.filter((c) => c !== column)
+      : [...columns, column];
+    const selected = new Set(next);
+    updateNodeConfig(id, {
+      columns: [
+        ...schemaCols.filter((c) => selected.has(c)),
+        ...next.filter((c) => !schemaCols.includes(c)),
+      ],
+    });
   };
 
   return (
@@ -53,22 +59,12 @@ export default function DropNaNode({ id, data, selected }: NodeProps) {
           Subset only selected columns
         </label>
         {subset && (
-          <div>
-            <p className={fieldLabelClass}>Columns</p>
-            <select
-              multiple
-              value={columns}
-              onChange={handleColumnsChange}
-              className={`${inputClass} h-24`}
-            >
-              {options.map((column) => (
-                <option key={column} value={column}>
-                  {column}
-                  {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ColumnChecklist
+            label="Columns"
+            columns={schemaCols}
+            selected={columns}
+            onToggle={handleToggleColumn}
+          />
         )}
     </NodeShell>
   );

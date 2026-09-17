@@ -3,11 +3,12 @@ import { ArrowUpDown } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
-import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
+import { useNodeColumns } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
-import NodeShell, { fieldLabelClass, inputClass } from './NodeShell';
+import ColumnChecklist from './ColumnChecklist';
+import NodeShell from './NodeShell';
 
 export default function SortNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
@@ -25,13 +26,20 @@ export default function SortNode({ id, data, selected }: NodeProps) {
   const by = config.by ?? [];
   const ascending = config.ascending !== false;
   const schemaCols = useNodeColumns(id);
-  const options = useMemo(() => withSelected(schemaCols, by), [schemaCols, by]);
 
-  const handleByChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    const selectedColumns = Array.from(event.target.selectedOptions).map(
-      (option) => option.value,
-    );
-    updateNodeConfig(id, { by: selectedColumns });
+  const handleToggleColumn = (column: string): void => {
+    const next = by.includes(column)
+      ? by.filter((c) => c !== column)
+      : [...by, column];
+    const selected = new Set(next);
+    // Preserve schema order so sort priority still follows list order,
+    // exactly as the native multi-select did.
+    updateNodeConfig(id, {
+      by: [
+        ...schemaCols.filter((c) => selected.has(c)),
+        ...next.filter((c) => !schemaCols.includes(c)),
+      ],
+    });
   };
 
   const handleAscendingChange = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -48,25 +56,13 @@ export default function SortNode({ id, data, selected }: NodeProps) {
       errors={errors}
       configured={by.length > 0 || !ascending}
     >
-        <div>
-          <p className={fieldLabelClass}>Sort by</p>
-          <select
-            multiple
-            value={by}
-            onChange={handleByChange}
-            className={`${inputClass} h-24`}
-          >
-            {options.map((column) => (
-              <option key={column} value={column}>
-                {column}
-                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
-              </option>
-            ))}
-          </select>
-          {by.length === 0 && (
-            <p className="text-red-400 text-xs mt-1">Select at least one column</p>
-          )}
-        </div>
+        <ColumnChecklist
+          label="Sort by"
+          columns={schemaCols}
+          selected={by}
+          onToggle={handleToggleColumn}
+          emptyHint={<p className="text-red-400 text-xs mt-1">Select at least one column</p>}
+        />
         <label className="flex items-center gap-2 text-xs font-medium text-ink2">
           <input type="checkbox" checked={ascending} onChange={handleAscendingChange} />
           Ascending

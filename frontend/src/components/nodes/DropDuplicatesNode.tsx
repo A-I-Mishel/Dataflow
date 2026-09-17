@@ -1,13 +1,13 @@
 import type { NodeProps } from '@xyflow/react';
 import { Copy } from 'lucide-react';
-import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
-import { isMissingOption, useNodeColumns, withSelected } from '../../lib/schema';
+import { useNodeColumns } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
-import NodeShell, { fieldLabelClass, hintClass, inputClass } from './NodeShell';
+import ColumnChecklist from './ColumnChecklist';
+import NodeShell, { hintClass } from './NodeShell';
 
 export default function DropDuplicatesNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
@@ -24,13 +24,18 @@ export default function DropDuplicatesNode({ id, data, selected }: NodeProps) {
   );
   const columns = config.columns ?? [];
   const schemaCols = useNodeColumns(id);
-  const options = useMemo(() => withSelected(schemaCols, columns), [schemaCols, columns]);
 
-  const handleColumnsChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    const selectedColumns = Array.from(event.target.selectedOptions).map(
-      (option) => option.value,
-    );
-    updateNodeConfig(id, { columns: selectedColumns });
+  const handleToggleColumn = (column: string): void => {
+    const next = columns.includes(column)
+      ? columns.filter((c) => c !== column)
+      : [...columns, column];
+    const selected = new Set(next);
+    updateNodeConfig(id, {
+      columns: [
+        ...schemaCols.filter((c) => selected.has(c)),
+        ...next.filter((c) => !schemaCols.includes(c)),
+      ],
+    });
   };
 
   return (
@@ -43,25 +48,15 @@ export default function DropDuplicatesNode({ id, data, selected }: NodeProps) {
       errors={errors}
       configured
     >
-      <div>
-        <p className={fieldLabelClass}>Key columns (empty = whole row)</p>
-        <select
-          multiple
-          value={columns}
-          onChange={handleColumnsChange}
-          className={`${inputClass} h-24`}
-        >
-            {options.map((column) => (
-              <option key={column} value={column}>
-                {column}
-                {isMissingOption(schemaCols, column) ? ' (missing)' : ''}
-              </option>
-            ))}
-        </select>
-        {columns.length === 0 && (
+      <ColumnChecklist
+        label="Key columns (empty = whole row)"
+        columns={schemaCols}
+        selected={columns}
+        onToggle={handleToggleColumn}
+        emptyHint={
           <p className={hintClass}>No columns selected — full-row duplicates are removed.</p>
-        )}
-      </div>
+        }
+      />
     </NodeShell>
   );
 }
