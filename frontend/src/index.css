@@ -206,7 +206,50 @@ body,
   cursor: pointer;
 }
 
-/* Light theme uses the same native OS cursors — no custom art. */
+/* Light theme: same familiar shapes, very light gray with a soft slate
+   edge so they stay defined on white cards without looking heavy. */
+.light .react-flow__pane.draggable {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='none' stroke='%238b95a5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g><g fill='none' stroke='%23e4e9f0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>")
+      13 13,
+    grab;
+}
+.light .react-flow__pane.dragging,
+.light .react-flow__node .node-drag-handle:active {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='none' stroke='%238b95a5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g><g fill='none' stroke='%23d3dae3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>")
+      13 13,
+    grabbing;
+}
+.light .react-flow__node.selectable,
+.light .react-flow__node.draggable,
+.light .react-flow__node .cursor-default {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'><path d='M6 3l13 9.5-7.5 1L9 21z' fill='%23e4e9f0' stroke='%238b95a5' stroke-width='1.6' stroke-linejoin='round'/></svg>")
+      6 3,
+    default !important;
+}
+.light .react-flow__node .node-drag-handle,
+.light .react-flow__node .cursor-grab {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='none' stroke='%238b95a5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g><g fill='none' stroke='%23e4e9f0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>")
+      13 13,
+    grab !important;
+}
+.light .react-flow__node .active\:cursor-grabbing:active {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='none' stroke='%238b95a5' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g><g fill='none' stroke='%23d3dae3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>")
+      13 13,
+    grabbing !important;
+}
+.light .react-flow__node select,
+.light .react-flow__node button,
+.light .react-flow__node a {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><path d='M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z' fill='%23e4e9f0' stroke='%238b95a5' stroke-width='1.5' stroke-linejoin='round'/></svg>")
+      4 4,
+    pointer;
+}
 
 /* Scroll inside nodes — wheel over a node scrolls its content instead of
    zooming the canvas (React Flow `nowheel` opt-out) and doesn't chain to pane. */
