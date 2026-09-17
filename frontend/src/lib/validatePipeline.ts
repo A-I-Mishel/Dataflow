@@ -1,4 +1,5 @@
 import type { NodeType, PipelineEdge, PipelineNode } from '../types';
+import { computeNodeSchemas } from './schema';
 
 export interface NodeConfigError {
   nodeId: string;
@@ -231,13 +232,20 @@ function unknownHint(unknown: string[], known: Set<string>): string {
 
 export function validateNodeConfigs(
   nodes: PipelineNode[],
+  edges: PipelineEdge[],
   columnList: string[],
 ): NodeConfigError[] {
   const errors: NodeConfigError[] = [];
-  const known = new Set(columnList);
+  // Each node is checked against its own input schema (base columns folded
+  // through topological predecessors) — the same schemas the dropdowns
+  // offer — so a correctly renamed column validates instead of erroring.
+  // Pass pure base columns here: phantom names would otherwise propagate
+  // into every downstream schema and weaken every check.
+  const schemas = computeNodeSchemas(nodes, edges, columnList);
 
   for (const node of nodes) {
     const config = node.data.config;
+    const known = new Set(schemas.get(node.id) ?? columnList);
     if (node.type === 'fill-na' && config.strategy === undefined) {
       errors.push({
         nodeId: node.id,
@@ -296,9 +304,16 @@ export function validateNodeConfigs(
   return errors;
 }
 
-export function getNodeErrors(node: PipelineNode, columnList: string[]): string[] {
+export function getNodeErrors(
+  node: PipelineNode,
+  columnList: string[],
+  inputSchema?: string[],
+): string[] {
   const errors: string[] = [];
   const cfg = node.data.config;
+  // Prefer the node's positional input schema when provided; the global
+  // list describes the upload (or last result), not this point in the chain.
+  const knownColumns = inputSchema ?? columnList;
 
   switch (node.type) {
     case 'fill-na':
@@ -346,7 +361,7 @@ export function getNodeErrors(node: PipelineNode, columnList: string[]): string[
 
   const colsToCheck = cfg.columns ?? cfg.by ?? [];
   colsToCheck.forEach((col) => {
-    if (!columnList.includes(col)) errors.push(`Column "${col}" no longer exists`);
+    if (!knownColumns.includes(col)) errors.push(`Column "${col}" no longer exists`);
   });
 
   return errors;

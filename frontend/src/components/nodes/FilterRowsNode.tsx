@@ -46,10 +46,11 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
   const errors = useMemo(
     () =>
       getNodeErrors(
-        { id, type: 'filter-rows', position: { x: 0, y: 0 }, data: { label, config } },
-        columnList,
-      ),
-    [id, label, config, columnList],
+          { id, type: 'filter-rows', position: { x: 0, y: 0 }, data: { label, config } },
+          columnList,
+          schemaCols,
+        ),
+    [id, label, config, columnList, schemaCols],
   );
   const conditions = config.conditions ?? [];
 

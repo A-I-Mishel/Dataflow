@@ -15,17 +15,18 @@ export default function DropNaNode({ id, data, selected }: NodeProps) {
   const columnList = usePipelineStore((state) => state.columnList);
   const label = typeof data.label === 'string' ? data.label : 'Drop NA';
   const config = (data.config ?? {}) as NodeConfig;
+  const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
         { id, type: 'drop-na', position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
+        schemaCols,
       ),
-    [id, label, config, columnList],
+    [id, label, config, columnList, schemaCols],
   );
   const subset = config.subset ?? false;
   const columns = config.columns ?? [];
-  const schemaCols = useNodeColumns(id);
 
   const handleSubsetChange = (event: ChangeEvent<HTMLInputElement>): void => {
     updateNodeConfig(id, { subset: event.target.checked });

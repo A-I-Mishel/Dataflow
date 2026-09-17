@@ -3,6 +3,7 @@ import { Type } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { useMemo } from 'react';
 
+import { useNodeColumns } from '../../lib/schema';
 import { getNodeErrors } from '../../lib/validatePipeline';
 import { usePipelineStore } from '../../stores/pipelineStore';
 import type { NodeConfig } from '../../types';
@@ -13,13 +14,15 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   const columnList = usePipelineStore((state) => state.columnList);
   const label = typeof data.label === 'string' ? data.label : 'Rename Column';
   const config = (data.config ?? {}) as NodeConfig;
+  const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
         { id, type: 'rename-column', position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
+        schemaCols,
       ),
-    [id, label, config, columnList],
+    [id, label, config, columnList, schemaCols],
   );
   const mapping = config.mapping ?? {};
   const entries = Object.entries(mapping);

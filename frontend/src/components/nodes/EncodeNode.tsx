@@ -17,6 +17,7 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
   const columnList = usePipelineStore((state) => state.columnList);
   const label = typeof data.label === 'string' ? data.label : 'Encode';
   const config = (data.config ?? {}) as NodeConfig;
+  const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
@@ -27,12 +28,12 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
           data: { label, config },
         },
         columnList,
+        schemaCols,
       ),
-    [id, label, config, columnList],
+    [id, label, config, columnList, schemaCols],
   );
   const method = config.method ?? '';
   const columns = config.columns ?? [];
-  const schemaCols = useNodeColumns(id);
 
   const handleMethodChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     updateNodeConfig(id, { method: event.target.value });

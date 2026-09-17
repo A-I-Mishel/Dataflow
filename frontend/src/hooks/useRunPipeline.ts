@@ -59,20 +59,12 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
       toast.error(`Disconnected nodes detected: ${disconnected.join(', ')}`);
       return;
     }
-    // Validate against the stable original columns plus any names created by
-    // rename nodes. The live columnList tracks the latest result instead, so
-    // using it here would flag valid rename/drop pipelines on re-runs.
+    // Validate against the stable original columns. The live columnList
+    // tracks the latest result instead, so using it here would flag valid
+    // rename/drop pipelines on re-runs. Rename outputs are NOT merged in:
+    // validateNodeConfigs folds them per-node itself, positionally.
     const baseColumns = originalData !== null ? originalData.columns : columnList;
-    const knownColumns = new Set<string>(baseColumns);
-    for (const node of nodes) {
-      const mapping = node.data.config.mapping;
-      if (mapping !== undefined) {
-        for (const created of Object.values(mapping)) {
-          knownColumns.add(created);
-        }
-      }
-    }
-    const configErrors = validateNodeConfigs(nodes, Array.from(knownColumns));
+    const configErrors = validateNodeConfigs(nodes, edges, baseColumns);
     if (configErrors.length > 0) {
       const message =
         configErrors.length === 1

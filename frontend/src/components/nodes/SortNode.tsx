@@ -15,17 +15,18 @@ export default function SortNode({ id, data, selected }: NodeProps) {
   const columnList = usePipelineStore((state) => state.columnList);
   const label = typeof data.label === 'string' ? data.label : 'Sort';
   const config = (data.config ?? {}) as NodeConfig;
+  const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
         { id, type: 'sort', position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
+        schemaCols,
       ),
-    [id, label, config, columnList],
+    [id, label, config, columnList, schemaCols],
   );
   const by = config.by ?? [];
   const ascending = config.ascending !== false;
-  const schemaCols = useNodeColumns(id);
 
   const handleToggleColumn = (column: string): void => {
     const next = by.includes(column)
