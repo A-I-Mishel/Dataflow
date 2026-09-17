@@ -47,6 +47,7 @@ class UploadResponse(BaseModel):
     row_count: int
     preview: List[Dict[str, Any]]
     missing_values: Dict[str, int]
+    large: bool = False
 
 
 class ColumnProfile(BaseModel):

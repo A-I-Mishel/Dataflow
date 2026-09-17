@@ -68,6 +68,7 @@ export default function PipelineCanvas({
   const setViewingNodeId = usePipelineStore((state) => state.setViewingNodeId);
   const setActiveTab = usePipelineStore((state) => state.setActiveTab);
   const isLoading = usePipelineStore((state) => state.isLoading);
+  const isLargeFile = usePipelineStore((state) => state.isLargeFile);
   const theme = usePipelineStore((state) => state.theme);
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -154,7 +155,14 @@ export default function PipelineCanvas({
   }, [isMobile, onRequestPalette]);
 
   return (
-    <div ref={wrapperRef} className="absolute inset-0 bg-canvas" onDoubleClick={handleDoubleClick}>
+    <div ref={wrapperRef} className="absolute inset-0 bg-canvas flex flex-col" onDoubleClick={handleDoubleClick}>
+      {isLargeFile && (
+        <p className="shrink-0 border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-center text-xs font-semibold text-amber-500 z-10">
+          Large-file mode: processed in chunks. Sort / Normalize / Encode are disabled; step
+          previews are approximate.
+        </p>
+      )}
+      <div className="relative flex-1">
       {/* mesh behind canvas */}
       <div className="canvas-mesh" aria-hidden />
       <ReactFlow
@@ -222,9 +230,12 @@ export default function PipelineCanvas({
             <Loader2 size={22} className="text-white animate-spin" />
           </div>
           <p className="text-sm font-semibold text-ink2">Running pipeline…</p>
-          <p className="text-xs text-ink3">Large files are processed in chunks</p>
+          <p className="text-xs text-ink3">
+            {isLargeFile ? 'Large file: processing in chunks' : 'Crunching your data'}
+          </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

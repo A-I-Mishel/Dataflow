@@ -251,6 +251,7 @@ def _handle_large_upload(
         preview=_sanitize_records(preview_df, 5),
         # Missing-value counts are exact (computed in the scan pass above).
         missing_values={col: missing.get(col, 0) for col in columns},
+        large=True,
     )
 
 

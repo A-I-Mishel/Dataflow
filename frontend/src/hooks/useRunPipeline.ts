@@ -14,6 +14,8 @@ function toMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+const LARGE_BLOCKED_TYPES = new Set(['sort', 'normalize', 'encode-categorical']);
+
 export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } {
   const sessionId = usePipelineStore((state) => state.sessionId);
   const nodes = usePipelineStore((state) => state.nodes);
@@ -21,6 +23,7 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
   const columnList = usePipelineStore((state) => state.columnList);
   const originalData = usePipelineStore((state) => state.originalData);
   const isLoading = usePipelineStore((state) => state.isLoading);
+  const isLargeFile = usePipelineStore((state) => state.isLargeFile);
 
   const run = useCallback(async (): Promise<void> => {
     if (sessionId === null) {
@@ -39,6 +42,17 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     if (linearError !== null) {
       toast.error(linearError);
       return;
+    }
+    if (isLargeFile) {
+      const blocked = nodes.filter((node) => LARGE_BLOCKED_TYPES.has(node.type));
+      if (blocked.length > 0) {
+        const names = blocked.map((node) => `"${node.data.label}"`).join(', ');
+        toast.error(
+          `Large-file mode: ${names} need the full dataset and are disabled. ` +
+            'Remove them or run the exported script locally instead.',
+        );
+        return;
+      }
     }
     const disconnected = getDisconnectedNodes(nodes, edges);
     if (disconnected.length > 0) {
@@ -98,7 +112,7 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     } finally {
       usePipelineStore.getState().setLoading(false);
     }
-  }, [sessionId, nodes, edges, columnList, originalData]);
+  }, [sessionId, nodes, edges, columnList, originalData, isLargeFile]);
 
   return { run, canRun: sessionId !== null && nodes.length > 0 && !isLoading };
 }

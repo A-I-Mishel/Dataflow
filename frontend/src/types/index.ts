@@ -45,6 +45,7 @@ export interface DataPreview {
   row_count: number;
   preview: Record<string, unknown>[];
   missing_values: Record<string, number>;
+  large?: boolean;
 }
 
 export interface ColumnProfile {
@@ -78,6 +79,7 @@ export interface UploadResponse {
   row_count: number;
   preview: Record<string, unknown>[];
   missing_values: Record<string, number>;
+  large?: boolean;
 }
 
 export interface NodePreview {

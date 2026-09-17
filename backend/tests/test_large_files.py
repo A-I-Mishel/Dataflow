@@ -60,6 +60,64 @@ def test_large_upload_execute_profile_generate_download(
     assert parsed.shape == (2, 3)
 
 
+def test_large_upload_flags_large_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_large_path(monkeypatch)
+    up = client.post("/upload", files={"file": ("big.csv", CSV_TEXT, "text/csv")})
+    assert up.status_code == 200, up.text
+    assert up.json()["large"] is True
+
+
+def test_small_upload_not_flagged() -> None:
+    up = client.post("/upload", files={"file": ("small.csv", CSV_TEXT, "text/csv")})
+    assert up.status_code == 200, up.text
+    assert up.json()["large"] is False
+
+
+def _large_session_id(csv_text: str = CSV_TEXT) -> str:
+    up = client.post("/upload", files={"file": ("big.csv", csv_text, "text/csv")})
+    assert up.status_code == 200, up.text
+    return up.json()["session_id"]
+
+
+@pytest.mark.parametrize("node_type", ["sort", "normalize", "encode-categorical"])
+def test_large_execute_rejects_stateful_nodes(
+    monkeypatch: pytest.MonkeyPatch, node_type: str
+) -> None:
+    _force_large_path(monkeypatch)
+    sid: str = _large_session_id()
+    config = {"sort": {"by": ["A"]}, "normalize": {"method": "min-max"}, "encode-categorical": {"method": "one-hot"}}[node_type]
+    ex = client.post(
+        "/execute",
+        json={
+            "session_id": sid,
+            "nodes": [{"id": "n1", "type": node_type, "config": config}],
+            "edges": [],
+        },
+    )
+    assert ex.status_code == 400, ex.text
+    assert "Large-file mode" in ex.json()["detail"]
+    assert "n1" in ex.json()["detail"]
+
+
+def test_large_execute_allows_row_local_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_large_path(monkeypatch)
+    sid: str = _large_session_id()
+    ex = client.post(
+        "/execute",
+        json={
+            "session_id": sid,
+            "nodes": [
+                {"id": "n1", "type": "drop-na", "config": {}},
+                {"id": "n2", "type": "drop-duplicates", "config": {}},
+            ],
+            "edges": [{"source": "n1", "target": "n2"}],
+        },
+    )
+    assert ex.status_code == 200, ex.text
+    assert ex.json()["shape"] == [2, 3]
+    assert all(step["approximate"] is True for step in ex.json()["intermediates"])
+
+
 def test_large_session_eviction_unlinks_temp_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

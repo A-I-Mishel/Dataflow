@@ -37,6 +37,7 @@ interface PipelineState {
   editVersion: number;
   viewingNodeId: string | null;
   nodeStatus: Record<string, 'running' | 'done' | 'error'>;
+  isLargeFile: boolean;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
   removeNode: (id: string) => void;
   updateNodeConfig: (id: string, config: Partial<NodeConfig>) => void;
@@ -188,6 +189,7 @@ export const usePipelineStore = create<PipelineState>()(
   editVersion: 0,
   viewingNodeId: null,
   nodeStatus: {},
+  isLargeFile: false,
   past: [],
   future: [],
   savedPipelines: [],
@@ -289,6 +291,7 @@ export const usePipelineStore = create<PipelineState>()(
       generatedCode: '',
       viewingNodeId: null,
       nodeStatus: {},
+      isLargeFile: data.large === true,
     }),
 
   setResult: (data) =>
@@ -338,7 +341,7 @@ export const usePipelineStore = create<PipelineState>()(
     const state = get();
     if (state.sessionId && !state.originalData) {
       // Session may have expired, but keep pipeline structure
-      set({ sessionId: null, columnList: [] });
+      set({ sessionId: null, columnList: [], isLargeFile: false });
     }
   },
 
@@ -427,6 +430,7 @@ export const usePipelineStore = create<PipelineState>()(
         sessionId: state.sessionId,
         columnList: state.columnList,
         originalData: state.originalData,
+        isLargeFile: state.isLargeFile,
         // DO NOT persist: resultData, generatedCode (too large for localStorage)
       }),
     },

@@ -121,11 +121,37 @@ def execute_pipeline_large_file(
     Note: transforms with global state (normalize statistics, categorical
     vocabularies, cross-chunk sort order) are computed per chunk, so results
     on large files are approximate. Row-local transforms (drop-na, fill-na,
-    drop-column, rename-column, filter-rows) are exact.
+    drop-column, drop-duplicates, rename-column, filter-rows) are exact.
+
+    Sort, normalize and encode-categorical are rejected outright: per-chunk
+    results for these are not just approximate but misleading.
     """
     # Validate the DAG once up front so a bad pipeline fails fast instead
     # of after partially streaming a 200MB file.
-    sort_nodes(nodes, edges)
+    sorted_for_check: List[PipelineNode] = sort_nodes(nodes, edges)
+    blocked: Dict[str, str] = {
+        "sort": "needs the full dataset to order rows",
+        "normalize": "needs global column statistics",
+        "encode-categorical": "needs the global category vocabulary",
+    }
+    blocked_types: List[str] = sorted(
+        {node.type for node in sorted_for_check if node.type in blocked}
+    )
+    if blocked_types:
+        offending: List[str] = [
+            f"'{node.id}' ({node.type})"
+            for node in sorted_for_check
+            if node.type in blocked
+        ]
+        reasons: str = "; ".join(f"{t} {blocked[t]}" for t in blocked_types)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Large-file mode does not support {', '.join(blocked_types)} "
+                f"(nodes {', '.join(offending)}): {reasons}. "
+                "Run these steps locally with the exported script instead."
+            ),
+        )
 
     try:
         chunk_iter = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding)
