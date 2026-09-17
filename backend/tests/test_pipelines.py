@@ -105,6 +105,19 @@ def test_upload_and_execute_are_logged() -> None:
         db2.close()
 
 
+def test_small_upload_cardinality_exact() -> None:
+    # A=["x","x","y",None] -> 2 (NaN excluded via nunique(dropna=True));
+    # B has 4 distinct values. Computed over the full frame, never preview.
+    up = client.post(
+        "/upload", files={"file": ("card.csv", "A,B\nx,a\nx,b\ny,c\n,z\n", "text/csv")}
+    )
+    assert up.status_code == 200, up.text
+    body = up.json()
+    assert body["cardinality_available"] is True
+    assert body["unique_counts"] == {"A": 2, "B": 4}
+    assert body["one_hot_max_cells"] == 10_000_000
+
+
 def test_execute_returns_step_intermediates() -> None:
     upload = client.post(
         "/upload", files={"file": ("steps.csv", "A,B\n3,x\n1,y\n2,x\n", "text/csv")}

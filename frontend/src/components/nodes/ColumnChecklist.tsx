@@ -12,6 +12,12 @@ interface ColumnChecklistProps {
   onToggle: (column: string) => void;
   /** Rendered when nothing is selected (e.g. per-node empty-state hints). */
   emptyHint?: ReactNode;
+  /**
+   * Optional per-column suffix text (e.g. "8 unique values"), keyed by
+   * column name. Ignored for selections missing from the schema, which
+   * keep their "(missing)" flag — unknown is never given a number.
+   */
+  secondaryLabels?: Record<string, string>;
 }
 
 /**
@@ -26,6 +32,7 @@ export default function ColumnChecklist({
   selected,
   onToggle,
   emptyHint,
+  secondaryLabels,
 }: ColumnChecklistProps) {
   const selectedSet = new Set(selected);
   const options = withSelected(columns, selected);
@@ -36,23 +43,33 @@ export default function ColumnChecklist({
         {options.length === 0 && (
           <p className="px-2 py-1.5 text-xs text-ink3">Upload a CSV to see columns</p>
         )}
-        {options.map((column) => (
-          <label
-            key={column}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-ink2 hover:bg-elevated cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={selectedSet.has(column)}
-              onChange={() => onToggle(column)}
-              className="h-3.5 w-3.5 shrink-0 accent-accent"
-            />
-            <span className="truncate">
-              {column}
-              {isMissingOption(columns, column) ? ' (missing)' : ''}
-            </span>
-          </label>
-        ))}
+        {options.map((column) => {
+          const missing = isMissingOption(columns, column);
+          const secondary =
+            !missing && secondaryLabels !== undefined
+              ? secondaryLabels[column]
+              : undefined;
+          return (
+            <label
+              key={column}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-ink2 hover:bg-elevated cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selectedSet.has(column)}
+                onChange={() => onToggle(column)}
+                className="h-3.5 w-3.5 shrink-0 accent-accent"
+              />
+              <span className="truncate">
+                {column}
+                {missing ? ' (missing)' : ''}
+                {secondary !== undefined ? (
+                  <span className="text-ink3">{` · ${secondary}`}</span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
       </div>
       {selected.length === 0 && emptyHint}
     </div>

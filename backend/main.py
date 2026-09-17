@@ -212,6 +212,16 @@ def _handle_small_upload(
     finally:
         _unlink_upload_tmp(tmp_path)
 
+    # Exact upload-time cardinality over the complete frame (never the
+    # 5-row preview). Columns that fail to compute are omitted (unknown),
+    # never zero. Matches get_dummies' default dummy_na=False semantics.
+    unique_counts: Dict[str, int] = {}
+    for col in df.columns.tolist():
+        try:
+            unique_counts[str(col)] = int(df[col].nunique(dropna=True))
+        except Exception as exc:
+            logger.warning("Cardinality scan failed for column '%s': %s", col, exc)
+
     store_session(key, df)
     logger.info("Stored session %s with shape %s", session_id, df.shape)
     log_memory_usage("upload")
@@ -225,6 +235,8 @@ def _handle_small_upload(
         row_count=int(df.shape[0]),
         preview=_sanitize_records(df, 5),
         missing_values=_missing_dict(df),
+        unique_counts=unique_counts,
+        cardinality_available=True,
     )
 
 
@@ -264,6 +276,10 @@ def _handle_large_upload(
         # Missing-value counts are exact (computed in the scan pass above).
         missing_values={col: missing.get(col, 0) for col in columns},
         large=True,
+        # No full scan for cardinality on large files by design:
+        # cardinality stays unavailable rather than fabricated.
+        unique_counts=None,
+        cardinality_available=False,
     )
 
 

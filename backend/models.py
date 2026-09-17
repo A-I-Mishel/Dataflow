@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
+from constants import ONE_HOT_MAX_CELLS
+
 # Note: Any is unavoidable here — NodeConfig.value/conditions and API previews
 # must accept arbitrary JSON values coming from user CSVs and pipeline configs.
 
@@ -49,6 +51,13 @@ class UploadResponse(BaseModel):
     preview: List[Dict[str, Any]]
     missing_values: Dict[str, int]
     large: bool = False
+    # Exact upload-time per-column cardinality (nunique(dropna=True)).
+    # None for large files (no full scan) and absent on older responses.
+    # A missing key is unknown — never zero.
+    unique_counts: Optional[Dict[str, int]] = None
+    cardinality_available: bool = False
+    # Authoritative one-hot safety limit, always present on new responses.
+    one_hot_max_cells: int = ONE_HOT_MAX_CELLS
 
 
 class ColumnProfile(BaseModel):

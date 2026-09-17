@@ -48,6 +48,12 @@ export interface DataPreview {
   large?: boolean;
   // Optional: sessions persisted before the filename field existed lack it.
   filename?: string;
+  // Optional: absent on old persisted sessions (treated as unavailable)
+  // and null on large files (no full scan by design). Missing keys are
+  // unknown — never zero.
+  unique_counts?: Record<string, number> | null;
+  cardinality_available?: boolean;
+  one_hot_max_cells?: number;
 }
 
 export interface ColumnProfile {
@@ -84,6 +90,9 @@ export interface UploadResponse {
   large?: boolean;
   // Optional: sessions persisted before the filename field existed lack it.
   filename?: string;
+  unique_counts?: Record<string, number> | null;
+  cardinality_available?: boolean;
+  one_hot_max_cells?: number;
 }
 
 export interface NodePreview {

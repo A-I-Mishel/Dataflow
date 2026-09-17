@@ -3,13 +3,15 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from fastapi import HTTPException
 
+from constants import ONE_HOT_MAX_CELLS
 from models import NodeConfig
 
+# ONE_HOT_MAX_CELLS lives in constants.py (single source of truth, also
+# exposed to the frontend via UploadResponse.one_hot_max_cells).
 # Above this estimated output size, one-hot is refused instead of risking
 # an OOM. 10M bool cells peak well under 100MB transient even at 3x during
 # get_dummies construction; the 25k-row x 25k-ID case (~640M cells) that
 # motivated this trips it by ~64x.
-ONE_HOT_MAX_CELLS: int = 10_000_000
 
 # NOTE: sklearn is intentionally NOT imported at module top. It costs
 # ~100MB+ RSS on import, and this backend runs on a 512MB instance where

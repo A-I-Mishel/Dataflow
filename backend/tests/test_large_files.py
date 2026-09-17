@@ -74,6 +74,16 @@ def test_small_upload_not_flagged() -> None:
     assert up.json()["large"] is False
 
 
+def test_large_upload_cardinality_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_large_path(monkeypatch)
+    up = client.post("/upload", files={"file": ("big.csv", CSV_TEXT, "text/csv")})
+    assert up.status_code == 200, up.text
+    body = up.json()
+    assert body["cardinality_available"] is False
+    assert body.get("unique_counts") is None
+    assert body["one_hot_max_cells"] == 10_000_000
+
+
 def _large_session_id(csv_text: str = CSV_TEXT) -> str:
     up = client.post("/upload", files={"file": ("big.csv", csv_text, "text/csv")})
     assert up.status_code == 200, up.text
