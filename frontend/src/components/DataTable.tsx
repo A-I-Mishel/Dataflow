@@ -13,8 +13,6 @@ interface DataTableProps {
   dtypes: Record<string, string>;
 }
 
-const MAX_ROWS = 100;
-
 export default function DataTable({ data, columns, dtypes }: DataTableProps) {
   const theme = usePipelineStore((state) => state.theme);
   const tableColumns = useMemo<ColumnDef<Record<string, unknown>>[]>(
@@ -40,10 +38,8 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
     [columns, dtypes, theme],
   );
 
-  const visibleData = useMemo(() => data.slice(0, MAX_ROWS), [data]);
-
   const table = useReactTable({
-    data: visibleData,
+    data,
     columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -95,11 +91,6 @@ export default function DataTable({ data, columns, dtypes }: DataTableProps) {
           </table>
         </div>
       </div>
-      {data.length > MAX_ROWS && (
-        <p className="text-xs font-medium text-ink3 mt-2.5 text-center">
-          Showing first {MAX_ROWS} of {data.length} rows • export for full CSV
-        </p>
-      )}
     </div>
   );
 }

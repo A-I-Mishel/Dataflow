@@ -143,10 +143,6 @@ body,
   }
 }
 
-.react-flow__attribution {
-  display: none !important;
-}
-
 /* Edges — mock palette, no layout change */
 .react-flow__edge .react-flow__edge-path {
   stroke: rgb(var(--wire));
@@ -195,93 +191,4 @@ body {
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 }
 
-/* ---- Mock animations only (no DOM changes) ---- */
-.spin {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  animation: rot 0.7s linear infinite;
-  display: inline-block;
-}
-.pulse-dot {
-  --pd: rgba(61, 220, 151, 0.5);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgb(var(--ok));
-  animation: pulse 2s infinite;
-  flex: none;
-}
-.pulse-dot.amber {
-  --pd: rgba(255, 180, 84, 0.5);
-  background: rgb(var(--warn));
-}
-.skel {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.skel .row {
-  display: flex;
-  gap: 10px;
-}
-.skel .cell {
-  height: 10px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgb(var(--elevated)), rgb(var(--panel)), rgb(var(--elevated)));
-  background-size: 200% 100%;
-  animation: shimmer 1.1s linear infinite;
-}
-.tbl {
-  animation: fadeUp 0.35s ease;
-}
-.node.new {
-  animation: pop 0.18s ease;
-}
-.wire-line.active {
-  stroke: rgb(var(--accent)) !important;
-  stroke-dasharray: 6 8;
-  animation: dashmove 0.5s linear infinite;
-}
 
-@keyframes rot {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 var(--pd);
-  }
-  70% {
-    box-shadow: 0 0 0 6px transparent;
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
-}
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-}
-@keyframes dashmove {
-  to {
-    stroke-dashoffset: -28;
-  }
-}

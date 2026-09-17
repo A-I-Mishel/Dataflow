@@ -30,7 +30,7 @@ function readmeText(): string {
     '===============================',
     '',
     'Files:',
-    '- cleaned_data.csv .... full cleaned dataset (same as the app preview)',
+    '- cleaned_data.csv .... full cleaned dataset (the app shows a preview of the first rows)',
     '- cleaning_pipeline.py  standalone script that reproduces the cleaning',
     '- requirements.txt .... Python dependencies for the script',
     '',
