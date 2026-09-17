@@ -206,6 +206,29 @@ export function getDisconnectedNodes(nodes: PipelineNode[], edges: PipelineEdge[
   return nodes.filter((node) => !reachable.has(node.id)).map((node) => node.id);
 }
 
+/**
+ * Extra hint for "unknown column" errors when the name is almost right:
+ * surrounding whitespace or case-only differences (e.g. pasted "Name "
+ * vs real "Name"). Returns "" when there is nothing to add.
+ */
+function unknownHint(unknown: string[], known: Set<string>): string {
+  const hints: string[] = [];
+  for (const name of unknown) {
+    const trimmed = name.trim();
+    if (trimmed !== name && known.has(trimmed)) {
+      hints.push(`"${name}" has surrounding whitespace — did you mean "${trimmed}"?`);
+      continue;
+    }
+    const caseMatch = Array.from(known).find(
+      (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+    );
+    if (caseMatch !== undefined && caseMatch !== name) {
+      hints.push(`"${name}" differs only by case — did you mean "${caseMatch}"?`);
+    }
+  }
+  return hints.length > 0 ? ` ${hints.join(' ')}` : '';
+}
+
 export function validateNodeConfigs(
   nodes: PipelineNode[],
   columnList: string[],
@@ -235,7 +258,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" references unknown columns: ${unknownColumns.join(', ')}`,
+          message: `Node "${node.data.label}" references unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -244,7 +267,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" sorts by unknown columns: ${unknownColumns.join(', ')}`,
+          message: `Node "${node.data.label}" sorts by unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -253,7 +276,7 @@ export function validateNodeConfigs(
       if (unknownKeys.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" renames unknown columns: ${unknownKeys.join(', ')}`,
+          message: `Node "${node.data.label}" renames unknown columns: ${unknownKeys.join(', ')}.${unknownHint(unknownKeys, known)}`,
         });
       }
     }
@@ -264,7 +287,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" filters on unknown columns: ${unknownColumns.join(', ')}`,
+          message: `Node "${node.data.label}" filters on unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -288,8 +311,15 @@ export function getNodeErrors(node: PipelineNode, columnList: string[]): string[
       // Empty columns = whole-row dedup; always valid.
       break;
     case 'rename-column':
-      if (!cfg.mapping || Object.keys(cfg.mapping).length === 0)
+      if (!cfg.mapping || Object.keys(cfg.mapping).length === 0) {
         errors.push('Add at least one mapping');
+      } else {
+        for (const key of Object.keys(cfg.mapping)) {
+          if (key.trim() !== key) {
+            errors.push(`Mapping key "${key}" has surrounding whitespace`);
+          }
+        }
+      }
       break;
     case 'filter-rows':
       if (!cfg.conditions || cfg.conditions.length === 0) {
