@@ -55,12 +55,12 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
   const runFailed = runStatus === 'error';
   return (
     <div
-      className={`w-[300px] rounded-[20px] border bg-card/90 backdrop-blur-xl shadow-card overflow-visible transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] hover:-translate-y-0.5 ${
+      className={`w-[300px] rounded-[20px] border bg-card/90 backdrop-blur-xl shadow-card overflow-visible transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] hover:-translate-y-0.5 cursor-default ${
         selected ? 'ring-2 ring-accent/70 border-accent/50 shadow-glow' : 'border-line'
       } ${hasError || runFailed ? 'ring-2 ring-rose-500 border-rose-500' : ''}`}
     >
       <div className="rounded-[20px] overflow-hidden">
-        <div className="relative flex items-center gap-2.5 px-3.5 py-2.5 border-b border-linesoft">
+        <div className="node-drag-handle relative flex items-center gap-2.5 px-3.5 py-2.5 border-b border-linesoft cursor-grab active:cursor-grabbing select-none">
           <div className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 ${s.iconBox}`}>
             <Icon size={16} className={s.icon} />
           </div>
@@ -99,7 +99,7 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
             <p className="text-xs font-semibold text-rose-500">{errors[0]}</p>
           </div>
         )}
-        <div className="p-3.5 space-y-2.5">{children}</div>
+        <div className="p-3.5 space-y-2.5 max-h-[280px] overflow-y-auto nowheel nopan nodrag node-scroll cursor-default">{children}</div>
       </div>
       <Handle type="target" position={Position.Top} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-top-2 shadow-md hover:!bg-accent/20" />
       <Handle type="source" position={Position.Bottom} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-bottom-2 shadow-md hover:!bg-accent/20" />
