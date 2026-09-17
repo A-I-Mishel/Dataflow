@@ -140,6 +140,16 @@ export default function PipelineCanvas({
     [setSelectedNodeId, setViewingNodeId, setActiveTab],
   );
 
+  const handleEdgeClick = useCallback(
+    (_event: unknown, edge: { id: string }) => {
+      // Clicking a thin edge must win over any still-selected node,
+      // otherwise Delete keeps targeting the node and the edge feels stuck.
+      setSelectedNodeId(null);
+      setSelectedEdgeId(edge.id);
+    },
+    [setSelectedNodeId, setSelectedEdgeId],
+  );
+
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -190,7 +200,9 @@ export default function PipelineCanvas({
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         onSelectionChange={handleSelectionChange}
+        deleteKeyCode={['Backspace', 'Delete']}
         onPaneClick={() => {
           setSelectedNodeId(null);
           setSelectedEdgeId(null);
@@ -201,7 +213,7 @@ export default function PipelineCanvas({
         zoomOnPinch={true}
         minZoom={0.2}
         maxZoom={4}
-        defaultEdgeOptions={{ type: 'smoothstep', animated: isLoading }}
+        defaultEdgeOptions={{ type: 'smoothstep', animated: isLoading, interactionWidth: 20 }}
         colorMode={theme}
       >
         <Background
