@@ -46,6 +46,13 @@ from session_store import (
     store_session,
 )
 
+# Render only shows WARNING+ by default: the root logger ships at WARNING
+# and uvicorn's logging config never touches it, so every app logger.info
+# (request telemetry, mem[...] lines, evictions) was silently discarded.
+# basicConfig attaches a handler to root exactly once; uvicorn's later
+# dictConfig leaves it alone (disable_existing_loggers=False).
+logging.basicConfig(level=logging.INFO)
+
 # Create SQLite tables on import so they exist under uvicorn, TestClient,
 # and pytest alike (lifespan/startup hooks do not run for bare TestClient).
 Base.metadata.create_all(bind=engine)
