@@ -47,8 +47,21 @@ function serializeNodes(nodes: PipelineNode[]): BackendNode[] {
   }));
 }
 
+function apiHost(): string {
+  try {
+    return new URL(API_BASE).host;
+  } catch {
+    return API_BASE;
+  }
+}
+
 function connectionError(): Error {
-  return new Error('Cannot connect to backend. Is the server running on localhost:8000?');
+  // Name the real host: the old localhost:8000 text sent production users
+  // chasing a server that was never supposed to be local. Render free-tier
+  // restarts/sleeps read as fetch throws, so say that too.
+  return new Error(
+    `Cannot reach the API at ${apiHost()}. It may be restarting or asleep — wait a minute and retry.`,
+  );
 }
 
 async function parseError(response: Response): Promise<Error> {
