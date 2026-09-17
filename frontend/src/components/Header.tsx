@@ -149,7 +149,7 @@ export default function Header() {
       <div className="h-full flex items-center justify-between gap-3 px-3 lg:px-5">
         {/* Brand */}
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-accent to-accent2 flex items-center justify-center shadow-sm shrink-0 opacity-90">
+            <div className="h-9 w-9 rounded-xl bg-accentbtn flex items-center justify-center shadow-sm shrink-0 opacity-95">
             <Sparkles size={18} className="text-white" />
           </div>
           <div className="min-w-0 hidden sm:block">
@@ -159,7 +159,7 @@ export default function Header() {
           <span className="sm:hidden truncate text-[16px] font-extrabold tracking-tight text-ink">DataFlow</span>
           <span className="hidden lg:inline-flex ml-2 items-center gap-1.5 rounded-full bg-accent/10 border border-accent/20 px-2.5 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px] font-semibold text-accent tracking-wide">PIPELINE</span>
+            <span className="text-[11px] font-semibold text-accenttext tracking-wide">PIPELINE</span>
           </span>
         </div>
 
@@ -173,7 +173,7 @@ export default function Header() {
             className={`relative inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold shadow-sm transition-all ${
               runDisabled
                 ? 'bg-elevated text-ink3 opacity-50 cursor-not-allowed'
-                : 'bg-gradient-to-r from-accent to-accent2 text-white hover:shadow-md hover:brightness-[1.05] active:scale-[0.98] opacity-95 hover:opacity-100'
+                : 'bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white hover:shadow-md active:scale-[0.98] opacity-95 hover:opacity-100'
             }`}
           >
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} className="fill-white" />}
@@ -277,7 +277,7 @@ export default function Header() {
             {uploadProgress > 0 && uploadProgress < 100 && (
               <div className="absolute top-full left-0 right-0 mt-1.5">
                 <div className="h-1 rounded-full bg-line overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-accent to-accent2 transition-all" style={{ width: `${uploadProgress}%` }} />
+                    <div className="h-full bg-accentbtn transition-all" style={{ width: `${uploadProgress}%` }} />
                 </div>
                 <p className="mt-1 text-center text-[11px] font-medium text-ink3">{uploadProgress}%</p>
               </div>
@@ -327,7 +327,7 @@ export default function Header() {
                     }}
                     className="w-full text-left px-4 py-3.5 hover:bg-elevated transition-colors group"
                   >
-                    <p className="text-sm font-semibold text-ink group-hover:text-accent transition-colors">Quick Clean</p>
+                    <p className="text-sm font-semibold text-ink group-hover:text-accenttext transition-colors">Quick Clean</p>
                     <p className="text-xs text-ink3 mt-0.5">Drop Missing → Fill Missing → Sort</p>
                   </button>
                   <button
@@ -340,7 +340,7 @@ export default function Header() {
                     }}
                     className="w-full text-left px-4 py-3.5 hover:bg-elevated transition-colors border-t border-linesoft group"
                   >
-                    <p className="text-sm font-semibold text-ink group-hover:text-accent transition-colors">Full Clean</p>
+                    <p className="text-sm font-semibold text-ink group-hover:text-accenttext transition-colors">Full Clean</p>
                     <p className="text-xs text-ink3 mt-0.5">Drop Missing → Fill Missing → Normalize → Encode</p>
                   </button>
                 </div>

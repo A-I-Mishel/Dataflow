@@ -4,92 +4,106 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---- Mock palette — colours only (no layout/logic change) ---- */
+/* ---- DataFlow palette — z.ai mockup family, semantic tokens only ---- */
 :root {
   color-scheme: dark;
-  --canvas: 10 13 19;
-  --panel: 15 19 27;
-  --card: 19 24 38;
-  --elevated: 21 26 38;
-  --btn: 21 26 38;
-  --btnhover: 27 33 48;
-  --btnink: 152 162 184;
-  --line: 47 54 66;
-  --linesoft: 31 36 47;
-  --ink: 233 237 245;
-  --ink2: 152 162 184;
-  --ink3: 95 106 128;
-  --muted: 102 112 135;
-  --accent: 91 140 255;
-  --accent-2: 61 95 217;
-  --accent-soft: 91 140 255;
-  --ok: 61 220 151;
-  --warn: 255 180 84;
-  --danger: 255 107 122;
-  --cat-cleaning: 61 220 151;
-  --cat-transform: 167 139 250;
-  --cat-encode: 255 180 84;
-  --cat-input: 91 140 255;
-  --grid: 148 163 190;
-  --wire: 57 65 90;
-  --border: 148 163 190;
+  --canvas: 12 16 23;
+  --panel: 18 22 31;
+  --card: 18 22 31;
+  --elevated: 23 28 39;
+  --btn: 23 28 39;
+  --btnhover: 27 34 48;
+  --btnink: 154 166 184;
+  --line: 35 43 58;
+  --linesoft: 35 43 58;
+  --line-strong: 46 56 73;
+  --ink: 231 236 243;
+  --ink2: 154 166 184;
+  --ink3: 100 116 139;
+  --muted: 46 56 73;
+  --accent: 99 102 241;
+  --accent-2: 67 56 202;
+  --accent-soft: 35 37 92;
+  --accent-text: 165 180 252;
+  --accent-btn: 90 82 232;
+  --accent-btnhover: 79 70 229;
+  --accent-btnpressed: 67 56 202;
+  --ok: 52 211 153;
+  --ok-text: 52 211 153;
+  --warn: 251 191 36;
+  --warn-soft: 42 30 5;
+  --danger: 248 113 113;
+  --cat-cleaning: 14 165 233;
+  --cat-transform: 139 92 246;
+  --cat-encode: 245 158 11;
+  --cat-input: 99 102 241;
+  --grid: 46 56 73;
+  --wire: 71 85 105;
+  --border: 46 56 73;
   --r: 12px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  --shadow: 0 4px 12px -2px rgb(0 0 0 / 0.5);
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --scrollbar-track: 15 19 27;
-  --scrollbar-thumb: 47 54 66;
-  --scrollbar-thumb-hover: 61 72 92;
+  --scrollbar-track: 12 16 23;
+  --scrollbar-thumb: 46 56 73;
+  --scrollbar-thumb-hover: 100 116 139;
 
-  --xy-controls-button-background-color: rgba(19, 24, 38, 0.92);
-  --xy-controls-button-background-color-hover: rgba(27, 33, 48, 1);
-  --xy-controls-button-color: #98a2b8;
-  --xy-controls-button-color-hover: #e9edf5;
-  --xy-controls-button-border-color: rgba(148, 163, 190, 0.14);
-  --xy-minimap-background-color: #0f131b;
-  --xy-attribution-background-color: rgba(15, 19, 27, 0.7);
+  --xy-controls-button-background-color: rgba(18, 22, 31, 0.92);
+  --xy-controls-button-background-color-hover: rgba(27, 34, 48, 1);
+  --xy-controls-button-color: #9aa6b8;
+  --xy-controls-button-color-hover: #e7ecf3;
+  --xy-controls-button-border-color: rgba(154, 163, 190, 0.16);
+  --xy-minimap-background-color: #12161f;
+  --xy-attribution-background-color: rgba(18, 22, 31, 0.7);
 }
 
 .light {
   color-scheme: light;
-  --canvas: 231 235 242;
+  --canvas: 235 239 244;
   --panel: 255 255 255;
   --card: 255 255 255;
-  --elevated: 245 247 251;
-  --btn: 245 247 251;
-  --btnhover: 236 239 245;
-  --btnink: 90 101 121;
-  --line: 198 202 210;
-  --linesoft: 221 224 230;
-  --ink: 24 32 47;
-  --ink2: 90 101 121;
-  --ink3: 152 161 179;
-  --muted: 160 170 188;
-  --accent: 91 140 255;
-  --accent-2: 61 95 217;
-  --accent-soft: 91 140 255;
-  --ok: 61 220 151;
-  --warn: 255 180 84;
-  --danger: 255 107 122;
-  --cat-cleaning: 61 220 151;
-  --cat-transform: 167 139 250;
-  --cat-encode: 255 180 84;
-  --cat-input: 91 140 255;
-  --grid: 20 30 55;
+  --elevated: 247 249 252;
+  --btn: 247 249 252;
+  --btnhover: 239 243 248;
+  --btnink: 67 80 106;
+  --line: 228 233 240;
+  --linesoft: 228 233 240;
+  --line-strong: 205 214 225;
+  --ink: 13 21 38;
+  --ink2: 67 80 106;
+  --ink3: 135 146 166;
+  --muted: 205 214 225;
+  --accent: 79 70 229;
+  --accent-2: 67 56 202;
+  --accent-soft: 233 236 254;
+  --accent-text: 79 70 229;
+  --accent-btn: 79 70 229;
+  --accent-btnhover: 67 56 202;
+  --accent-btnpressed: 55 48 163;
+  --ok: 5 150 105;
+  --ok-text: 4 120 87;
+  --warn: 180 83 9;
+  --warn-soft: 255 248 235;
+  --danger: 220 38 38;
+  --cat-cleaning: 14 165 233;
+  --cat-transform: 139 92 246;
+  --cat-encode: 245 158 11;
+  --cat-input: 79 70 229;
+  --grid: 205 214 225;
   --wire: 148 163 184;
-  --border: 20 30 55;
+  --border: 205 214 225;
   --r: 12px;
-  --shadow: 0 8px 22px rgba(24, 32, 60, 0.1);
+  --shadow: 0 2px 4px rgb(16 24 40 / 0.05), 0 8px 20px -4px rgb(16 24 40 / 0.12);
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --scrollbar-track: 231 235 242;
-  --scrollbar-thumb: 198 202 210;
-  --scrollbar-thumb-hover: 160 170 188;
+  --scrollbar-track: 235 239 244;
+  --scrollbar-thumb: 205 214 225;
+  --scrollbar-thumb-hover: 135 146 166;
 
   --xy-controls-button-background-color: rgba(255, 255, 255, 0.96);
-  --xy-controls-button-background-color-hover: #f5f7fb;
-  --xy-controls-button-color: #5a6579;
-  --xy-controls-button-color-hover: #18202f;
-  --xy-controls-button-border-color: rgba(20, 30, 55, 0.1);
-  --xy-minimap-background-color: #f5f7fb;
+  --xy-controls-button-background-color-hover: #f7f9fc;
+  --xy-controls-button-color: #43506a;
+  --xy-controls-button-color-hover: #0d1526;
+  --xy-controls-button-border-color: rgba(13, 21, 38, 0.1);
+  --xy-minimap-background-color: #f7f9fc;
   --xy-attribution-background-color: rgba(255, 255, 255, 0.7);
 }
 /* Support mock's [data-theme] attribute without breaking existing .light toggle */
@@ -178,7 +192,7 @@ select {
   caret-color: rgb(var(--accent));
 }
 ::selection {
-  background: rgba(91, 140, 255, 0.28);
+  background: rgba(99, 102, 241, 0.25);
 }
 
 /* Mesh background — mock's single radial glow, no layout change */
@@ -196,11 +210,11 @@ select {
   left: 50%;
   top: -8%;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(91, 140, 255, 0.07), transparent 60%);
+  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.07), transparent 60%);
   filter: none;
 }
 .light .canvas-mesh::before {
-  background: radial-gradient(ellipse at center, rgba(91, 140, 255, 0.05), transparent 60%);
+  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.05), transparent 60%);
 }
 .canvas-mesh::after {
   display: none;

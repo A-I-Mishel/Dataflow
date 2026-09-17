@@ -11,12 +11,12 @@ interface ProfileViewProps {
 
 function tooltipStyle(theme: Theme): Record<string, string> {
   return theme === 'light'
-    ? { backgroundColor: '#ffffff', border: '1px solid #e8e6f5', borderRadius: '12px' }
-    : { backgroundColor: '#1d1b36', border: '1px solid rgba(82,78,128,0.5)', borderRadius: '12px' };
+    ? { backgroundColor: '#ffffff', border: '1px solid #E4E9F0', borderRadius: '12px' }
+    : { backgroundColor: '#171C27', border: '1px solid #2E3849', borderRadius: '12px' };
 }
 
 function tooltipLabelColor(theme: Theme): string {
-  return theme === 'light' ? '#0f172a' : '#f1f5f9';
+  return theme === 'light' ? '#0D1526' : '#E7ECF3';
 }
 
 function isNumericColumn(column: ColumnProfile): boolean {
@@ -100,7 +100,7 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
                 type="category"
                 dataKey="value"
                 width={80}
-                tick={{ fill: theme === 'light' ? '#64748b' : '#94a3b8', fontSize: 11 }}
+                  tick={{ fill: theme === 'light' ? '#43506A' : '#9AA6B8', fontSize: 11 }}
               />
               <Tooltip
                 contentStyle={tooltipStyle(theme)}
@@ -119,7 +119,7 @@ export default function ProfileView({ profile }: ProfileViewProps) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl p-4 border border-line bg-gradient-to-br from-accent/15 to-accent2/15 backdrop-blur-xl">
+        <div className="rounded-2xl p-4 border border-line bg-accentsoft backdrop-blur-xl">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3">Rows</p>
           <p className="text-2xl font-extrabold tracking-tight text-ink mt-1">{profile.shape[0].toLocaleString()}</p>
         </div>

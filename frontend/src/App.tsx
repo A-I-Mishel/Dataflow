@@ -120,7 +120,7 @@ export default function App() {
                 aria-label={`Show ${view.label}`}
                 aria-pressed={isActive}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 text-xs font-medium ${
-                  isActive ? 'text-indigo-500 dark:text-indigo-400' : 'text-ink3 hover:text-ink2'
+                  isActive ? 'text-accenttext' : 'text-ink3 hover:text-ink2'
                 }`}
               >
                 <Icon size={20} />

@@ -7,29 +7,26 @@ import { usePipelineStore } from '../../stores/pipelineStore';
 
 export type NodeTone = 'blue' | 'purple' | 'orange';
 
-const TONE_STYLES: Record<NodeTone, { gradient: string; iconWrap: string; icon: string; accent: string }> = {
+const TONE_STYLES: Record<NodeTone, { dot: string; iconBox: string; icon: string }> = {
   blue: {
-    gradient: 'from-sky-500/[0.07] via-blue-500/[0.07] to-indigo-500/[0.07]',
-    iconWrap: 'bg-gradient-to-br from-sky-600 to-indigo-600 shadow-[0_2px_10px_rgba(14,165,233,0.22)]',
-    icon: 'text-white',
-    accent: 'bg-sky-500',
+    dot: 'bg-sky-500',
+    iconBox: 'bg-elevated border border-line',
+    icon: 'text-sky-500',
   },
   purple: {
-    gradient: 'from-violet-500/[0.07] via-purple-500/[0.07] to-fuchsia-500/[0.07]',
-    iconWrap: 'bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-[0_2px_10px_rgba(110,80,180,0.22)]',
-    icon: 'text-white',
-    accent: 'bg-violet-500',
+    dot: 'bg-violet-500',
+    iconBox: 'bg-elevated border border-line',
+    icon: 'text-violet-500',
   },
   orange: {
-    gradient: 'from-amber-500/[0.07] via-orange-500/[0.07] to-red-500/[0.07]',
-    iconWrap: 'bg-gradient-to-br from-amber-600 to-orange-600 shadow-[0_2px_10px_rgba(180,100,20,0.20)]',
-    icon: 'text-white',
-    accent: 'bg-orange-500',
+    dot: 'bg-orange-500',
+    iconBox: 'bg-elevated border border-line',
+    icon: 'text-orange-500',
   },
 };
 
 export const fieldInput =
-  'rounded-xl bg-elevated/60 border border-line px-3 py-2 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 backdrop-blur-sm transition-all';
+  'rounded-xl bg-elevated/60 border border-line px-3 py-2 text-sm text-ink placeholder:text-ink2 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 backdrop-blur-sm transition-all';
 export const inputClass = `w-full ${fieldInput}`;
 export const fieldLabelClass = 'text-[11px] font-bold tracking-widest uppercase text-ink3 mb-1.5';
 export const hintClass = 'text-xs text-ink3';
@@ -63,16 +60,19 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
       } ${hasError || runFailed ? 'ring-2 ring-rose-500 border-rose-500' : ''}`}
     >
       <div className="rounded-[20px] overflow-hidden">
-        <div className={`relative flex items-center gap-3 px-4 py-3.5 border-b border-linesoft bg-gradient-to-r ${s.gradient}`}>
-          <div className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 ${s.iconWrap}`}>
-            <Icon size={18} className={s.icon} />
+        <div className="relative flex items-center gap-2.5 px-3.5 py-2.5 border-b border-linesoft">
+          <div className={`h-8 w-8 rounded-lg grid place-items-center shrink-0 ${s.iconBox}`}>
+            <Icon size={16} className={s.icon} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold tracking-tight text-ink leading-none">{title}</p>
-            <p className="text-[11px] font-medium tracking-wide text-ink3 mt-0.5 capitalize">{tone} • transform</p>
+            <p className="text-[13px] font-bold tracking-tight text-ink leading-none">{title}</p>
+            <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-ink3 mt-1 leading-none capitalize">
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${s.dot}`} />
+              {tone} • transform
+            </p>
           </div>
           {runStatus === 'running' && (
-            <Loader2 size={14} className="ml-auto animate-spin text-accent shrink-0" />
+            <Loader2 size={14} className="ml-auto animate-spin text-accenttext shrink-0" />
           )}
           {runStatus === 'done' && (
             <span
@@ -99,7 +99,7 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
             <p className="text-xs font-semibold text-rose-500">{errors[0]}</p>
           </div>
         )}
-        <div className="p-4 space-y-3 bg-gradient-to-b from-transparent to-elevated/20">{children}</div>
+        <div className="p-3.5 space-y-2.5">{children}</div>
       </div>
       <Handle type="target" position={Position.Top} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-top-2 shadow-md hover:!bg-accent/20" />
       <Handle type="source" position={Position.Bottom} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-bottom-2 shadow-md hover:!bg-accent/20" />

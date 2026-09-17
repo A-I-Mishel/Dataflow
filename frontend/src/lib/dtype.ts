@@ -10,7 +10,7 @@ export function dtypeBadgeClass(dtype: string, theme: Theme): string {
     return dark ? 'bg-green-500/20 text-green-300' : 'bg-green-500/15 text-green-700';
   }
   if (lower.includes('datetime64') || lower.includes('date') || lower.includes('time')) {
-    return dark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-500/15 text-purple-700';
+    return dark ? 'bg-accentsoft text-accenttext' : 'bg-accentsoft text-accenttext';
   }
   return dark ? 'bg-slate-500/20 text-slate-300' : 'bg-slate-500/15 text-slate-600';
 }
