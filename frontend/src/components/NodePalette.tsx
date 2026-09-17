@@ -96,7 +96,7 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
                     <p className="text-[13px] font-bold tracking-tight text-ink leading-none">{item.label}</p>
                     <p className="text-[11px] font-medium text-ink3 mt-1 leading-none hidden lg:block">{item.description}</p>
                   </div>
-                  <span className="ml-auto hidden lg:block text-ink3 group-hover:text-accent transition-colors">＋</span>
+                  <span className="ml-auto hidden lg:block text-ink3 group-hover:text-accenttext transition-colors">＋</span>
                 </div>
               );
             })}

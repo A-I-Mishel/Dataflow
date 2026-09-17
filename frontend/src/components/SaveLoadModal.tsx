@@ -122,7 +122,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
   if (typeof document === 'undefined') return null;
   const modal = (
     <div
-      className="fixed inset-0 bg-[#050510]/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-[rgb(var(--canvas)/0.72)] backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
@@ -168,7 +168,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                   }
                 }}
                 placeholder="e.g. My Churn Cleaning"
-                className="w-full rounded-2xl bg-elevated/60 border border-line px-4 py-3 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
+                className="w-full rounded-2xl bg-elevated/60 border border-line px-4 py-3 text-sm text-ink placeholder:text-ink2 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
               />
             </div>
             <button
@@ -178,7 +178,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
               className={`w-full rounded-full px-4 py-3 text-sm font-extrabold transition-all inline-flex items-center justify-center gap-2 ${
                 name.trim() === '' || nodes.length === 0 || isSaving
                   ? 'bg-elevated text-ink3 cursor-not-allowed border border-line'
-                  : 'bg-gradient-to-r from-accent to-accent2 text-white shadow-glow hover:shadow-glow-lg hover:scale-[1.01] active:scale-[0.99]'
+                  : 'bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white shadow-md hover:scale-[1.01] active:scale-[0.99]'
               }`}
             >
               {isSaving ? (

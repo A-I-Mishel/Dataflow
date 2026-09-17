@@ -208,7 +208,7 @@ export default function PipelineCanvas({
           variant={BackgroundVariant.Dots}
           gap={16}
           size={1.1}
-          color={theme === 'light' ? 'rgba(20,30,55,0.22)' : 'rgba(148,163,190,0.11)'}
+          color={theme === 'light' ? 'rgba(150,165,185,0.55)' : 'rgba(70,85,110,0.5)'}
           className="bg-transparent"
         />
         <Controls
@@ -220,14 +220,14 @@ export default function PipelineCanvas({
         {!isMobile && (
           <MiniMap
             nodeColor={minimapNodeColor}
-            maskColor={theme === 'light' ? 'rgba(245, 247, 250, 0.9)' : 'rgba(15, 16, 27, 0.82)'}
+            maskColor={theme === 'light' ? 'rgba(235, 239, 244, 0.9)' : 'rgba(12, 16, 23, 0.82)'}
             className="rounded-2xl border border-line shadow-card overflow-hidden backdrop-blur-md opacity-90"
           />
         )}
         {nodes.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 pointer-events-none z-10">
             <div className="max-w-[420px] w-full rounded-[28px] border border-line bg-panel/75 backdrop-blur-xl shadow-card p-8 text-center">
-              <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-accent/90 to-accent2/90 grid place-items-center shadow-sm mb-5 opacity-90">
+              <div className="mx-auto h-14 w-14 rounded-2xl bg-accentbtn grid place-items-center shadow-sm mb-5">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
               </div>
               <h3 className="text-[18px] font-extrabold tracking-tight text-ink">Build your pipeline</h3>
@@ -236,8 +236,8 @@ export default function PipelineCanvas({
               </p>
               <div className="mt-5 flex items-center justify-center gap-2 text-[11px] font-medium tracking-wide text-ink3">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-elevated border border-line px-2.5 py-1"><span className="h-1.5 w-1.5 rounded-full bg-accent/70" /> Drag to add</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-elevated border border-line px-2.5 py-1"><span className="h-1.5 w-1.5 rounded-full bg-accent2/70" /> Connect</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-accent/90 to-accent2/90 text-white px-2.5 py-1 shadow-sm">Run ▶</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-elevated border border-line px-2.5 py-1"><span className="h-1.5 w-1.5 rounded-full bg-accent/70" /> Connect</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-accentbtn text-white px-2.5 py-1 shadow-sm">Run ▶</span>
               </div>
               <p className="text-[11px] text-ink3 mt-3">Tip: double-tap canvas on mobile to open palette</p>
             </div>
@@ -246,7 +246,7 @@ export default function PipelineCanvas({
       </ReactFlow>
       {isLoading && (
         <div className="absolute inset-0 bg-canvas/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-10">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-accent/80 to-accent2/80 grid place-items-center shadow-sm animate-pulse">
+          <div className="h-12 w-12 rounded-2xl bg-accentbtn grid place-items-center shadow-sm animate-pulse">
             <Loader2 size={22} className="text-white animate-spin" />
           </div>
           <p className="text-sm font-semibold text-ink2">Running pipeline…</p>

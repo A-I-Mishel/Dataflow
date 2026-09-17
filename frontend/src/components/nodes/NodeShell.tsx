@@ -29,7 +29,7 @@ const TONE_STYLES: Record<NodeTone, { gradient: string; iconWrap: string; icon: 
 };
 
 export const fieldInput =
-  'rounded-xl bg-elevated/60 border border-line px-3 py-2 text-sm text-ink placeholder:text-ink3 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 backdrop-blur-sm transition-all';
+  'rounded-xl bg-elevated/60 border border-line px-3 py-2 text-sm text-ink placeholder:text-ink2 focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 backdrop-blur-sm transition-all';
 export const inputClass = `w-full ${fieldInput}`;
 export const fieldLabelClass = 'text-[11px] font-bold tracking-widest uppercase text-ink3 mb-1.5';
 export const hintClass = 'text-xs text-ink3';
@@ -72,7 +72,7 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
             <p className="text-[11px] font-medium tracking-wide text-ink3 mt-0.5 capitalize">{tone} • transform</p>
           </div>
           {runStatus === 'running' && (
-            <Loader2 size={14} className="ml-auto animate-spin text-accent shrink-0" />
+            <Loader2 size={14} className="ml-auto animate-spin text-accenttext shrink-0" />
           )}
           {runStatus === 'done' && (
             <span
