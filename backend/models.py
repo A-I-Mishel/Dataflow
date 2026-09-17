@@ -73,12 +73,22 @@ class ProfileResponse(BaseModel):
     columns: Dict[str, ColumnProfile]
 
 
+class NodePreview(BaseModel):
+    node_id: str
+    shape: List[int]
+    columns: List[str]
+    dtypes: Dict[str, str]
+    preview: List[Dict[str, Any]]
+    approximate: bool = False
+
+
 class ExecuteResponse(BaseModel):
     preview: List[Dict[str, Any]]
     shape: List[int]
     columns: List[str]
     dtypes: Dict[str, str]
     profile: ProfileResponse
+    intermediates: List[NodePreview] = []
 
 
 class GenerateResponse(BaseModel):

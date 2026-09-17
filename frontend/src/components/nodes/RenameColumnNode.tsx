@@ -66,6 +66,7 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={Type}
       tone="blue"

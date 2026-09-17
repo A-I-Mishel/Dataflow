@@ -69,6 +69,8 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     }
 
     usePipelineStore.getState().setLoading(true);
+    usePipelineStore.getState().setViewingNodeId(null);
+    usePipelineStore.getState().setAllNodeStatus('running');
     try {
       // /generate is sessionless (pure function of nodes/edges), so both
       // requests run in parallel. Codegen never blocks the result: if it
@@ -79,6 +81,7 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
       );
       const result = await executePipeline(sessionId, nodes, edges);
       usePipelineStore.getState().setResult(result);
+      usePipelineStore.getState().setAllNodeStatus('done');
       toast.success(
         `Pipeline executed — ${result.shape[0]} rows, ${result.shape[1]} columns`,
       );
@@ -90,6 +93,7 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
       }
       usePipelineStore.getState().setActiveTab('preview');
     } catch (error: unknown) {
+      usePipelineStore.getState().setAllNodeStatus('error');
       toast.error(toMessage(error, 'Pipeline execution failed.'));
     } finally {
       usePipelineStore.getState().setLoading(false);

@@ -6,7 +6,6 @@ import uuid
 from collections.abc import Iterator
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,17 +15,24 @@ from sqlalchemy.orm import Session
 
 import crud
 from database import Base, engine, get_db
-from engine import execute_pipeline, execute_pipeline_large_file
+from engine import (
+    execute_pipeline_large_file,
+    execute_pipeline_with_intermediates,
+)
 from generator import generate_script
 from models import (
     ExecuteRequest,
     ExecuteResponse,
     GenerateResponse,
+    NodePreview,
     ProfileResponse,
     UploadResponse,
 )
 from models_db import SavedPipeline
 from profiler import profile_dataframe
+from sanitize import dtypes_dict as _dtypes_dict
+from sanitize import missing_dict as _missing_dict
+from sanitize import sanitize_records as _sanitize_records
 from session_store import (
     discard_large_session,
     evict_old_sessions,
@@ -107,45 +113,8 @@ app.add_middleware(
 )
 
 
-# Any denotes arbitrary JSON-serializable cell values from CSV data.
-def _sanitize_value(value: Any) -> Any:
-    if value is None:
-        return None
-    try:
-        if pd.isna(value):
-            return None
-    except Exception:
-        pass
-    if isinstance(value, pd.Timestamp):
-        return value.isoformat()
-    if isinstance(value, np.integer):
-        return int(value)
-    if isinstance(value, np.floating):
-        f: float = float(value)
-        return None if np.isnan(f) else f
-    if isinstance(value, np.bool_):
-        return bool(value)
-    if isinstance(value, float) and np.isnan(value):
-        return None
-    return value
-
-
-def _sanitize_records(df: pd.DataFrame, limit: int = 5) -> List[Dict[str, Any]]:
-    preview_df: pd.DataFrame = df.head(limit)
-    records: List[Dict[str, Any]] = preview_df.to_dict(orient="records")
-    sanitized: List[Dict[str, Any]] = []
-    for row in records:
-        clean: Dict[str, Any] = {str(k): _sanitize_value(v) for k, v in row.items()}
-        sanitized.append(clean)
-    return sanitized
-
-
-def _dtypes_dict(df: pd.DataFrame) -> Dict[str, str]:
-    return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
-
-
-def _missing_dict(df: pd.DataFrame) -> Dict[str, int]:
-    return {str(col): int(df[col].isna().sum()) for col in df.columns}
+# Preview sanitization lives in sanitize.py so engine.py can share it
+# without importing the FastAPI app module.
 
 
 def _storage_key(api_key: Optional[str], session_id: str) -> str:
@@ -356,15 +325,32 @@ def execute(
     evict_old_sessions()
     key: str = _storage_key(x_api_key, request.session_id)
     result: pd.DataFrame
+    intermediates: List[NodePreview] = []
     if is_large_session(key):
         large = get_large_session(key)
         result = execute_pipeline_large_file(
             large.path, request.nodes, request.edges,
             chunk_size=EXEC_CHUNK_ROWS, encoding=large.encoding,
         )
+        # Step previews for large files come from the first chunk only and
+        # are explicitly approximate (per-chunk stats, no global sort). A
+        # preview failure must never fail an otherwise successful run.
+        try:
+            first_chunk: pd.DataFrame = pd.read_csv(
+                large.path, nrows=EXEC_CHUNK_ROWS, encoding=large.encoding
+            )
+            first_chunk.columns = [str(c) for c in first_chunk.columns]
+            _ignored, intermediates = execute_pipeline_with_intermediates(
+                first_chunk, request.nodes, request.edges, approximate=True
+            )
+        except Exception as exc:
+            logger.warning("First-chunk step previews failed: %s", exc)
+            intermediates = []
     else:
         original: pd.DataFrame = get_session(key)
-        result = execute_pipeline(original, request.nodes, request.edges)
+        result, intermediates = execute_pipeline_with_intermediates(
+            original, request.nodes, request.edges
+        )
     store_result(key, result)
     try:
         crud.log_execution(db, request.session_id, "custom", int(result.shape[0]))
@@ -379,6 +365,7 @@ def execute(
         columns=[str(c) for c in result.columns.tolist()],
         dtypes=_dtypes_dict(result),
         profile=profile,
+        intermediates=intermediates,
     )
 
 

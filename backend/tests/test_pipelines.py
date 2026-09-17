@@ -102,3 +102,34 @@ def test_upload_and_execute_are_logged() -> None:
         assert logs[-1].result_rows == 2
     finally:
         db2.close()
+
+
+def test_execute_returns_step_intermediates() -> None:
+    upload = client.post(
+        "/upload", files={"file": ("steps.csv", "A,B\n3,x\n1,y\n2,x\n", "text/csv")}
+    )
+    assert upload.status_code == 200
+    session_id: str = upload.json()["session_id"]
+    executed = client.post(
+        "/execute",
+        json={
+            "session_id": session_id,
+            "nodes": [
+                {"id": "s1", "type": "sort", "config": {"by": ["A"], "ascending": True}},
+                {
+                    "id": "f1",
+                    "type": "filter-rows",
+                    "config": {
+                        "conditions": [{"column": "A", "operator": ">", "value": 1}]
+                    },
+                },
+            ],
+            "edges": [{"source": "s1", "target": "f1"}],
+        },
+    )
+    assert executed.status_code == 200, executed.text
+    body = executed.json()
+    assert [step["node_id"] for step in body["intermediates"]] == ["s1", "f1"]
+    assert body["intermediates"][0]["shape"][0] == 3
+    assert [row["A"] for row in body["intermediates"][1]["preview"]] == [2, 3]
+    assert body["intermediates"][1]["approximate"] is False

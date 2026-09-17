@@ -32,6 +32,7 @@ export default function DropDuplicatesNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={Copy}
       tone="blue"

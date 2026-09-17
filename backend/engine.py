@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 import pandas as pd
 from fastapi import HTTPException
 
-from models import NodeConfig, PipelineNode
+from models import NodeConfig, NodePreview, PipelineNode
+from sanitize import dtypes_dict, sanitize_records
 from toposort import topological_sort
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
@@ -42,16 +43,43 @@ def sort_nodes(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def execute_pipeline(
-    df: pd.DataFrame, nodes: List[PipelineNode], edges: List[Dict[str, str]]
-) -> pd.DataFrame:
+# Rows kept per step preview. Full frames are never stored — 50 sanitized
+# rows per node is enough to inspect a step and stays tiny.
+INTERMEDIATE_PREVIEW_ROWS: int = 50
+
+
+def _snapshot_preview(
+    node_id: str, df: pd.DataFrame, approximate: bool = False
+) -> NodePreview:
+    return NodePreview(
+        node_id=node_id,
+        shape=[int(df.shape[0]), int(df.shape[1])],
+        columns=[str(c) for c in df.columns.tolist()],
+        dtypes=dtypes_dict(df),
+        preview=sanitize_records(df, INTERMEDIATE_PREVIEW_ROWS),
+        approximate=approximate,
+    )
+
+
+def execute_pipeline_with_intermediates(
+    df: pd.DataFrame,
+    nodes: List[PipelineNode],
+    edges: List[Dict[str, str]],
+    approximate: bool = False,
+) -> Tuple[pd.DataFrame, List[NodePreview]]:
+    """Run the pipeline, returning the final frame plus one preview per node.
+
+    Previews are recorded in topological (execution) order. Only sanitized
+    head rows are kept — never full intermediate frames.
+    """
     if not nodes:
-        return df.copy(deep=True)
+        return df.copy(deep=True), []
     try:
         sorted_nodes: List[PipelineNode] = topological_sort(nodes, edges)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     current: pd.DataFrame = df.copy(deep=True)
+    previews: List[NodePreview] = []
     for node in sorted_nodes:
         fn: Optional[TransformFn] = _TRANSFORMS.get(node.type)
         if fn is None:
@@ -66,7 +94,16 @@ def execute_pipeline(
                 status_code=400, detail=f"Node '{node.id}' ({node.type}) failed: {exc}"
             ) from exc
         current = new_df
-    return current
+        previews.append(_snapshot_preview(node.id, current, approximate))
+    return current, previews
+
+
+def execute_pipeline(
+    df: pd.DataFrame, nodes: List[PipelineNode], edges: List[Dict[str, str]]
+) -> pd.DataFrame:
+    final: pd.DataFrame
+    final, _previews = execute_pipeline_with_intermediates(df, nodes, edges)
+    return final
 
 
 def execute_pipeline_large_file(

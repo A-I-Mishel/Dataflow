@@ -44,6 +44,7 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={Tags}
       tone="orange"

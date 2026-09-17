@@ -80,12 +80,22 @@ export interface UploadResponse {
   missing_values: Record<string, number>;
 }
 
+export interface NodePreview {
+  node_id: string;
+  shape: [number, number];
+  columns: string[];
+  dtypes: Record<string, string>;
+  preview: Record<string, unknown>[];
+  approximate?: boolean;
+}
+
 export interface ExecuteResponse {
   preview: Record<string, unknown>[];
   shape: [number, number];
   columns: string[];
   dtypes: Record<string, string>;
   profile: ProfileData;
+  intermediates?: NodePreview[];
 }
 
 export interface GenerateResponse {

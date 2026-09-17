@@ -32,6 +32,7 @@ export default function DropColumnNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={XCircle}
       tone="blue"

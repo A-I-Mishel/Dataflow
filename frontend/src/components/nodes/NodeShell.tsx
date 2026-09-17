@@ -1,6 +1,9 @@
 import { Handle, Position } from '@xyflow/react';
+import { Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+
+import { usePipelineStore } from '../../stores/pipelineStore';
 
 export type NodeTone = 'blue' | 'purple' | 'orange';
 
@@ -42,16 +45,22 @@ interface NodeShellProps {
   errors: string[];
   configured: boolean;
   children: ReactNode;
+  nodeId?: string;
 }
 
-export default function NodeShell({ title, icon: Icon, tone, selected = false, errors, configured, children }: NodeShellProps) {
+export default function NodeShell({ title, icon: Icon, tone, selected = false, errors, configured, children, nodeId }: NodeShellProps) {
   const s = TONE_STYLES[tone];
   const hasError = errors.length > 0;
+  // Honest run states only: set for all nodes together on run settle.
+  const runStatus = usePipelineStore((state) =>
+    nodeId !== undefined ? state.nodeStatus[nodeId] : undefined,
+  );
+  const runFailed = runStatus === 'error';
   return (
     <div
       className={`w-[300px] rounded-[20px] border bg-card/90 backdrop-blur-xl shadow-card overflow-visible transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.22)] hover:-translate-y-0.5 ${
         selected ? 'ring-2 ring-accent/70 border-accent/50 shadow-glow' : 'border-white/[0.06]'
-      } ${hasError ? 'ring-2 ring-rose-500 border-rose-500' : ''}`}
+      } ${hasError || runFailed ? 'ring-2 ring-rose-500 border-rose-500' : ''}`}
     >
       <div className="rounded-[20px] overflow-hidden">
         <div className={`relative flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.05] bg-gradient-to-r ${s.gradient}`}>
@@ -62,10 +71,27 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
             <p className="text-sm font-bold tracking-tight text-ink leading-none">{title}</p>
             <p className="text-[11px] font-medium tracking-wide text-ink3 mt-0.5 capitalize">{tone} • transform</p>
           </div>
-          <span
-            title={hasError ? 'Needs attention' : configured ? 'Configured' : 'Default'}
-            className={`ml-auto h-2.5 w-2.5 rounded-full shrink-0 ring-4 ${hasError ? 'bg-rose-500 ring-rose-500/20' : configured ? 'bg-emerald-500 ring-emerald-500/20' : 'bg-muted ring-white/10'}`}
-          />
+          {runStatus === 'running' && (
+            <Loader2 size={14} className="ml-auto animate-spin text-accent shrink-0" />
+          )}
+          {runStatus === 'done' && (
+            <span
+              title="Ran successfully"
+              className="ml-auto h-2.5 w-2.5 rounded-full shrink-0 ring-4 bg-emerald-500 ring-emerald-500/20"
+            />
+          )}
+          {runStatus === 'error' && (
+            <span
+              title="Run failed"
+              className="ml-auto h-2.5 w-2.5 rounded-full shrink-0 ring-4 bg-rose-500 ring-rose-500/20"
+            />
+          )}
+          {runStatus === undefined && (
+            <span
+              title={hasError ? 'Needs attention' : configured ? 'Configured' : 'Default'}
+              className={`ml-auto h-2.5 w-2.5 rounded-full shrink-0 ring-4 ${hasError ? 'bg-rose-500 ring-rose-500/20' : configured ? 'bg-emerald-500 ring-emerald-500/20' : 'bg-muted ring-white/10'}`}
+            />
+          )}
         </div>
         {hasError && (
           <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/20 flex items-center gap-2">

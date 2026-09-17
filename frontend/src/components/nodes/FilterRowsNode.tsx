@@ -122,6 +122,7 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={Filter}
       tone="purple"

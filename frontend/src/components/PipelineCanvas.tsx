@@ -65,6 +65,8 @@ export default function PipelineCanvas({
   const onConnectAction = usePipelineStore((state) => state.onConnect);
   const addNode = usePipelineStore((state) => state.addNode);
   const setSelectedNodeId = usePipelineStore((state) => state.setSelectedNodeId);
+  const setViewingNodeId = usePipelineStore((state) => state.setViewingNodeId);
+  const setActiveTab = usePipelineStore((state) => state.setActiveTab);
   const isLoading = usePipelineStore((state) => state.isLoading);
   const theme = usePipelineStore((state) => state.theme);
   const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -106,6 +108,19 @@ export default function PipelineCanvas({
       }
     },
     [onConnectAction],
+  );
+
+  const handleNodeClick = useCallback(
+    (_event: unknown, node: { id: string }) => {
+      setSelectedNodeId(node.id);
+      // After a run, clicking a node inspects that step's output.
+      const intermediates = usePipelineStore.getState().resultData?.intermediates;
+      if (intermediates?.some((step) => step.node_id === node.id) === true) {
+        setViewingNodeId(node.id);
+        setActiveTab('preview');
+      }
+    },
+    [setSelectedNodeId, setViewingNodeId, setActiveTab],
   );
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
@@ -150,7 +165,7 @@ export default function PipelineCanvas({
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
-        onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+        onNodeClick={handleNodeClick}
         onPaneClick={() => setSelectedNodeId(null)}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -158,7 +173,7 @@ export default function PipelineCanvas({
         zoomOnPinch={true}
         minZoom={0.2}
         maxZoom={4}
-        defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
+        defaultEdgeOptions={{ type: 'smoothstep', animated: isLoading }}
         colorMode={theme}
       >
         <Background

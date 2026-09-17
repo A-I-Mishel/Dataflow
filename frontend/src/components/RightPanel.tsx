@@ -49,6 +49,18 @@ export default function RightPanel() {
   const generatedCode = usePipelineStore((state) => state.generatedCode);
   const isLoading = usePipelineStore((state) => state.isLoading);
   const isStale = usePipelineStore(selectIsResultStale);
+  const viewingNodeId = usePipelineStore((state) => state.viewingNodeId);
+  const setViewingNodeId = usePipelineStore((state) => state.setViewingNodeId);
+  const nodes = usePipelineStore((state) => state.nodes);
+
+  const viewingStep =
+    viewingNodeId !== null
+      ? (resultData?.intermediates?.find((step) => step.node_id === viewingNodeId) ?? null)
+      : null;
+  const viewingLabel =
+    viewingNodeId !== null
+      ? (nodes.find((node) => node.id === viewingNodeId)?.data.label ?? viewingNodeId)
+      : null;
 
   const fallbackProfile =
     resultData === null && originalData !== null
@@ -103,11 +115,38 @@ export default function RightPanel() {
                   Result is stale — re-run to refresh
                 </p>
               )}
-              <DataTable
-                data={resultData.preview}
-                columns={resultData.columns}
-                dtypes={resultData.dtypes}
-              />
+              {viewingStep !== null && viewingLabel !== null ? (
+                <div>
+                  <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-elevated px-3 py-2">
+                    <p className="text-xs font-semibold text-ink2">
+                      Viewing: {viewingLabel} (output)
+                    </p>
+                    {viewingStep.approximate === true && (
+                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                        APPROXIMATE
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setViewingNodeId(null)}
+                      className="ml-auto text-xs font-bold text-accent hover:underline"
+                    >
+                      Back to final result
+                    </button>
+                  </div>
+                  <DataTable
+                    data={viewingStep.preview}
+                    columns={viewingStep.columns}
+                    dtypes={viewingStep.dtypes}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  data={resultData.preview}
+                  columns={resultData.columns}
+                  dtypes={resultData.dtypes}
+                />
+              )}
             </div>
           ) : (
             <EmptyState

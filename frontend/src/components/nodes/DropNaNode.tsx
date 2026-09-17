@@ -37,6 +37,7 @@ export default function DropNaNode({ id, data, selected }: NodeProps) {
 
   return (
     <NodeShell
+      nodeId={id}
       title={label}
       icon={Trash2}
       tone="blue"

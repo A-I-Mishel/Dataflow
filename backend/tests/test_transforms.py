@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from fastapi import HTTPException
 
-from engine import execute_pipeline
+from engine import execute_pipeline, execute_pipeline_with_intermediates
 from models import NodeConfig, PipelineNode
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
@@ -344,6 +344,44 @@ def test_drop_duplicates_engine_integration(sample_df: pd.DataFrame) -> None:
         [],
     )
     assert result.shape[0] == sample_df.shape[0]
+
+
+def test_filter_contains_nan_matches_generated_code() -> None:
+    # Runtime treats NaN as "" — the generated code must do the same, so a
+    # `contains "nan"` filter matches nothing in both.
+    df: pd.DataFrame = pd.DataFrame({"Name": ["Alice", None, "Bob"]})
+    result, code = apply_filter_rows(
+        df,
+        NodeConfig(
+            conditions=[{"column": "Name", "operator": "contains", "value": "nan"}]
+        ),
+    )
+    _assert_valid_code(code)
+    assert 'fillna("")' in code
+    assert result.shape[0] == 0
+
+
+def test_intermediates_in_topo_order() -> None:
+    df: pd.DataFrame = pd.DataFrame({"A": [3, 1, 2, 2], "B": ["x", "y", "x", "x"]})
+    nodes = [
+        PipelineNode(id="s1", type="sort", config=NodeConfig(by=["A"], ascending=True)),
+        PipelineNode(id="d1", type="drop-duplicates", config=NodeConfig()),
+    ]
+    edges = [{"source": "s1", "target": "d1"}]
+    final, previews = execute_pipeline_with_intermediates(df, nodes, edges)
+    assert [p.node_id for p in previews] == ["s1", "d1"]
+    assert previews[0].shape[0] == 4
+    assert [r["A"] for r in previews[0].preview] == [1, 2, 2, 3]
+    assert previews[1].shape[0] == 3
+    assert final.shape[0] == 3
+    assert all(p.approximate is False for p in previews)
+
+
+def test_intermediates_empty_pipeline() -> None:
+    df: pd.DataFrame = pd.DataFrame({"A": [1]})
+    final, previews = execute_pipeline_with_intermediates(df, [], [])
+    assert final.shape == (1, 1)
+    assert previews == []
 
 
 def test_pure_no_mutation(sample_df: pd.DataFrame) -> None:

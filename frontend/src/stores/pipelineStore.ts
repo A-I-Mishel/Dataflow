@@ -35,6 +35,8 @@ interface PipelineState {
   activeTab: ActiveTab;
   resultVersion: number;
   editVersion: number;
+  viewingNodeId: string | null;
+  nodeStatus: Record<string, 'running' | 'done' | 'error'>;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
   removeNode: (id: string) => void;
   updateNodeConfig: (id: string, config: Partial<NodeConfig>) => void;
@@ -59,6 +61,8 @@ interface PipelineState {
   loadTemplate: (templateName: string) => void;
   setSavedPipelines: (list: ServerPipelineSummary[]) => void;
   setCanvas: (nodes: PipelineNode[], edges: PipelineEdge[]) => void;
+  setViewingNodeId: (id: string | null) => void;
+  setAllNodeStatus: (status: 'running' | 'done' | 'error' | null) => void;
 }
 
 const NODE_LABELS: Record<NodeType, string> = {
@@ -182,6 +186,8 @@ export const usePipelineStore = create<PipelineState>()(
   activeTab: 'preview',
   resultVersion: 0,
   editVersion: 0,
+  viewingNodeId: null,
+  nodeStatus: {},
   past: [],
   future: [],
   savedPipelines: [],
@@ -191,6 +197,8 @@ export const usePipelineStore = create<PipelineState>()(
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
       editVersion: state.editVersion + 1,
+      viewingNodeId: null,
+      nodeStatus: {},
       nodes: [
         ...state.nodes,
         {
@@ -207,6 +215,8 @@ export const usePipelineStore = create<PipelineState>()(
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
       editVersion: state.editVersion + 1,
+      viewingNodeId: state.viewingNodeId === id ? null : state.viewingNodeId,
+      nodeStatus: {},
       nodes: state.nodes.filter((node) => node.id !== id),
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
@@ -217,6 +227,8 @@ export const usePipelineStore = create<PipelineState>()(
       past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
       future: [],
       editVersion: state.editVersion + 1,
+      viewingNodeId: null,
+      nodeStatus: {},
       nodes: state.nodes.map((node) =>
         node.id === id
           ? { ...node, data: { ...node.data, config: { ...node.data.config, ...config } } }
@@ -235,6 +247,8 @@ export const usePipelineStore = create<PipelineState>()(
         past: [...state.past.slice(-49), { nodes: state.nodes, edges: state.edges }],
         future: [],
         editVersion: state.editVersion + 1,
+        viewingNodeId: null,
+        nodeStatus: {},
         edges: [...state.edges, { id, source: connection.source, target: connection.target }],
       };
     }),
@@ -248,7 +262,9 @@ export const usePipelineStore = create<PipelineState>()(
       );
       return {
         nodes: applyNodeChanges(changes, state.nodes) as PipelineNode[],
-        ...(structural ? { editVersion: state.editVersion + 1 } : {}),
+        ...(structural
+          ? { editVersion: state.editVersion + 1, viewingNodeId: null, nodeStatus: {} }
+          : {}),
       };
     }),
 
@@ -258,7 +274,9 @@ export const usePipelineStore = create<PipelineState>()(
       const structural = changes.some((change) => change.type !== 'select');
       return {
         edges: applyEdgeChanges(changes, state.edges) as PipelineEdge[],
-        ...(structural ? { editVersion: state.editVersion + 1 } : {}),
+        ...(structural
+          ? { editVersion: state.editVersion + 1, viewingNodeId: null, nodeStatus: {} }
+          : {}),
       };
     }),
 
@@ -269,12 +287,15 @@ export const usePipelineStore = create<PipelineState>()(
       columnList: data.columns,
       resultData: null,
       generatedCode: '',
+      viewingNodeId: null,
+      nodeStatus: {},
     }),
 
   setResult: (data) =>
     set((state) => ({
       resultData: data,
       columnList: data.columns,
+      viewingNodeId: null,
       // Sync versions: the result now reflects all edits so far.
       resultVersion: state.editVersion,
     })),
@@ -309,6 +330,8 @@ export const usePipelineStore = create<PipelineState>()(
       resultData: null,
       generatedCode: '',
       selectedNodeId: null,
+      viewingNodeId: null,
+      nodeStatus: {},
     })),
 
   checkSession: () => {
@@ -330,6 +353,8 @@ export const usePipelineStore = create<PipelineState>()(
         edges: previous.edges,
         selectedNodeId: null,
         editVersion: state.editVersion + 1,
+        viewingNodeId: null,
+        nodeStatus: {},
       };
     }),
 
@@ -344,6 +369,8 @@ export const usePipelineStore = create<PipelineState>()(
         edges: next.edges,
         selectedNodeId: null,
         editVersion: state.editVersion + 1,
+        viewingNodeId: null,
+        nodeStatus: {},
       };
     }),
 
@@ -359,10 +386,24 @@ export const usePipelineStore = create<PipelineState>()(
         resultData: null,
         generatedCode: '',
         selectedNodeId: null,
+        viewingNodeId: null,
+        nodeStatus: {},
       };
     }),
 
   setSavedPipelines: (list) => set({ savedPipelines: list }),
+
+  setViewingNodeId: (id) => set({ viewingNodeId: id }),
+
+  setAllNodeStatus: (status) =>
+    set((state) => {
+      if (status === null) return { nodeStatus: {} };
+      const nodeStatus: Record<string, 'running' | 'done' | 'error'> = {};
+      for (const node of state.nodes) {
+        nodeStatus[node.id] = status;
+      }
+      return { nodeStatus };
+    }),
 
   setCanvas: (nodes, edges) =>
     set((state) => ({
@@ -373,6 +414,8 @@ export const usePipelineStore = create<PipelineState>()(
       resultData: null,
       generatedCode: '',
       selectedNodeId: null,
+      viewingNodeId: null,
+      nodeStatus: {},
     })),
     }),
     {
