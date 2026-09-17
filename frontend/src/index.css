@@ -75,7 +75,7 @@
   --cat-encode: 255 180 84;
   --cat-input: 91 140 255;
   --grid: 20 30 55;
-  --wire: 195 203 219;
+  --wire: 148 163 184;
   --border: 20 30 55;
   --r: 12px;
   --shadow: 0 8px 22px rgba(24, 32, 60, 0.1);
@@ -146,7 +146,7 @@ body,
 /* Edges — mock palette, no layout change */
 .react-flow__edge .react-flow__edge-path {
   stroke: rgb(var(--wire));
-  stroke-width: 2;
+  stroke-width: 2.5;
 }
 .react-flow__edge:hover .react-flow__edge-path {
   stroke: rgb(var(--accent));

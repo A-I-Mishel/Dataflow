@@ -101,8 +101,8 @@ export default function NodeShell({ title, icon: Icon, tone, selected = false, e
         )}
         <div className="p-4 space-y-3 bg-gradient-to-b from-transparent to-elevated/20">{children}</div>
       </div>
-      <Handle type="target" position={Position.Top} className="!bg-panel !border-2 !border-accent/70 !w-3.5 !h-3.5 !-top-1.5 shadow-sm" />
-      <Handle type="source" position={Position.Bottom} className="!bg-panel !border-2 !border-accent/70 !w-3.5 !h-3.5 !-bottom-1.5 shadow-sm" />
+      <Handle type="target" position={Position.Top} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-top-2 shadow-md hover:!bg-accent/20" />
+      <Handle type="source" position={Position.Bottom} className="!bg-panel !border-[2.5px] !border-accent !w-4 !h-4 !-bottom-2 shadow-md hover:!bg-accent/20" />
     </div>
   );
 }
