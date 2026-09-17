@@ -50,9 +50,11 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     }
     const configErrors = validateNodeConfigs(nodes, Array.from(knownColumns));
     if (configErrors.length > 0) {
-      for (const error of configErrors) {
-        toast.error(error.message);
-      }
+      const message =
+        configErrors.length === 1
+          ? configErrors[0].message
+          : `Pipeline has ${configErrors.length} issues:\n${configErrors.map((e) => `• ${e.message}`).join('\n')}`;
+      toast.error(message);
       return;
     }
 

@@ -43,12 +43,16 @@ def _condition_to_code(column: str, operator: str, value: object) -> str:
     col_ref: str = f"df[{column!r}]"
     if operator in (">", "<", ">=", "<=", "==", "!="):
         return f"({col_ref} {operator} {value!r})"
+    # Must match _single_mask runtime semantics exactly: NaN -> "" before
+    # casting, otherwise a generated `contains "nan"` filter would match
+    # missing values that the app itself does not match.
+    text_ref: str = f"({col_ref}.fillna(\"\").astype(str))"
     if operator == "contains":
-        return f"({col_ref}.astype(str).str.contains({str(value)!r}, na=False, regex=False))"
+        return f"({text_ref}.str.contains({str(value)!r}, na=False, regex=False))"
     if operator == "startswith":
-        return f"({col_ref}.astype(str).str.startswith({str(value)!r}, na=False))"
+        return f"({text_ref}.str.startswith({str(value)!r}, na=False))"
     if operator == "endswith":
-        return f"({col_ref}.astype(str).str.endswith({str(value)!r}, na=False))"
+        return f"({text_ref}.str.endswith({str(value)!r}, na=False))"
     raise HTTPException(status_code=400, detail=f"filter-rows: unsupported operator '{operator}'")
 
 

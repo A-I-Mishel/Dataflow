@@ -26,9 +26,19 @@ function stripFirstLogic(conditions: Condition[]): Condition[] {
   return [{ column: first.column, operator: first.operator, value: first.value }, ...rest];
 }
 
+function isNumericDtype(dtype: string | undefined): boolean {
+  if (!dtype) return false;
+  const lower = dtype.toLowerCase();
+  return (
+    lower.includes('int') || lower.includes('float') || lower.includes('double') || lower.includes('number')
+  );
+}
+
 export default function FilterRowsNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
+  const originalData = usePipelineStore((state) => state.originalData);
+  const resultData = usePipelineStore((state) => state.resultData);
   const label = typeof data.label === 'string' ? data.label : 'Filter Rows';
   const config = (data.config ?? {}) as NodeConfig;
   const errors = useMemo(
@@ -78,8 +88,20 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
 
   const handleValueChange = (index: number, event: ChangeEvent<HTMLInputElement>): void => {
     const raw = event.target.value;
-    const parsed = parseFloat(raw);
-    const value = raw !== '' && !Number.isNaN(parsed) ? parsed : raw;
+    // Dtype-aware coercion: only parse numeric strings when the target
+    // column is actually numeric. Otherwise "007", "1e5" or "18abc" would
+    // be corrupted by parseFloat and never match string columns.
+    const column = conditions[index]?.column ?? '';
+    const dtype =
+      (column !== '' ? originalData?.dtypes[column] : undefined) ??
+      (column !== '' ? resultData?.dtypes[column] : undefined);
+    let value: string | number = raw;
+    if (raw !== '' && isNumericDtype(dtype)) {
+      const parsed = parseFloat(raw);
+      if (!Number.isNaN(parsed)) {
+        value = parsed;
+      }
+    }
     commit(
       conditions.map((condition, i) =>
         i === index ? { ...condition, value } : condition,

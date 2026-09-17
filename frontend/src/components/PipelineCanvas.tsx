@@ -145,6 +145,7 @@ export default function PipelineCanvas({
         onPaneClick={() => setSelectedNodeId(null)}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
+        zoomOnDoubleClick={!isMobile}
         zoomOnPinch={true}
         minZoom={0.2}
         maxZoom={4}

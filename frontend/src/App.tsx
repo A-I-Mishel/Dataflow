@@ -53,6 +53,7 @@ export default function App() {
       const key = event.key.toLowerCase();
       if ((event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey) {
         event.preventDefault();
+        if (usePipelineStore.getState().past.length === 0) return;
         usePipelineStore.getState().undo();
         toast.success('Undo');
       } else if (
@@ -60,6 +61,7 @@ export default function App() {
         (key === 'y' || (key === 'z' && event.shiftKey))
       ) {
         event.preventDefault();
+        if (usePipelineStore.getState().future.length === 0) return;
         usePipelineStore.getState().redo();
         toast.success('Redo');
       } else if (event.key === 'Delete') {
@@ -82,7 +84,6 @@ export default function App() {
     return (
       <div className="flex flex-col min-h-screen bg-canvas text-ink relative">
         <div className="canvas-mesh" aria-hidden />
-        <Header />
         <Header />
         <div className="flex-1 pb-16">
           {mobileView === 'canvas' && (

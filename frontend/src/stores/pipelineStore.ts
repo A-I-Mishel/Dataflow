@@ -236,6 +236,8 @@ export const usePipelineStore = create<PipelineState>()(
       sessionId: data.session_id,
       originalData: data,
       columnList: data.columns,
+      resultData: null,
+      generatedCode: '',
     }),
 
   setResult: (data) =>
