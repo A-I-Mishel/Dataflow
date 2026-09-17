@@ -51,7 +51,7 @@
 
 .light {
   color-scheme: light;
-  --canvas: 243 245 249;
+  --canvas: 231 235 242;
   --panel: 255 255 255;
   --card: 255 255 255;
   --elevated: 245 247 251;
@@ -80,7 +80,7 @@
   --r: 12px;
   --shadow: 0 8px 22px rgba(24, 32, 60, 0.1);
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --scrollbar-track: 243 245 249;
+  --scrollbar-track: 231 235 242;
   --scrollbar-thumb: 198 202 210;
   --scrollbar-thumb-hover: 160 170 188;
 
@@ -159,6 +159,26 @@ body,
 .react-flow__connection-path {
   stroke: rgb(var(--accent));
   stroke-width: 2;
+}
+
+/* Cursors — keep the pointer visible on the bright light-theme canvas.
+   (Dark theme keeps the default grab hand, which reads fine on dark.) */
+.light .react-flow__pane.draggable {
+  cursor: crosshair;
+}
+.light .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* Text caret + selection — accent-coloured so the caret never
+   washes out against light fields */
+input,
+textarea,
+select {
+  caret-color: rgb(var(--accent));
+}
+::selection {
+  background: rgba(91, 140, 255, 0.28);
 }
 
 /* Mesh background — mock's single radial glow, no layout change */

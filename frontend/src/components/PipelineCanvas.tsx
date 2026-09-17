@@ -208,7 +208,7 @@ export default function PipelineCanvas({
           variant={BackgroundVariant.Dots}
           gap={16}
           size={1.1}
-          color={theme === 'light' ? 'rgba(20,30,55,0.13)' : 'rgba(148,163,190,0.11)'}
+          color={theme === 'light' ? 'rgba(20,30,55,0.22)' : 'rgba(148,163,190,0.11)'}
           className="bg-transparent"
         />
         <Controls
