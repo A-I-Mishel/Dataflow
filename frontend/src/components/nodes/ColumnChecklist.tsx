@@ -106,7 +106,7 @@ export default function ColumnChecklist({
           )}
         </div>
         {open && options.length > 0 && (
-          <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-40 overflow-y-auto rounded-xl bg-panel border border-line shadow-card p-1">
+          <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-40 overflow-y-auto nowheel nopan nodrag rounded-xl bg-panel border border-line shadow-card p-1">
             {remaining.length === 0 && (
               <p className="px-2 py-1.5 text-xs text-ink3">All columns selected</p>
             )}

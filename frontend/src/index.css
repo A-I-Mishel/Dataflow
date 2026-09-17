@@ -175,13 +175,55 @@ body,
   stroke-width: 2;
 }
 
-/* Cursors — keep the pointer visible on the bright light-theme canvas.
-   (Dark theme keeps the default grab hand, which reads fine on dark.) */
-.light .react-flow__pane.draggable {
-  cursor: crosshair;
+/* Cursors — keep the pointer visible on nodes in both themes.
+   React Flow defaults nodes to `cursor: grab`, which is a thin white hand
+   on Windows and washes out against the white light-theme cards.
+   Nodes use default arrow, header uses grab for drag, fields use text/pointer. */
+.react-flow__pane.draggable {
+  cursor: grab;
 }
-.light .react-flow__pane.dragging {
+.react-flow__pane.dragging {
   cursor: grabbing;
+}
+.react-flow__node.selectable,
+.react-flow__node.draggable {
+  cursor: default !important;
+}
+.react-flow__node .node-drag-handle {
+  cursor: grab !important;
+}
+.react-flow__node .node-drag-handle:active {
+  cursor: grabbing !important;
+}
+.react-flow__node input,
+.react-flow__node textarea {
+  cursor: text;
+}
+.react-flow__node select,
+.react-flow__node button,
+.react-flow__node a {
+  cursor: pointer;
+}
+
+/* Scroll inside nodes — wheel over a node scrolls its content instead of
+   zooming the canvas (React Flow `nowheel` opt-out) and doesn't chain to pane. */
+.node-scroll {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.node-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.node-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.light .node-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 /* Text caret + selection — accent-coloured so the caret never
@@ -190,6 +232,11 @@ input,
 textarea,
 select {
   caret-color: rgb(var(--accent));
+}
+.light input,
+.light select,
+.light textarea {
+  color-scheme: light;
 }
 ::selection {
   background: rgba(99, 102, 241, 0.25);
