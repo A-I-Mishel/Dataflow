@@ -185,6 +185,7 @@ export default function PipelineCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        proOptions={{ hideAttribution: true }}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
