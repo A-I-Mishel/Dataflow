@@ -1843,7 +1843,6 @@ async function saveCurrentTemplate(){
 }
 async function applyTemplate(id, name){
   try {
-    if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
     const t = await apiLoadPipeline(backend.base, id);
     const nodes = (t.nodes || []).filter(x => x && E.OPS[x.type]).map(x => {
       const n = makeNode(x.type);
@@ -1856,6 +1855,16 @@ async function applyTemplate(id, name){
     state.selected = null;
     state.viewStep = 'final';
     arrange();
+    if (!state.data){
+      // No dataset yet: lay the steps out and wait. Runs are lazy, so
+      // nothing executes or errors until data arrives — uploading first
+      // is a habit, not a requirement. (Undo starts working from the
+      // next change: history needs a dataset to snapshot against.)
+      renderNodes(); renderInspector(); renderPreview(); renderCode();
+      $('#dlgTemplates').close();
+      toast(`“${name}” staged — now upload a dataset to run it`, 'check');
+      return;
+    }
     fitView();
     requestRun(0);
     renderNodes(); renderInspector(); renderPreview(); renderCode();
