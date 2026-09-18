@@ -400,8 +400,8 @@ function objOf(id){
   return state.nodes.find(n => n.id === id);
 }
 const WIRE_DEFS = `<defs>
-  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#A99F85"/></marker>
-  <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#D9481F"/></marker>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57503F"/></marker>
+  <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#D9481F"/></marker>
 </defs>`;
 function renderWires(){
   if (!state.data){ $('#wires').innerHTML = ''; return; }
@@ -562,7 +562,13 @@ function renderBrokenNode(layer, n, i, err){
 }
 
 /* ---- pan / zoom ---- */
-function applyView(){ $('#world').style.transform = `translate(${view.px}px,${view.py}px) scale(${view.z})`; }
+function applyView(){
+  $('#world').style.transform = `translate(${view.px}px,${view.py}px) scale(${view.z})`;
+  // Infinite dot grid: dots live on #viewport (fixed 26px, full coverage),
+  // offset by pan so they feel anchored while zoom keeps them readable.
+  const vp = $('#viewport');
+  if (vp) vp.style.backgroundPosition = `${view.px}px ${view.py}px`;
+}
 function zoomLab(){ $('#zoomLab').textContent = Math.round(view.z * 100) + '%'; }
 function zoomAt(cx, cy, k){
   const nz = clamp(view.z * k, .35, 1.8);

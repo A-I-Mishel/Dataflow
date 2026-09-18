@@ -68,15 +68,15 @@ button{font-family:var(--mono)}
 /* ---- canvas ---- */
 #center{flex:1;min-width:0;display:flex;flex-direction:column}
 #canvasWrap{position:relative;height:44%;min-height:170px;background:var(--paper2);overflow:hidden}
-#viewport{position:absolute;inset:0;cursor:grab}
+#viewport{position:absolute;inset:0;cursor:grab;background-color:var(--paper2);
+  background-image:radial-gradient(circle,#C8BEA4 1.2px,transparent 1.6px);background-size:26px 26px}
 #viewport.panning{cursor:grabbing}
-#world{position:absolute;left:0;top:0;width:6000px;height:4000px;transform-origin:0 0;pointer-events:none;
-  background-image:radial-gradient(circle,#C8BEA4 1.1px,transparent 1.4px);background-size:26px 26px}
-#wires{position:absolute;left:0;top:0;pointer-events:none}
-#wires path{fill:none;stroke:#B3A98E;stroke-width:2;transition:stroke .15s}
-#wires path.flow{stroke:var(--acc);stroke-width:2.4;stroke-dasharray:7 7;animation:dashf .4s linear infinite}
+#world{position:absolute;left:0;top:0;width:6000px;height:4000px;transform-origin:0 0;pointer-events:none;background:none}
+#wires{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
+#wires path{fill:none;stroke:#57503F;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 0 rgba(255,254,250,.9));transition:stroke .15s}
+#wires path.flow{stroke:var(--acc);stroke-width:3;stroke-dasharray:7 7;animation:dashf .4s linear infinite}
 @keyframes dashf{to{stroke-dashoffset:-14}}
-#nodesLayer{position:absolute;inset:0}
+#nodesLayer{position:absolute;inset:0;z-index:2}
 #canvasTools{position:absolute;top:12px;left:12px;display:flex;gap:6px;align-items:center;z-index:6;flex-wrap:wrap}
 .ctool{height:30px;min-width:30px;padding:0 9px;display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--ink);border-radius:8px;font-size:11px;font-weight:600;color:var(--ink);cursor:pointer;box-shadow:2px 2px 0 rgba(33,29,21,.13);transition:background .12s,color .12s}
 .ctool:hover:not(:disabled){background:var(--ink);color:var(--panel)}
