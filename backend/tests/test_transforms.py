@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from typing import List
 
 from engine import execute_pipeline, execute_pipeline_with_intermediates
@@ -563,6 +564,15 @@ def test_extract_text_modes() -> None:
     assert rx["m"].tolist()[:2] == ["john@x", "amy@y"]
     with pytest.raises(HTTPException):
         apply_extract_text(df, NodeConfig(columns=["e"], method="regex", pattern="([", output="m"))
+    # Overlong patterns are refused before touching the regex engine (ReDoS):
+    # at the model boundary (422-style) and inside the transform for
+    # dict-built configs that bypass it.
+    with pytest.raises(ValidationError):
+        NodeConfig(columns=["e"], method="regex", pattern="a" * 201, output="m")
+    cfg = NodeConfig(columns=["e"], method="regex", pattern="x", output="m")
+    cfg.pattern = "a" * 201
+    with pytest.raises(HTTPException):
+        apply_extract_text(df, cfg)
     with pytest.raises(HTTPException):
         apply_extract_text(df, NodeConfig(columns=["e"], method="after", delimiter="@", output="e"))
 
@@ -650,6 +660,10 @@ def test_create_column() -> None:
         )
     with pytest.raises(HTTPException):
         apply_create_column(df, NodeConfig(output="price", formula="[price] + 1"))
+    # Deep nesting fails cleanly instead of RecursionError.
+    with pytest.raises(HTTPException) as exc_info:
+        apply_create_column(df, NodeConfig(output="t2", formula="(" * 60 + "[price]" + ")" * 60))
+    assert "deeply" in str(exc_info.value.detail)
 
 
 def test_conditional_column() -> None:

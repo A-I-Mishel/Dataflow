@@ -501,6 +501,12 @@ describe('parseFormula', () => {
       assert.throws(() => E.parseFormula(bad));
     }
   });
+  it('caps nesting depth instead of overflowing the stack', () => {
+    assert.throws(
+      () => E.parseFormula('('.repeat(60) + '[a]' + ')'.repeat(60)),
+      /deeply/,
+    );
+  });
 });
 
 describe('create-column', () => {

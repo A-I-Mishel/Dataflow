@@ -134,6 +134,8 @@ def apply_extract_text(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFra
     pattern: Optional[str] = config.pattern
     if not pattern:
         raise HTTPException(status_code=400, detail="extract-text: type a pattern")
+    if len(pattern) > 200:
+        raise HTTPException(status_code=400, detail="extract-text: pattern accepts at most 200 characters")
     try:
         re.compile(pattern)
     except re.error as exc:

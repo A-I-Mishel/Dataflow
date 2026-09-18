@@ -24,6 +24,7 @@ from ratelimit import RateLimitMiddleware
 from generator import generate_script
 from models import (
     MAX_EDGES,
+    MAX_ID_LENGTH,
     MAX_NODES,
     ExecuteRequest,
     ExecuteResponse,
@@ -80,13 +81,13 @@ EXEC_CHUNK_ROWS: int = 10000
 
 
 class ProfileRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(max_length=MAX_ID_LENGTH)
 
 
 # Any is unavoidable below: saved pipeline nodes/edges are arbitrary JSON
 # blobs (ids, types, configs, positions) that must round-trip byte-identically.
 class PipelineSaveRequest(BaseModel):
-    name: str
+    name: str = Field(max_length=MAX_ID_LENGTH)
     nodes: List[Dict[str, Any]] = Field(max_length=MAX_NODES)
     edges: List[Dict[str, str]] = Field(max_length=MAX_EDGES)
 

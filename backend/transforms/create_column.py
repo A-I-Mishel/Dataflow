@@ -61,9 +61,14 @@ def tokenize(formula: str) -> List[object]:
 
 
 class _Parser:
+    # Depth cap: deeply nested parens/unary-minus recurse per level, and an
+    # uncapped formula turns into a RecursionError (confusing 400 at best).
+    MAX_DEPTH: int = 50
+
     def __init__(self, tokens: List[object]) -> None:
         self.tokens = tokens
         self.pos = 0
+        self.depth = 0
 
     def peek(self) -> Optional[object]:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else None
@@ -74,6 +79,16 @@ class _Parser:
             raise HTTPException(status_code=400, detail="create-column: formula ends mid-expression")
         self.pos += 1
         return tok
+
+    def _deeper(self) -> None:
+        self.depth += 1
+        if self.depth > self.MAX_DEPTH:
+            raise HTTPException(
+                status_code=400, detail="create-column: formula nests too deeply (max 50)"
+            )
+
+    def _shallower(self) -> None:
+        self.depth -= 1
 
     def parse(self) -> AST:
         node = self.parse_expr()
@@ -100,12 +115,20 @@ class _Parser:
         if isinstance(tok, tuple):
             return tok  # ('col', name) or ('num', value)
         if tok == "(":
-            node = self.parse_expr()
-            if self.next() != ")":
-                raise HTTPException(status_code=400, detail="create-column: unbalanced parenthesis")
-            return node
+            self._deeper()
+            try:
+                node = self.parse_expr()
+                if self.next() != ")":
+                    raise HTTPException(status_code=400, detail="create-column: unbalanced parenthesis")
+                return node
+            finally:
+                self._shallower()
         if tok == "-":
-            return ("neg", self.parse_factor())
+            self._deeper()
+            try:
+                return ("neg", self.parse_factor())
+            finally:
+                self._shallower()
         raise HTTPException(
             status_code=400, detail="create-column: expected a number, [column] or '('"
         )

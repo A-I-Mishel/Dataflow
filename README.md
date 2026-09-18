@@ -46,7 +46,7 @@ Empty = local-only mode.
 
 ## Tests
 
-- Sieve unit tests: `node --test tests/engine.test.mjs`
+- Sieve unit tests: `node --test tests/engine.test.mjs tests/api.test.mjs`
   from `frontend-sieve/`.
 - Backend: `pytest tests/` from `backend/` (includes
   `test_sieve_parity.py`, cell-for-cell local-vs-pandas checks).

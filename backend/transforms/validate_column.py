@@ -85,6 +85,10 @@ def evaluate_rule(df: pd.DataFrame, column: str, check: Dict[str, Any]) -> Tuple
             raise HTTPException(
                 status_code=400, detail="validate-column: allowed needs a non-empty values list"
             )
+        if len(values) > 200:
+            raise HTTPException(
+                status_code=400, detail="validate-column: allowed accepts at most 200 values"
+            )
         bad = present & ~series.isin(values)
         return int(bad.sum()), _samples(series[bad])
     if rule == "unique":
@@ -96,6 +100,10 @@ def evaluate_rule(df: pd.DataFrame, column: str, check: Dict[str, Any]) -> Tuple
         if not pattern or not isinstance(pattern, str):
             raise HTTPException(
                 status_code=400, detail="validate-column: pattern needs a non-blank expression"
+            )
+        if len(pattern) > 200:
+            raise HTTPException(
+                status_code=400, detail="validate-column: pattern accepts at most 200 characters"
             )
         try:
             compiled = re.compile(pattern)

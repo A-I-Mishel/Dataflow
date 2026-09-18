@@ -133,16 +133,19 @@ function EngineFactory(){
       if (m){ toks.push({ t:'num', v:parseFloat(m[0]) }); i += m[0].length; continue; }
       throw new Error(`unexpected character "${ch}" (columns go in [brackets])`);
     }
-    let pos = 0;
+    let pos = 0, depth = 0;
     const peek = () => (pos < toks.length ? toks[pos] : null);
     const next = () => { const t = peek(); if (t === null) throw new Error('formula ends mid-expression'); pos++; return t; };
+    // Depth cap mirrors the backend twin: uncapped nesting overflows the
+    // call stack instead of producing a readable node error.
+    const deeper = () => { if (++depth > 50) throw new Error('formula nests too deeply (max 50)'); };
     function expr(){ let n = term(); while (peek() === '+' || peek() === '-'){ const op = next(); n = { t:'bin', op, l:n, r:term() }; } return n; }
     function term(){ let n = factor(); while (peek() === '*' || peek() === '/'){ const op = next(); n = { t:'bin', op, l:n, r:factor() }; } return n; }
     function factor(){
       const t = next();
       if (t && typeof t === 'object') return t;
-      if (t === '('){ const n = expr(); if (next() !== ')') throw new Error('unbalanced parenthesis'); return n; }
-      if (t === '-'){ return { t:'neg', x:factor() }; }
+      if (t === '('){ deeper(); try { const n = expr(); if (next() !== ')') throw new Error('unbalanced parenthesis'); return n; } finally { depth--; } }
+      if (t === '-'){ deeper(); try { return { t:'neg', x:factor() }; } finally { depth--; } }
       throw new Error(`expected a number, [column] or '('`);
     }
     const tree = expr();

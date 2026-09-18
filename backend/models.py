@@ -50,7 +50,9 @@ class NodeConfig(BaseModel):
     start: Optional[int] = None
     end: Optional[int] = None
     delimiter2: Optional[str] = None
-    pattern: Optional[str] = None
+    # Capped: user regex runs per-cell server-side (ReDoS surface; the cap
+    # stops casual abuse, rate limits bound the rate).
+    pattern: Optional[str] = Field(default=None, max_length=200)
     # New-column name (merge/extract/extract-date-part/date-difference).
     output: Optional[str] = None
     # group-rare threshold ('10' or '5%').
@@ -63,7 +65,8 @@ class NodeConfig(BaseModel):
     unit: Optional[str] = None
     # Wave-3 fields:
     # create-column arithmetic formula, e.g. "[price] * [quantity]".
-    formula: Optional[str] = None
+    # Capped: the parser is linear, but evaluation is per-row.
+    formula: Optional[str] = Field(default=None, max_length=2000)
     # conditional-column rules: [{column, operator, value, result}] plus the
     # ELSE default (None = null).
     rules: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=MAX_LIST_ITEMS)
