@@ -14,5 +14,8 @@ def apply_sort(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFrame, str]
     missing: List[str] = [c for c in by if c not in df.columns]
     if missing:
         raise HTTPException(status_code=400, detail=f"sort: unknown columns {missing}")
-    result: pd.DataFrame = df.sort_values(by=by, ascending=ascending)
-    return result, f"df = df.sort_values(by={by!r}, ascending={ascending})"
+    # kind="stable": tied rows keep their input order (matches the Sieve
+    # engine's stable sort and the exported script below). Quicksort ties
+    # would come out in an arbitrary, run-dependent order instead.
+    result: pd.DataFrame = df.sort_values(by=by, ascending=ascending, kind="stable")
+    return result, f"df = df.sort_values(by={by!r}, ascending={ascending}, kind='stable')"

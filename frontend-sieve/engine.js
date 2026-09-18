@@ -304,13 +304,18 @@ function EngineFactory(){
       run(d, p){
         const ci = colIdx(d, p.column);
         const numeric = isNumCol(d.rows, ci);
+        const dir = p.dir === 'asc' ? 1 : -1;
+        // Direction lives in the comparator (not a post-hoc reverse) so tied
+        // rows keep input order in BOTH directions — matching pandas
+        // kind="stable" — while missing values stay last either way
+        // (na_position="last" in the exported code).
         const rows = d.rows.slice().sort((a, b) => {
           const va = a[ci], vb = b[ci], ma = MISS(va), mb = MISS(vb);
           if (ma && mb) return 0;
           if (ma) return 1;
           if (mb) return -1;
-          if (numeric){ const x = numify(va), y = numify(vb); return x === y ? 0 : (x < y ? -1 : 1); }
-          return va < vb ? -1 : va > vb ? 1 : 0;   // code-point order, mirrors Python str comparison
+          if (numeric){ const x = numify(va), y = numify(vb); return x === y ? 0 : (x < y ? -1 : 1) * dir; }
+          return (va < vb ? -1 : va > vb ? 1 : 0) * dir;   // code-point order, mirrors Python str comparison
         });
         return { columns: d.columns, rows };
       },
@@ -319,9 +324,9 @@ function EngineFactory(){
         if (hint && hint.num)
           return [
             `_k = _sieve_num(df[${c}])`,
-            `df = df.assign(_sieve_key=_k).sort_values("_sieve_key", ascending=${p.dir === 'asc'}, na_position="last").drop(columns="_sieve_key").reset_index(drop=True)`
+            `df = df.assign(_sieve_key=_k).sort_values("_sieve_key", ascending=${p.dir === 'asc'}, na_position="last", kind="stable").drop(columns="_sieve_key").reset_index(drop=True)`
           ];
-        return [`df = df.sort_values(${c}, ascending=${p.dir === 'asc'}, na_position="last").reset_index(drop=True)  # text order`];
+        return [`df = df.sort_values(${c}, ascending=${p.dir === 'asc'}, na_position="last", kind="stable").reset_index(drop=True)  # text order, stable ties`];
       }
     },
 
