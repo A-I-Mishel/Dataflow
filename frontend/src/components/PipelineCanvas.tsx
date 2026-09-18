@@ -253,7 +253,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center p-6">
               <div className="w-full max-w-[420px] rounded-[28px] border border-line bg-panel/75 p-8 text-center shadow-card backdrop-blur-xl">
-                <div className="bg-accentbtn mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl shadow-sm">
+                <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-accentbtn shadow-sm">
                   <svg
                     width="28"
                     height="28"
@@ -288,7 +288,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-elevated px-2.5 py-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent/70" /> Connect
                   </span>
-                  <span className="bg-accentbtn inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-white shadow-sm">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-accentbtn px-2.5 py-1 text-white shadow-sm">
                     Run ▶
                   </span>
                 </div>
@@ -301,7 +301,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
         </ReactFlow>
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-canvas/60 backdrop-blur-[2px]">
-            <div className="bg-accentbtn grid h-12 w-12 animate-pulse place-items-center rounded-2xl shadow-sm">
+            <div className="grid h-12 w-12 animate-pulse place-items-center rounded-2xl bg-accentbtn shadow-sm">
               <Loader2 size={22} className="animate-spin text-white" />
             </div>
             <p className="text-sm font-semibold text-ink2">Running pipeline…</p>

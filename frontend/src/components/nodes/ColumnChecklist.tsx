@@ -80,7 +80,7 @@ export default function ColumnChecklist({
                 className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${
                   missing
                     ? "border-warn/30 bg-warn-soft text-warn"
-                    : "bg-accentsoft text-accenttext border-accent/25"
+                    : "border-accent/25 bg-accentsoft text-accenttext"
                 }`}
               >
                 <span className="max-w-[140px] truncate">

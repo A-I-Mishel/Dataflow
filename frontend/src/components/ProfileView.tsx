@@ -152,7 +152,7 @@ export default function ProfileView({ profile }: ProfileViewProps) {
         {entries.length} of {Object.keys(profile.columns).length} columns
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-accentsoft rounded-2xl border border-line p-4 backdrop-blur-xl">
+        <div className="rounded-2xl border border-line bg-accentsoft p-4 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-ink3">Rows</p>
           <p className="mt-1 text-2xl font-extrabold tracking-tight text-ink">
             {profile.shape[0].toLocaleString()}

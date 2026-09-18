@@ -9,7 +9,7 @@ interface EmptyStateProps {
 export default function EmptyState({ icon: Icon, title, description }: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center">
-      <div className="bg-accentsoft mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-accent/20">
+      <div className="mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-accent/20 bg-accentsoft">
         <Icon size={28} className="text-accenttext" />
       </div>
       <p className="text-[15px] font-extrabold tracking-tight text-ink">{title}</p>

@@ -84,7 +84,7 @@ export default function NodeShell({
             </p>
           </div>
           {runStatus === "running" && (
-            <Loader2 size={14} className="text-accenttext ml-auto shrink-0 animate-spin" />
+            <Loader2 size={14} className="ml-auto shrink-0 animate-spin text-accenttext" />
           )}
           {runStatus === "done" && (
             <span

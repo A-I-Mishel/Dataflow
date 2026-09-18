@@ -162,7 +162,7 @@ export default function RightPanel() {
                     <button
                       type="button"
                       onClick={() => setViewingNodeId(null)}
-                      className="text-accenttext ml-auto text-xs font-bold hover:underline"
+                      className="ml-auto text-xs font-bold text-accenttext hover:underline"
                     >
                       Back to final result
                     </button>

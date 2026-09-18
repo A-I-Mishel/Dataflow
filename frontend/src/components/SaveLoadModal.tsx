@@ -210,7 +210,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
               className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold transition-all ${
                 name.trim() === "" || nodes.length === 0 || isSaving
                   ? "cursor-not-allowed border border-line bg-elevated text-ink3"
-                  : "bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white shadow-md hover:scale-[1.01] active:scale-[0.99]"
+                  : "bg-accentbtn text-white shadow-md hover:scale-[1.01] hover:bg-accentbtnhover active:scale-[0.99] active:bg-accentbtnpressed"
               }`}
             >
               {isSaving ? (

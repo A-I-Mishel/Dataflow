@@ -194,7 +194,7 @@ export default function Header() {
       <div className="flex h-full items-center justify-between gap-3 px-3 lg:px-5">
         {/* Brand */}
         <div className="flex min-w-0 items-center gap-3">
-          <div className="bg-accentbtn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl opacity-95 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accentbtn opacity-95 shadow-sm">
             <Sparkles size={18} className="text-white" />
           </div>
           <div className="hidden min-w-0 sm:block">
@@ -210,7 +210,7 @@ export default function Header() {
           </span>
           <span className="ml-2 hidden items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 lg:inline-flex">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok" />
-            <span className="text-accenttext text-[11px] font-semibold tracking-wide">
+            <span className="text-[11px] font-semibold tracking-wide text-accenttext">
               PIPELINE
             </span>
           </span>
@@ -234,7 +234,7 @@ export default function Header() {
                 ? "cursor-not-allowed bg-elevated text-ink3 opacity-50"
                 : isLoading
                   ? "border border-line bg-card text-ink2 hover:border-accent/40 hover:text-ink"
-                  : "bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white opacity-95 hover:opacity-100 hover:shadow-md active:scale-[0.98]"
+                  : "bg-accentbtn text-white opacity-95 hover:bg-accentbtnhover hover:opacity-100 hover:shadow-md active:scale-[0.98] active:bg-accentbtnpressed"
             }`}
           >
             {isLoading ? <X size={16} /> : <Play size={16} className="fill-white" />}
@@ -396,7 +396,7 @@ export default function Header() {
               <div className="absolute left-0 right-0 top-full mt-1.5">
                 <div className="h-1 overflow-hidden rounded-full bg-line">
                   <div
-                    className="bg-accentbtn h-full transition-all"
+                    className="h-full bg-accentbtn transition-all"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -465,7 +465,7 @@ export default function Header() {
                     }}
                     className="group w-full px-4 py-3.5 text-left transition-colors hover:bg-elevated"
                   >
-                    <p className="group-hover:text-accenttext text-sm font-semibold text-ink transition-colors">
+                    <p className="text-sm font-semibold text-ink transition-colors group-hover:text-accenttext">
                       Quick Clean
                     </p>
                     <p className="mt-0.5 text-xs text-ink3">Drop Missing → Fill Missing → Sort</p>
@@ -482,7 +482,7 @@ export default function Header() {
                     }}
                     className="group w-full border-t border-linesoft px-4 py-3.5 text-left transition-colors hover:bg-elevated"
                   >
-                    <p className="group-hover:text-accenttext text-sm font-semibold text-ink transition-colors">
+                    <p className="text-sm font-semibold text-ink transition-colors group-hover:text-accenttext">
                       Full Clean
                     </p>
                     <p className="mt-0.5 text-xs text-ink3">

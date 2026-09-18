@@ -24,11 +24,16 @@ export default {
         muted: "rgb(var(--muted) / <alpha-value>)",
         accent: "rgb(var(--accent) / <alpha-value>)",
         accent2: "rgb(var(--accent-2) / <alpha-value>)",
-        "accent-text": "rgb(var(--accent-text) / <alpha-value>)",
-        "accent-btn": "rgb(var(--accent-btn) / <alpha-value>)",
-        "accent-btnhover": "rgb(var(--accent-btnhover) / <alpha-value>)",
-        "accent-btnpressed": "rgb(var(--accent-btnpressed) / <alpha-value>)",
-        "accent-soft": "rgb(var(--accent-soft) / <alpha-value>)",
+        // NOTE: keys are intentionally unhyphenated (accentbtn, not
+        // accent-btn) — every call site spells them that way, and Tailwind
+        // generates utilities verbatim from these keys. A hyphenated key
+        // silently produces a class nobody uses (this exact bug shipped:
+        // all accent fills/text were transparent in both themes).
+        accenttext: "rgb(var(--accent-text) / <alpha-value>)",
+        accentbtn: "rgb(var(--accent-btn) / <alpha-value>)",
+        accentbtnhover: "rgb(var(--accent-btnhover) / <alpha-value>)",
+        accentbtnpressed: "rgb(var(--accent-btnpressed) / <alpha-value>)",
+        accentsoft: "rgb(var(--accent-soft) / <alpha-value>)",
         "line-strong": "rgb(var(--line-strong) / <alpha-value>)",
         "ok-text": "rgb(var(--ok-text) / <alpha-value>)",
         "warn-soft": "rgb(var(--warn-soft) / <alpha-value>)",
