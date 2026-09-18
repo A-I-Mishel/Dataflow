@@ -491,19 +491,26 @@ function renderNodes(){
 
   state.nodes.forEach((n, i) => {
     keep.add(n.id);
-    let el = nodeEls.get(n.id);
-    if (!el){
-      el = elDiv('node'); el.dataset.id = n.id; el.tabIndex = 0; bindNode(el); nodeEls.set(n.id, el); layer.append(el);
-      el.classList.add('appear'); el.style.animationDelay = Math.min(i * 60, 360) + 'ms';
+    try {
+      let el = nodeEls.get(n.id);
+      if (!el){
+        el = elDiv('node'); el.dataset.id = n.id; el.tabIndex = 0; bindNode(el); nodeEls.set(n.id, el); layer.append(el);
+        el.classList.add('appear'); el.style.animationDelay = Math.min(i * 60, 360) + 'ms';
+      }
+      el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+      const op = E.OPS[n.type];
+      if (!op) throw new Error(`unknown operation "${n.type}"`);
+      el.className = 'node' + (state.selected === n.id ? ' sel' : '') + (n.enabled ? '' : ' muted') + (n._err ? ' err' : '');
+      el.innerHTML = `<button class="nx" title="Remove step" aria-label="Remove ${esc(op.name)}">${ic('x',11)}</button>
+        <div class="nh"><span class="nstep">${n.enabled ? i+1 : '–'}</span><span class="nic">${ic(op.icon,14)}</span><span class="nname">${esc(op.name)}</span><span class="ndot"></span></div>
+        <div class="nsum">${esc(op.summary(n.params) || '')}</div>
+        <div class="nfoot">${esc(footText(n))}</div>`;
+      el.setAttribute('aria-label', nodeAria(n.id, `Step ${i+1}: ${op.name}. ${op.summary(n.params)}. ${n.enabled ? footText(n) : 'bypassed'}`));
+    } catch(err){
+      // One broken step must never abort the whole canvas render (which
+      // would leave fresh nodes with stale wires and no explanation).
+      renderBrokenNode(layer, n, i, err);
     }
-    el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
-    const op = E.OPS[n.type];
-    el.className = 'node' + (state.selected === n.id ? ' sel' : '') + (n.enabled ? '' : ' muted') + (n._err ? ' err' : '');
-    el.innerHTML = `<button class="nx" title="Remove step" aria-label="Remove ${esc(op.name)}">${ic('x',11)}</button>
-      <div class="nh"><span class="nstep">${n.enabled ? i+1 : '–'}</span><span class="nic">${ic(op.icon,14)}</span><span class="nname">${esc(op.name)}</span><span class="ndot"></span></div>
-      <div class="nsum">${esc(op.summary(n.params) || '')}</div>
-      <div class="nfoot">${esc(footText(n))}</div>`;
-    el.setAttribute('aria-label', nodeAria(n.id, `Step ${i+1}: ${op.name}. ${op.summary(n.params)}. ${n.enabled ? footText(n) : 'bypassed'}`));
   });
 
   keep.add('__out');
@@ -519,7 +526,36 @@ function renderNodes(){
     el.setAttribute('aria-label', nodeAria('__out', 'Clean output, final result')); }
 
   for (const [id, el] of [...nodeEls]) if (!keep.has(id)){ el.remove(); nodeEls.delete(id); }
-  renderWires();
+  try {
+    renderWires();
+  } catch(err){
+    console.error('renderWires failed:', err);
+    warnRenderSkip('wires', err);
+  }
+}
+
+let lastRenderWarn = 0;
+function warnRenderSkip(what, err){
+  console.error(`renderNodes: ${what} failed to display:`, err);
+  const now = Date.now();
+  if (now - lastRenderWarn > 8000){
+    lastRenderWarn = now;
+    toast('A canvas element failed to display — open the console (F12) for details.', 'alert');
+  }
+}
+function renderBrokenNode(layer, n, i, err){
+  warnRenderSkip(`step ${i + 1} ("${n && n.type}")`, err);
+  let el = nodeEls.get(n.id);
+  if (!el){
+    el = elDiv('node err'); el.dataset.id = n.id; el.tabIndex = 0;
+    nodeEls.set(n.id, el); layer.append(el);
+  }
+  el.style.left = (typeof n.x === 'number' ? n.x : 0) + 'px';
+  el.style.top = (typeof n.y === 'number' ? n.y : 0) + 'px';
+  el.className = 'node err';
+  el.innerHTML = `<div class="nh"><span class="nstep">!</span><span class="nname">Broken step</span><span class="ndot"></span></div>
+    <div class="nfoot">Could not display this step (unknown type or bad settings). Remove it and re-add.</div>`;
+  el.setAttribute('aria-label', `Step ${i + 1}: broken step. Remove it and re-add.`);
 }
 
 /* ---- pan / zoom ---- */
@@ -830,6 +866,16 @@ function renderInspector(){
     const n = state.nodes.find(x => x.id === id);
     if (!n){ state.selected = null; return renderInspector(); }
     const op = E.OPS[n.type], idx = state.nodes.indexOf(n);
+    if (!op){
+      H.innerHTML = `<div class="ih-t"><span class="ihic">${ic('alert',17)}</span>Broken step</div>
+        <div class="ih-s">Step ${idx+1} of ${state.nodes.length} · unknown operation "${esc(n.type)}"</div>`;
+      B.innerHTML = '';
+      B.append(elDiv('errbox', ic('alert',14) + '<div>This step cannot be displayed or configured. Remove it below and re-add.</div>'));
+      const del = elDiv('f', '<button class="btn sm danger">Remove broken step</button>');
+      del.querySelector('button').onclick = () => deleteNode(n.id);
+      B.append(del);
+      return;
+    }
     H.innerHTML = `<div class="ih-t"><span class="ihic">${ic(op.icon,17)}</span>${esc(op.name)}</div>
       <div class="ih-s">Step ${idx+1} of ${state.nodes.length} · ${n.enabled ? 'active' : 'bypassed'}</div>`;
     B.innerHTML = '';
@@ -1062,6 +1108,10 @@ function genCode(){
   if (!en.length) L.push('# no steps yet — add transformations in Sieve', '');
   en.forEach((n, i) => {
     const op = E.OPS[n.type];
+    if (!op){
+      L.push(`# Step ${i+1} · unknown operation "${n.type}" skipped — remove it in the app`, '');
+      return;
+    }
     L.push(`# Step ${i+1} · ${op.name}`);
     if (n._err) L.push(`# NOTE: this step reported "${n._err}" in the app — fix it there or review before running.`);
     const ctx = { columns: n._inColumns && n._inColumns.length ? n._inColumns : d.columns,
