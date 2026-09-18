@@ -66,7 +66,25 @@ def apply_fill_na(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFrame, s
         result = result.fillna(value)
         return result, f"df = df.fillna({value!r})"
 
+    if strategy in ("ffill", "bfill"):
+        limit = config.limit
+        if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or limit < 0):
+            raise HTTPException(
+                status_code=400,
+                detail="fill-na: limit must be a non-negative integer or omitted",
+            )
+        method = "ffill" if strategy == "ffill" else "bfill"
+        lim_arg = "" if limit is None else f", limit={limit}"
+        if cols:
+            missing = [c for c in cols if c not in df.columns]
+            if missing:
+                raise HTTPException(status_code=400, detail=f"fill-na {method}: unknown columns {missing}")
+            result[cols] = df[cols].ffill(limit=limit) if method == "ffill" else df[cols].bfill(limit=limit)
+            return result, f"df[{cols!r}] = df[{cols!r}].{method}({lim_arg.lstrip(', ')})"
+        result = df.ffill(limit=limit) if method == "ffill" else df.bfill(limit=limit)
+        return result, f"df = df.{method}({lim_arg.lstrip(', ')})"
+
     raise HTTPException(
         status_code=400,
-        detail=f"fill-na: unknown strategy '{config.strategy}'. Allowed: mean, median, mode, constant",
+        detail=f"fill-na: unknown strategy '{config.strategy}'. Allowed: mean, median, mode, constant, ffill, bfill",
     )

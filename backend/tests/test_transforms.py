@@ -7,17 +7,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pandas as pd
 import pytest
 from fastapi import HTTPException
+from typing import List
 
 from engine import execute_pipeline, execute_pipeline_with_intermediates
 from models import NodeConfig, PipelineNode
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
+from transforms.drop_empty_columns import apply_drop_empty_columns
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
 from transforms.normalize import apply_normalize
 from transforms.rename_column import apply_rename_column
+from transforms.reorder_columns import apply_reorder_columns
+from transforms.replace_values import apply_replace_values
+from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 
 
@@ -411,3 +416,88 @@ def test_pure_no_mutation(sample_df: pd.DataFrame) -> None:
     apply_normalize(sample_df, NodeConfig(method="min-max"))
     apply_encode_categorical(sample_df, NodeConfig(method="label", columns=["Dept"]))
     pd.testing.assert_frame_equal(sample_df, before)
+
+
+def test_fill_na_ffill_limit() -> None:
+    df: pd.DataFrame = pd.DataFrame({"a": [1.0, None, None, 4.0]})
+    result, code = apply_fill_na(df, NodeConfig(columns=["a"], strategy="ffill", limit=1))
+    _assert_valid_code(code)
+    assert result["a"].tolist()[:2] == [1.0, 1.0]
+    assert pd.isna(result["a"].tolist()[2])
+    with pytest.raises(HTTPException):
+        apply_fill_na(df, NodeConfig(columns=["a"], strategy="ffill", limit=-1))
+
+
+def test_fill_na_bfill() -> None:
+    df: pd.DataFrame = pd.DataFrame({"a": [1.0, None, None, 4.0]})
+    result, code = apply_fill_na(df, NodeConfig(columns=["a"], strategy="bfill"))
+    _assert_valid_code(code)
+    assert result["a"].tolist() == [1.0, 4.0, 4.0, 4.0]
+
+
+def test_drop_na_how_all(sample_df: pd.DataFrame) -> None:
+    # No row is missing in BOTH Name and Age here, unlike the default any.
+    result, code = apply_drop_na(
+        sample_df, NodeConfig(columns=["Name", "Age"], how="all")
+    )
+    _assert_valid_code(code)
+    assert result.shape == (4, 5)
+    with pytest.raises(HTTPException):
+        apply_drop_na(sample_df, NodeConfig(how="sometimes"))
+
+
+def test_round_values(sample_df: pd.DataFrame) -> None:
+    result, code = apply_round_values(
+        sample_df, NodeConfig(columns=["Salary"], decimals=0)
+    )
+    _assert_valid_code(code)
+    vals = result["Salary"].tolist()
+    assert vals[0] == 50000.0 and vals[2] == 70000.0
+    assert pd.isna(vals[1])
+    auto, auto_code = apply_round_values(sample_df, NodeConfig())
+    _assert_valid_code(auto_code)
+    assert "select_dtypes" in auto_code
+    with pytest.raises(HTTPException):
+        apply_round_values(sample_df, NodeConfig(columns=["Nope"], decimals=1))
+
+
+def test_reorder_columns(sample_df: pd.DataFrame) -> None:
+    order: List[str] = ["HireDate", "Dept", "Salary", "Age", "Name"]
+    result, code = apply_reorder_columns(sample_df, NodeConfig(columns=order))
+    _assert_valid_code(code)
+    assert result.columns.tolist() == order
+    # Inexact orders must fail loudly instead of silently dropping data.
+    with pytest.raises(HTTPException):
+        apply_reorder_columns(sample_df, NodeConfig(columns=["Name"]))
+    with pytest.raises(HTTPException):
+        apply_reorder_columns(sample_df, NodeConfig(columns=[]))
+
+
+def test_drop_empty_columns() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"a": [1, 2], "b": [None, None], "c": ["", ""], "d": ["x", ""]}
+    )
+    result, code = apply_drop_empty_columns(df, NodeConfig())
+    _assert_valid_code(code)
+    # b is all-NA and c is all-''; d has one real value so it stays.
+    assert result.columns.tolist() == ["a", "d"]
+
+
+def test_replace_values(sample_df: pd.DataFrame) -> None:
+    result, code = apply_replace_values(
+        sample_df, NodeConfig(columns=["Dept"], find="IT", replacement="Eng")
+    )
+    _assert_valid_code(code)
+    assert result["Dept"].tolist() == ["Eng", "HR", "Eng", "HR"]
+    insensitive, _ = apply_replace_values(
+        sample_df,
+        NodeConfig(columns=["Dept"], find="it", replacement="Eng", case_sensitive=False),
+    )
+    assert insensitive["Dept"].tolist() == ["Eng", "HR", "Eng", "HR"]
+    nulled, null_code = apply_replace_values(
+        sample_df, NodeConfig(columns=["Dept"], find="HR", replacement=None)
+    )
+    _assert_valid_code(null_code)
+    assert nulled["Dept"].isna().sum() == 2
+    with pytest.raises(HTTPException):
+        apply_replace_values(sample_df, NodeConfig(columns=["Dept"]))

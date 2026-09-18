@@ -37,12 +37,13 @@ Per-browser overrides: topbar backend button (localStorage) and
 - `app.js` — state, canvas, inspector, preview, exports, boot
 - `tests/parity-run.mjs` — backend parity runner (dev only, excluded
   from deploys via `.vercelignore`)
-- `tests/engine.test.mjs` — unit tests, zero deps
+- `tests/engine.test.mjs` — engine unit tests, zero deps
+- `tests/api.test.mjs` — sieve→backend translator tests, zero deps
 
 ## Tests
 
-- `node --test tests/engine.test.mjs` from this directory (9 checks:
-  hint convention, sort direction/ties, one-hot run + codegen).
+- `node --test tests/engine.test.mjs tests/api.test.mjs` from this directory
+  (engine + translator suites).
 - Backend parity: `pytest tests/test_sieve_parity.py` from `backend/`
   (25k-row messy corpus, cell-for-cell vs the FastAPI engine).
 
@@ -57,17 +58,19 @@ Per-browser overrides: topbar backend button (localStorage) and
 
 ## Backend mapping (sieve → API node types)
 
-Fully mapped: `fill-missing` (mean/median/mode/custom) → `fill-na`,
-`drop-missing` → `drop-na`, `drop-duplicates` (keep-first) →
-`drop-duplicates`, `filter-rows` (`= ≠ > < ≥ ≤ contains`) → `filter-rows`,
-`sort-rows` → `sort`, `drop-columns` → `drop-column`, `rename-columns` →
-`rename-column`, `one-hot` → `encode-categorical`.
+Fully mapped: `fill-missing` (mean/median/mode/custom/ffill/bfill+limit)
+→ `fill-na`, `drop-missing` (any/all) → `drop-na`, `drop-duplicates`
+(keep-first) → `drop-duplicates`, `filter-rows`
+(`= ≠ > < ≥ ≤ contains`) → `filter-rows`, `sort-rows` → `sort`,
+`drop-columns` → `drop-column`, `rename-columns` → `rename-column`,
+`one-hot` → `encode-categorical`, `round-values` → `round-values`,
+`reorder-columns` → `reorder-columns`, `drop-empty-columns` →
+`drop-empty-columns`, `replace-values` → `replace-values`.
 
 Local-only (backend check skips the run and says why instead of comparing
-against different semantics): `fill-missing/ffill` (no backend strategy),
-`drop-duplicates/keep-last` (backend always keeps first), `standardize`
-(new column vs in-place normalize), `clean-text`, `convert-type`,
-`remove-outliers`.
+against different semantics): `drop-duplicates/keep-last` (backend always
+keeps first), `standardize` (new column vs in-place normalize),
+`clean-text`, `convert-type`, `remove-outliers`.
 
 ## Cutover status
 

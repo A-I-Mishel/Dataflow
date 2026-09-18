@@ -26,6 +26,17 @@ class NodeConfig(BaseModel):
     method: Optional[str] = None
     by: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
     ascending: Optional[bool] = True
+    # Wave-1 fields (all optional; each transform reads only its own):
+    # drop-na/drop-missing match rule.
+    how: Optional[str] = None
+    # fill-na ffill/bfill consecutive-fill cap; None/omitted = unlimited.
+    limit: Optional[int] = None
+    # round-values decimal places.
+    decimals: Optional[int] = None
+    # replace-values find/replacement pair (replacement None = null).
+    find: Optional[Any] = None
+    replacement: Optional[Any] = None
+    case_sensitive: Optional[bool] = True
 
 
 class PipelineNode(BaseModel):
@@ -40,6 +51,10 @@ class PipelineNode(BaseModel):
         "normalize",
         "encode-categorical",
         "sort",
+        "round-values",
+        "reorder-columns",
+        "drop-empty-columns",
+        "replace-values",
     ]
     config: NodeConfig
 

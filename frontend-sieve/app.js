@@ -984,6 +984,17 @@ function buildField(f, node){
       w.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tog(); } };
       wrap.append(w);
     });
+  } else if (f.t === 'lines'){
+    // Ordered string list (reorder-columns): one entry per line, kept raw
+    // (column names may carry significant spaces) — only exact-'' lines drop.
+    wrap.innerHTML = `<label>${esc(f.label)}</label>`;
+    const ta = document.createElement('textarea');
+    ta.rows = Math.max(4, nodeCols(node).length + 1);
+    ta.placeholder = nodeCols(node).join('\n');
+    ta.value = (P[f.k] || []).join('\n');
+    ta.addEventListener('change', () => { P[f.k] = ta.value.split('\n').filter(x => x !== ''); onParam(node); });
+    ta.addEventListener('input', () => { P[f.k] = ta.value.split('\n').filter(x => x !== ''); requestRun(state.nodes.indexOf(node)); });
+    wrap.append(ta);
   } else if (f.t === 'rename'){
     wrap.innerHTML = `<label>${esc(f.label)}</label>`;
     P.map = P.map || {};
@@ -1614,7 +1625,7 @@ window.Sieve = { runSelfTests, state, E };  // debug handle
 /* ==================================================================
    CHROME — palette, tabs, header, DnD, keyboard, errors, boot
    ================================================================== */
-const GROUPS = ['Missing Data','Rows','Text & Types','Structure','Numbers'];
+const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Numbers'];
 function buildPalette(){
   const host = $('#palList');
   for (const g of GROUPS){

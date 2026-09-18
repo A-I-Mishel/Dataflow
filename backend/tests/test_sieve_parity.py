@@ -157,3 +157,53 @@ def test_parity_filter_project_rename() -> None:
         ]
     )
     assert frames_equal(sieve, backend) == []
+
+
+def test_parity_wave1_ops() -> None:
+    """Wave-1 additions, cell-for-cell: reorder, directional fill, round,
+    replace, drop-empty (no-op here — the corpus has no all-empty column,
+    which is itself the parity assertion), drop, rename, sort."""
+    full_order = [
+        "Active",
+        "PerformanceScore",
+        "City",
+        "HireDate",
+        "Email",
+        "Department",
+        "Salary",
+        "Age",
+        "Name",
+        "EmployeeID",
+    ]
+    sieve = sieve_run(
+        [
+            {"type": "reorder-columns", "params": {"order": full_order}},
+            {"type": "fill-missing", "params": {"column": "Age", "method": "ffill", "value": "", "limit": ""}},
+            {"type": "round-values", "params": {"columns": ["PerformanceScore"], "decimals": "1"}},
+            {"type": "replace-values", "params": {"columns": ["Department"], "find": "Sales", "replacement": "Retail", "case": True}},
+            {"type": "drop-columns", "params": {"columns": ["City"]}},
+            {"type": "drop-empty-columns", "params": {}},
+            {"type": "rename-columns", "params": {"map": {"Name": "FullName"}}},
+            {"type": "sort-rows", "params": {"column": "Age", "dir": "desc"}},
+        ]
+    )
+    backend = backend_run(
+        [
+            _node("n1", "reorder-columns", columns=full_order),
+            _node("n2", "fill-na", columns=["Age"], strategy="ffill"),
+            _node("n3", "round-values", columns=["PerformanceScore"], decimals=1),
+            _node(
+                "n4",
+                "replace-values",
+                columns=["Department"],
+                find="Sales",
+                replacement="Retail",
+                case_sensitive=True,
+            ),
+            _node("n5", "drop-column", columns=["City"]),
+            _node("n6", "drop-empty-columns"),
+            _node("n7", "rename-column", mapping={"Name": "FullName"}),
+            _node("n8", "sort", by=["Age"], ascending=False),
+        ]
+    )
+    assert frames_equal(sieve, backend) == []

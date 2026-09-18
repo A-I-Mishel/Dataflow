@@ -23,6 +23,10 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "normalize": ("transforms.normalize", "apply_normalize"),
     "encode-categorical": ("transforms.encode_categorical", "apply_encode_categorical"),
     "sort": ("transforms.sort", "apply_sort"),
+    "round-values": ("transforms.round_values", "apply_round_values"),
+    "reorder-columns": ("transforms.reorder_columns", "apply_reorder_columns"),
+    "drop-empty-columns": ("transforms.drop_empty_columns", "apply_drop_empty_columns"),
+    "replace-values": ("transforms.replace_values", "apply_replace_values"),
 }
 
 

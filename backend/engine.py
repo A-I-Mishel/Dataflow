@@ -9,12 +9,16 @@ from sanitize import dtypes_dict, sanitize_records
 from toposort import topological_sort, validate_linear_chain
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
+from transforms.drop_empty_columns import apply_drop_empty_columns
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
 from transforms.normalize import apply_normalize
 from transforms.rename_column import apply_rename_column
+from transforms.reorder_columns import apply_reorder_columns
+from transforms.replace_values import apply_replace_values
+from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 
 logger = logging.getLogger(__name__)
@@ -31,6 +35,10 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "normalize": apply_normalize,
     "encode-categorical": apply_encode_categorical,
     "sort": apply_sort,
+    "round-values": apply_round_values,
+    "reorder-columns": apply_reorder_columns,
+    "drop-empty-columns": apply_drop_empty_columns,
+    "replace-values": apply_replace_values,
 }
 
 

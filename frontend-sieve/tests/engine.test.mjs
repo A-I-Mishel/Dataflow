@@ -176,3 +176,143 @@ describe('duplicate headers', () => {
     assert.deepEqual(parsed.columns, ['a', 'a_2', 'a_2_2']);
   });
 });
+
+describe('directional fill', () => {
+  const rows = [['1'], [''], [''], ['4']];
+  it('ffill carries the last value forward', () => {
+    const out = E.OPS['fill-missing'].run(
+      { columns: ['v'], rows: rows.map((r) => [...r]) },
+      { column: 'v', method: 'ffill', value: '', limit: '' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['1', '1', '1', '4'],
+    );
+  });
+  it('bfill carries the next value backward', () => {
+    const out = E.OPS['fill-missing'].run(
+      { columns: ['v'], rows: rows.map((r) => [...r]) },
+      { column: 'v', method: 'bfill', value: '', limit: '' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['1', '4', '4', '4'],
+    );
+  });
+  it('limit caps consecutive fills like pandas', () => {
+    const out = E.OPS['fill-missing'].run(
+      { columns: ['v'], rows: rows.map((r) => [...r]) },
+      { column: 'v', method: 'ffill', value: '', limit: '1' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['1', '1', '', '4'],
+    );
+  });
+  it('rejects a non-numeric limit', () => {
+    assert.throws(() =>
+      E.OPS['fill-missing'].run(
+        { columns: ['v'], rows: [['']] },
+        { column: 'v', method: 'ffill', value: '', limit: 'many' },
+      ),
+    );
+  });
+});
+
+describe('drop-missing match', () => {
+  const data = { columns: ['a', 'b'], rows: [['1', 'x'], ['', 'y'], ['', '']] };
+  it('any drops rows with any empty cell', () => {
+    const out = E.OPS['drop-missing'].run(data, { column: '__all__', match: 'any' });
+    assert.deepEqual(out.rows, [['1', 'x']]);
+  });
+  it('all keeps rows that still hold something', () => {
+    const out = E.OPS['drop-missing'].run(data, { column: '__all__', match: 'all' });
+    assert.deepEqual(out.rows, [['1', 'x'], ['', 'y']]);
+  });
+});
+
+describe('round-values', () => {
+  it('rounds ticked columns to N places', () => {
+    const out = E.OPS['round-values'].run(
+      { columns: ['v', 't'], rows: [['1.234', 'a'], ['2.345', 'b']] },
+      { columns: ['v'], decimals: '1' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      [1.2, 2.3],
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[1]),
+      ['a', 'b'],
+    );
+  });
+  it('requires columns and valid decimals', () => {
+    assert.throws(() =>
+      E.OPS['round-values'].run({ columns: ['v'], rows: [] }, { columns: [], decimals: '2' }),
+    );
+    assert.throws(() =>
+      E.OPS['round-values'].run({ columns: ['v'], rows: [] }, { columns: ['v'], decimals: 'many' }),
+    );
+  });
+});
+
+describe('reorder-columns', () => {
+  it('reorders exactly', () => {
+    const out = E.OPS['reorder-columns'].run(
+      { columns: ['a', 'b'], rows: [[1, 2]] },
+      { order: ['b', 'a'] },
+    );
+    assert.deepEqual(out.columns, ['b', 'a']);
+    assert.deepEqual(out.rows, [[2, 1]]);
+  });
+  it('rejects inexact orders instead of dropping data', () => {
+    const data = { columns: ['a', 'b'], rows: [] };
+    assert.throws(() => E.OPS['reorder-columns'].run(data, { order: ['b'] }));
+    assert.throws(() => E.OPS['reorder-columns'].run(data, { order: ['b', 'a', 'zzz'] }));
+    assert.throws(() => E.OPS['reorder-columns'].run(data, { order: ['a', 'a', 'b'] }));
+  });
+});
+
+describe('drop-empty-columns', () => {
+  it('drops only fully-empty columns', () => {
+    const out = E.OPS['drop-empty-columns'].run(
+      { columns: ['a', 'b', 'c'], rows: [[1, '', 'x'], [2, '', '']] },
+      {},
+    );
+    assert.deepEqual(out.columns, ['a', 'c']);
+  });
+  it('never drops from an empty frame', () => {
+    const out = E.OPS['drop-empty-columns'].run({ columns: ['a'], rows: [] }, {});
+    assert.deepEqual(out.columns, ['a']);
+  });
+});
+
+describe('replace-values', () => {
+  const data = { columns: ['c'], rows: [['a'], ['B'], ['c']] };
+  it('swaps exact matches', () => {
+    const out = E.OPS['replace-values'].run(data, {
+      columns: ['c'], find: 'a', replacement: 'z', case: true,
+    });
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['z', 'B', 'c'],
+    );
+  });
+  it('matches case-insensitively for strings only', () => {
+    const out = E.OPS['replace-values'].run(data, {
+      columns: ['c'], find: 'b', replacement: 'W', case: false,
+    });
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['a', 'W', 'c'],
+    );
+  });
+  it('requires columns and a find value', () => {
+    assert.throws(() =>
+      E.OPS['replace-values'].run(data, { columns: [], find: 'a', replacement: 'z', case: true }),
+    );
+    assert.throws(() =>
+      E.OPS['replace-values'].run(data, { columns: ['c'], find: '', replacement: 'z', case: true }),
+    );
+  });
+});

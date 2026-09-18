@@ -171,22 +171,36 @@ function EngineFactory(){
     'fill-missing': {
       name:'Fill Missing', icon:'droplet', group:'Missing Data', rowStable:true,
       blurb:'Replace gaps with mean, median, mode…',
-      defaults: () => ({ column:'', method:'median', value:'' }),
+      defaults: () => ({ column:'', method:'median', value:'', limit:'' }),
       schema: [
         { k:'column', t:'column', label:'Column' },
-        { k:'method', t:'seg', label:'Strategy', opts:[['mean','Mean'],['median','Median'],['mode','Mode'],['ffill','Fill down'],['custom','Value']] },
-        { k:'value', t:'text', label:'Fill value', ph:'e.g. Unknown', show:p=>p.method==='custom' }
+        { k:'method', t:'seg', label:'Strategy', opts:[['mean','Mean'],['median','Median'],['mode','Mode'],['ffill','Fill down'],['bfill','Fill up'],['custom','Value']] },
+        { k:'value', t:'text', label:'Fill value', ph:'e.g. Unknown', show:p=>p.method==='custom' },
+        { k:'limit', t:'text', label:'Consecutive-fill limit', ph:'blank = unlimited', show:p=>p.method==='ffill'||p.method==='bfill' }
       ],
-      summary: p => `${p.column || '—'} · ${{mean:'mean',median:'median',mode:'mode',ffill:'fill down',custom:`“${p.value}”`}[p.method]}`,
+      summary: p => {
+        const label = {mean:'mean',median:'median',mode:'mode',ffill:'fill down',bfill:'fill up',custom:`“${p.value}”`}[p.method];
+        const lim = (p.method === 'ffill' || p.method === 'bfill') && p.limit !== '' && p.limit != null ? ` · max ${p.limit} in a row` : '';
+        return `${p.column || '—'} · ${label}${lim}`;
+      },
       hint: (d, p) => (p.method === 'mean' || p.method === 'median') ? { num:true } : null,
       run(d, p){
         const ci = colIdx(d, p.column), rows = d.rows;
-        if (p.method === 'ffill'){
-          let last = null; const out = new Array(rows.length);
-          for (let i = 0; i < rows.length; i++){
+        if (p.method === 'ffill' || p.method === 'bfill'){
+          const lim = p.limit === '' || p.limit == null ? null
+            : (/^\d+$/.test(String(p.limit).trim()) ? parseInt(p.limit, 10) : null);
+          if ((p.limit !== '' && p.limit != null) && lim === null) throw new Error('fill limit must be a whole number or blank');
+          const order = rows.map((_, i) => i);
+          if (p.method === 'bfill') order.reverse();
+          // pandas .ffill(limit=n)/.bfill(limit=n) semantics: at most n
+          // consecutive gaps filled, streak resets on every real value.
+          const out = rows.slice();
+          let last = null, streak = 0;
+          for (const i of order){
             const v = rows[i][ci];
-            if (MISS(v)) out[i] = last === null ? rows[i] : replaceCell(rows[i], ci, last);
-            else { last = v; out[i] = rows[i]; }
+            if (MISS(v)){
+              if (last !== null && (lim === null || streak < lim)){ out[i] = replaceCell(rows[i], ci, last); streak++; }
+            } else { last = v; streak = 0; }
           }
           return { columns: d.columns, rows: out };
         }
@@ -210,7 +224,11 @@ function EngineFactory(){
       },
       code: (ctx, p) => {
         const c = py(p.column);
-        if (p.method === 'ffill') return [`df[${c}] = df[${c}].ffill()`];
+        if (p.method === 'ffill' || p.method === 'bfill'){
+          const m = p.method === 'ffill' ? 'ffill' : 'bfill';
+          const arg = /^\d+$/.test(String(p.limit ?? '').trim()) ? `limit=${parseInt(p.limit, 10)}` : '';
+          return [`df[${c}] = df[${c}].${m}(${arg})`];
+        }
         if (p.method === 'mode')  return [`df[${c}] = df[${c}].fillna(df[${c}].mode().iloc[0])`];
         if (p.method === 'mean' || p.method === 'median'){
           const agg = p.method === 'mean' ? 'mean' : 'median';
@@ -226,14 +244,28 @@ function EngineFactory(){
     'drop-missing': {
       name:'Drop Missing Rows', icon:'ban', group:'Missing Data', rowStable:false,
       blurb:'Remove rows that contain empty cells',
-      defaults: () => ({ column:'__all__' }),
-      schema: [{ k:'column', t:'select', label:'Drop rows empty in', opts: ctx => [['__all__','any column'], ...ctx.columns.map(c => [c, c])] }],
-      summary: p => p.column === '__all__' ? 'rows with any empty cell' : `rows where “${p.column}” is empty`,
+      defaults: () => ({ column:'__all__', match:'any' }),
+      schema: [
+        { k:'column', t:'select', label:'Drop rows empty in', opts: ctx => [['__all__','any column'], ...ctx.columns.map(c => [c, c])] },
+        { k:'match', t:'seg', label:'Drop when', opts:[['any','any checked cell is empty'],['all','every checked cell is empty']] }
+      ],
+      summary: p => {
+        const scope = p.column === '__all__' ? 'rows' : `rows where “${p.column}”`;
+        return (p.match || 'any') === 'any'
+          ? (p.column === '__all__' ? 'rows with any empty cell' : `${scope} is empty`)
+          : (p.column === '__all__' ? 'rows that are completely empty' : `${scope} is empty`);
+      },
       run(d, p){
-        const rows = d.rows.filter(r => p.column === '__all__' ? !r.some(v => MISS(v)) : !MISS(r[colIdx(d, p.column)]));
+        const any = (p.match || 'any') === 'any';
+        const idx = p.column === '__all__' ? d.columns.map((_, i) => i) : [colIdx(d, p.column)];
+        const rows = d.rows.filter(r => any ? !idx.some(i => MISS(r[i])) : !idx.every(i => MISS(r[i])));
         return { columns: d.columns, rows };
       },
-      code: (ctx, p) => [p.column === '__all__' ? 'df = df.dropna()' : `df = df.dropna(subset=[${py(p.column)}])`]
+      code: (ctx, p) => {
+        const how = (p.match || 'any') === 'any' ? 'any' : 'all';
+        if (p.column === '__all__') return [`df = df.dropna(how="${how}")`];
+        return [`df = df.dropna(subset=[${py(p.column)}], how="${how}")`];
+      }
     },
 
     'drop-duplicates': {
@@ -581,6 +613,142 @@ function EngineFactory(){
         if (p.method === 'z')
           return [`_k = _sieve_num(df[${c}])`, `df[${nc}] = ((_k - _k.mean()) / _k.std()).round(4)`];
         return [`_k = _sieve_num(df[${c}])`, `df[${nc}] = ((_k - _k.min()) / (_k.max() - _k.min())).round(4)`];
+      }
+    },
+
+    'round-values': {
+      name:'Round Values', icon:'sigma', group:'Numbers', rowStable:true,
+      blurb:'Round numbers to N decimal places',
+      defaults: () => ({ columns:[], decimals:'2' }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'decimals', t:'text', label:'Decimal places', ph:'e.g. 2' }
+      ],
+      summary: p => `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} → ${p.decimals === '' ? '…' : p.decimals + ' dp'}`,
+      hint: () => ({ num:true }),
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        if (!/^\d+$/.test(String(p.decimals ?? '').trim())) throw new Error('decimals must be a whole number ≥ 0');
+        const dec = parseInt(p.decimals, 10);
+        const idx = p.columns.map(c => colIdx(d, c));
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (const ci of idx){
+            const v = row[ci];
+            if (!MISS(v) && isNumV(v)){
+              const nv = Number(numify(v).toFixed(dec));
+              if (nv !== v) row = replaceCell(row, ci, nv);
+            }
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const dec = /^\d+$/.test(String(p.decimals ?? '').trim()) ? String(parseInt(p.decimals, 10)) : '2';
+        const cs = (p.columns || []).map(py).join(', ');
+        return [`df[[${cs}]] = df[[${cs}]].round(${dec})`];
+      }
+    },
+
+    'reorder-columns': {
+      name:'Reorder Columns', icon:'columns', group:'Structure', rowStable:true,
+      blurb:'Arrange columns in a new order',
+      defaults: () => ({ order:[] }),
+      schema: [{ k:'order', t:'lines', label:'New order — one column per line' }],
+      summary: p => {
+        const o = (p.order || []).filter(x => x !== '');
+        if (!o.length) return 'list every column, one per line';
+        return o.slice(0, 2).join(', ') + (o.length > 2 ? ` (+${o.length - 2} more)` : '');
+      },
+      run(d, p){
+        // Exact set match: a missing or extra entry would silently drop data.
+        const o = (p.order || []).filter(x => x !== '');
+        if (!o.length) throw new Error('list every column name, one per line');
+        const unknown = o.filter(c => !d.columns.includes(c));
+        if (unknown.length) throw new Error(`unknown column${unknown.length > 1 ? 's' : ''} “${unknown.join('”, “')}”`);
+        const missing = d.columns.filter(c => !o.includes(c));
+        if (missing.length) throw new Error(`still missing “${missing.join('”, “')}”`);
+        if (new Set(o).size !== o.length) throw new Error('list each column exactly once');
+        return { columns: o.slice(), rows: d.rows.map(r => o.map(c => r[d.columns.indexOf(c)])) };
+      },
+      code: (ctx, p) => [`df = df[[${(p.order || []).filter(x => x !== '').map(py).join(', ')}]]`]
+    },
+
+    'drop-empty-columns': {
+      name:'Drop Empty Columns', icon:'ban', group:'Structure', rowStable:true,
+      blurb:'Remove columns where every cell is empty',
+      defaults: () => ({}),
+      schema: [],
+      summary: () => 'columns with no data at all',
+      run(d, p){
+        // Mirrors the backend twin: empty means null/NaN or exactly ''.
+        // Whitespace-only strings are NOT empty (trimming is clean-text's
+        // job) — treating them as empty here would diverge from pandas.
+        // Zero rows would vacuously drop everything, so bail out instead.
+        if (!d.rows.length) return { columns: d.columns, rows: d.rows };
+        const drop = d.columns.map((_, i) => i).filter(i => d.rows.every(r => MISS(r[i])));
+        if (!drop.length) return { columns: d.columns, rows: d.rows };
+        const keep = d.columns.map((_, i) => i).filter(i => !drop.includes(i));
+        return { columns: keep.map(i => d.columns[i]), rows: d.rows.map(r => keep.map(i => r[i])) };
+      },
+      code: () => [
+        `# drop columns where every value is missing or ''`,
+        `empty = [c for c in df.columns if df[c].isna().all() or (str(df[c].dtype) in ('object', 'string', 'str') and bool((df[c] == '').all()))]`,
+        `df = df.drop(columns=empty)`
+      ]
+    },
+
+    'replace-values': {
+      name:'Replace Values', icon:'arrowr', group:'Values', rowStable:true,
+      blurb:'Swap one value for another',
+      defaults: () => ({ columns:[], find:'', replacement:'', case:true }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'find', t:'text', label:'Find value', ph:'exact value to find' },
+        { k:'replacement', t:'text', label:'Replacement', ph:'blank writes empty' },
+        { k:'case', t:'check', label:'Match case' }
+      ],
+      summary: p => `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · “${p.find}” → “${p.replacement}”${p.case === false ? ' · any case' : ''}`,
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        if (p.find === '' || p.find == null) throw new Error('type the value to find');
+        const idx = p.columns.map(c => colIdx(d, c));
+        const f = p.find, sensitive = p.case !== false;
+        // Match rule (mirrors pandas replace + the backend twin): strict
+        // equality first, then numeric equivalence across the string/number
+        // boundary Sieve's CSV parsing creates; case-insensitive mode only
+        // ever matches strings. Missing cells are never matched.
+        const match = v => {
+          if (sensitive){
+            if (v === f) return true;
+            return isNumV(v) && isNumV(f) && numify(v) === numify(f);
+          }
+          return typeof v === 'string' && v.toLowerCase() === String(f).toLowerCase();
+        };
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (const ci of idx){
+            const v = row[ci];
+            if (MISS(v) || !match(v)) continue;
+            const nv = p.replacement == null ? null : p.replacement;
+            if (nv !== v) row = replaceCell(row, ci, nv);
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const cs = p.columns.map(py).join(', ');
+        const allNum = (p.columns || []).every(c => ctx.types && ctx.types[c] === 'num');
+        // py(null) would emit the *string* "null" — None must be literal.
+        const lit = v => v == null ? 'None'
+          : (v !== '' && allNum && isNumV(v) ? String(numify(v)) : py(v));
+        if (p.case === false){
+          return [
+            `for _c in [${cs}]:`,
+            `    df[_c] = df[_c].where(df[_c].isna(), df[_c].apply(lambda v: ${lit(p.replacement)} if isinstance(v, str) and v.lower() == ${py(String(p.find).toLowerCase())} else v))`
+          ];
+        }
+        return [`df[[${cs}]] = df[[${cs}]].replace(${lit(p.find)}, ${lit(p.replacement)})`];
       }
     }
   };

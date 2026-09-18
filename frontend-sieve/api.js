@@ -122,7 +122,6 @@ export function getSessionId() {
 const FILTER_OP = { '=': '==', '≠': '!=', '>': '>', '<': '<', '≥': '>=', '≤': '<=', contains: 'contains' };
 
 // Ops with no exact backend equivalent (different semantics, not just names):
-// · fill-missing/ffill — backend fill-na has no ffill strategy
 // · drop-duplicates/keep-last — backend always keeps first (ignores keep)
 // · standardize — writes a NEW column (col_z); backend normalize rewrites in place
 // · clean-text / convert-type / remove-outliers — no backend transform at all
@@ -151,12 +150,20 @@ export function sieveToBackend(sieveNodes) {
       } else if (p.method === 'custom') {
         if (!need(p.value !== '', 'empty fill value')) continue;
         nodes.push({ id: id(), type: 'fill-na', config: { columns: [p.column], strategy: 'constant', value: numIfNumeric(p.value) } });
+      } else if (p.method === 'ffill' || p.method === 'bfill') {
+        const cfg = { columns: [p.column], strategy: p.method };
+        if (p.limit !== '' && p.limit != null) {
+          if (!/^\d+$/.test(String(p.limit).trim())) { skipped.push({ type: t, reason: 'invalid fill limit' }); continue; }
+          cfg.limit = parseInt(p.limit, 10);
+        }
+        nodes.push({ id: id(), type: 'fill-na', config: cfg });
       } else {
         skipped.push({ type: t, reason: `fill method "${p.method}" has no backend equivalent` });
       }
     } else if (t === 'drop-missing') {
-      if (!p.column || p.column === '__all__') nodes.push({ id: id(), type: 'drop-na', config: {} });
-      else nodes.push({ id: id(), type: 'drop-na', config: { columns: [p.column] } });
+      const how = (p.match || 'any') === 'all' ? 'all' : 'any';
+      if (!p.column || p.column === '__all__') nodes.push({ id: id(), type: 'drop-na', config: how === 'any' ? {} : { how } });
+      else nodes.push({ id: id(), type: 'drop-na', config: { columns: [p.column], how } });
     } else if (t === 'drop-duplicates') {
       if (p.keep && p.keep !== 'first') { skipped.push({ type: t, reason: 'backend always keeps first' }); continue; }
       nodes.push({ id: id(), type: 'drop-duplicates', config: {} });
@@ -178,6 +185,29 @@ export function sieveToBackend(sieveNodes) {
     } else if (t === 'one-hot') {
       if (!need(p.column, 'no column selected')) continue;
       nodes.push({ id: id(), type: 'encode-categorical', config: { method: 'one-hot', columns: [p.column] } });
+    } else if (t === 'round-values') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      if (!/^\d+$/.test(String(p.decimals ?? '').trim())) { skipped.push({ type: t, reason: 'invalid decimals' }); continue; }
+      nodes.push({ id: id(), type: 'round-values', config: { columns: [...p.columns], decimals: parseInt(p.decimals, 10) } });
+    } else if (t === 'reorder-columns') {
+      const order = (p.order || []).filter((x) => x !== '');
+      if (!need(order.length, 'empty column order')) continue;
+      nodes.push({ id: id(), type: 'reorder-columns', config: { columns: order } });
+    } else if (t === 'drop-empty-columns') {
+      nodes.push({ id: id(), type: 'drop-empty-columns', config: {} });
+    } else if (t === 'replace-values') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      // The local engine rejects a blank find (mirroring filter-rows), so
+      // there is nothing meaningful to verify remotely — skip, don't guess.
+      if (!need(p.find !== '' && p.find != null, 'empty find value')) continue;
+      nodes.push({
+        id: id(),
+        type: 'replace-values',
+        // Numeric coercion must match filter-rows: the backend compares
+        // against typed frames while Sieve parses CSV text, so '30' ships
+        // as 30 exactly when it looks numeric on both sides.
+        config: { columns: [...p.columns], find: numIfNumeric(p.find), replacement: p.replacement ?? null, case_sensitive: p.case !== false },
+      });
     } else if (LOCAL_ONLY[t]) {
       skipped.push({ type: t, reason: LOCAL_ONLY[t] });
     } else {
