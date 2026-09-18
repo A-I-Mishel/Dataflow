@@ -122,6 +122,7 @@ button{font-family:var(--mono)}
 .node.muted .ndot{background:var(--ink3)}
 @keyframes blink{to{opacity:.3}}
 .nsum{padding:7px 11px;font-size:10.5px;line-height:1.5;color:var(--ink2);border-bottom:1px dashed var(--line);min-height:29px}
+.nsum.ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nfoot{padding:5px 11px 6px;font-size:10px;color:var(--ink3)}
 .node.err .nfoot{color:var(--acc-d);font-weight:600}
 .nx{position:absolute;top:-9px;right:-9px;width:20px;height:20px;display:none;place-items:center;background:var(--ink);color:var(--panel);border:none;border-radius:50%;cursor:pointer;z-index:4}

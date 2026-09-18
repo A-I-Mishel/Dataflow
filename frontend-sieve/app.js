@@ -229,8 +229,17 @@ function updateSaveChip(mode){
   elc.textContent = `saved ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
   elc.title = 'Pipeline saved in this browser. Dataset stored in IndexedDB.';
 }
-function persistSoon(){ updateSaveChip('pending'); clearTimeout(persistTimer); persistTimer = setTimeout(persistNow, 500); }
+let saveChipTimer = null;
+function persistSoon(){
+  // "saving…" only appears when a save is genuinely delayed (>800ms of
+  // continuous interaction); fast saves settle silently to "saved HH:MM"
+  // instead of flashing the chip on every keystroke.
+  clearTimeout(persistTimer); persistTimer = setTimeout(persistNow, 500);
+  clearTimeout(saveChipTimer);
+  saveChipTimer = setTimeout(() => updateSaveChip('pending'), 800);
+}
 function persistNow(){
+  clearTimeout(saveChipTimer);
   if (!state.data) return;
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
@@ -465,7 +474,7 @@ function renderNodes(){
     el.style.left = state.srcPos.x + 'px'; el.style.top = state.srcPos.y + 'px';
     el.classList.toggle('sel', state.selected === '__src');
     el.innerHTML = `<div class="nh"><span class="nic">${ic('db',15)}</span><span class="nname">Source</span><span class="ndot"></span></div>
-      <div class="nsum">${esc(state.data.name)}</div>
+      <div class="nsum ellipsis" title="${esc(state.data.name)}">${esc(state.data.name)}</div>
       <div class="nfoot">${fmt(state.data.rows.length)} rows · ${state.data.columns.length} cols · raw import</div>`;
     el.setAttribute('aria-label', nodeAria('__src', 'Source dataset ' + state.data.name + ', ' + state.data.rows.length + ' rows, ' + state.data.columns.length + ' columns')); }
 
@@ -645,7 +654,7 @@ function addNode(type){
   const colField = schema.find(f => f.t === 'column');
   if (colField && !n.params[colField.k]){
     const cols = state.outputs.length ? state.outputs[state.outputs.length - 1].columns : state.data.columns;
-    n.params[colField.k] = cols[0] || '';
+    n.params[colField.k] = firstSuitableColumn(type, n.params, cols);
   }
   state.nodes.push(n);
   state.outPos = { x: n.x + 300, y: n.y };
@@ -654,6 +663,23 @@ function addNode(type){
   requestRun(state.nodes.length - 1);
   renderNodes(); renderInspector(); renderPreview(); renderCode();
   pushHist('added ' + E.OPS[type].name);
+}
+function firstSuitableColumn(type, params, cols){
+  // A fresh Fill Missing on a text column instantly errors ("no parseable
+  // numeric values"), so when the op declares a numeric need, pre-pick the
+  // first numeric column instead of blindly taking cols[0]. Falls back to
+  // cols[0] (or '' when nothing numeric exists) on any uncertainty.
+  try {
+    const op = E.OPS[type];
+    if (!op || typeof op.hint !== 'function' || !cols.length) return cols[0] || '';
+    const last = state.outputs.length ? state.outputs[state.outputs.length - 1] : null;
+    const meta = (last && last.meta) || E.metaOf(state.data.columns, state.data.rows, false);
+    const hint = op.hint({ columns: cols }, params, meta) || null;
+    if (hint && hint.num && meta && meta.types){
+      return cols.find(c => meta.types[c] === 'num') || '';
+    }
+    return cols[0] || '';
+  } catch(e){ return cols[0] || ''; }
 }
 function duplicateNode(n){
   const i = state.nodes.indexOf(n);

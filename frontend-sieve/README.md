@@ -22,6 +22,23 @@ server, not `file://` (module CORS), e.g. `npx serve .`.
 - `app.js` — state, canvas, inspector, preview, exports, boot
 - `tests/parity-run.mjs` — backend parity runner (dev only, excluded
   from deploys via `.vercelignore`)
+- `tests/engine.test.mjs` — unit tests, zero deps
+
+## Tests
+
+- `node --test tests/engine.test.mjs` from this directory (9 checks:
+  hint convention, sort direction/ties, one-hot run + codegen).
+- Backend parity: `pytest tests/test_sieve_parity.py` from `backend/`
+  (25k-row messy corpus, cell-for-cell vs the FastAPI engine).
+
+## Conventions (learned the hard way)
+
+- Op `hint` functions take `(data, params, meta)` positionally — the
+  runner calls `hint(inD, n.params, inMeta)`. Single-arg hints silently
+  read the dataset as params and return null, which drops `_sieve_num` /
+  `_sieve_str` helpers from exported scripts. Locked by test.
+- `sort-rows` direction lives in the comparator (never post-reverse),
+  so ties keep input order both ways — matching pandas `kind="stable"`.
 
 ## Cutover checklist (production switch)
 

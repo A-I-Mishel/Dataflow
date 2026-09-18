@@ -169,7 +169,7 @@ function EngineFactory(){
         { k:'value', t:'text', label:'Fill value', ph:'e.g. Unknown', show:p=>p.method==='custom' }
       ],
       summary: p => `${p.column || '—'} · ${{mean:'mean',median:'median',mode:'mode',ffill:'fill down',custom:`“${p.value}”`}[p.method]}`,
-      hint: p => (p.method === 'mean' || p.method === 'median') ? { num:true } : null,
+      hint: (d, p) => (p.method === 'mean' || p.method === 'median') ? { num:true } : null,
       run(d, p){
         const ci = colIdx(d, p.column), rows = d.rows;
         if (p.method === 'ffill'){
@@ -252,7 +252,7 @@ function EngineFactory(){
         { k:'value', t:'text', label:'Value', ph:'value to compare' }
       ],
       summary: p => `${p.column || '—'} ${p.op} ${p.value === '' ? '…' : p.value}`,
-      hint: p => isNumV(p.value) ? { num:true } : null,
+      hint: (d, p) => isNumV(p.value) ? { num:true } : null,
       run(d, p){
         const ci = colIdx(d, p.column);
         if (p.value === '') throw new Error('type a comparison value');
@@ -438,7 +438,7 @@ function EngineFactory(){
         { k:'to', t:'seg', label:'Convert to', opts:[['number','number'],['text','text'],['date','ISO date']] }
       ],
       summary: p => `${p.column || '—'} → ${{number:'number',text:'text',date:'date (YYYY-MM-DD)'}[p.to]}`,
-      hint: p => p.to === 'number' ? { num:true } : (p.to === 'text' ? { str:true } : null),
+      hint: (d, p) => p.to === 'number' ? { num:true } : (p.to === 'text' ? { str:true } : null),
       run(d, p){
         const ci = colIdx(d, p.column);
         return { columns: d.columns, rows: d.rows.map(r => {
