@@ -71,7 +71,7 @@ button{font-family:var(--mono)}
   background-image:radial-gradient(circle,#C8BEA4 1.2px,transparent 1.6px);background-size:26px 26px}
 #viewport.panning{cursor:grabbing}
 #world{position:absolute;left:0;top:0;width:6000px;height:4000px;transform-origin:0 0;pointer-events:none;background:none}
-#wires{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
+#wires{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
 #wires path{fill:none;stroke:#57503F;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 0 rgba(255,254,250,.9));transition:stroke .15s}
 #wires path.flow{stroke:var(--acc);stroke-width:3;stroke-dasharray:7 7;animation:dashf .4s linear infinite}
 @keyframes dashf{to{stroke-dashoffset:-14}}
