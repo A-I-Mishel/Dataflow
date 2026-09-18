@@ -72,6 +72,109 @@ function EngineFactory(){
     first.setUTCDate(first.getUTCDate() - fday + 3);
     return 1 + Math.round((dt - first) / 6048e5);
   }
+  // Strict scalar→number for arithmetic/validation: blank stays missing,
+  // anything else must parse cleanly or it throws naming the column. This
+  // deliberately rejects what numify() accepts (currency, thousands) so the
+  // local engine refuses exactly the inputs pandas to_numeric() refuses.
+  const STRICT_NUM_RE = /^[-+]?(\d+(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
+  function strictNum(v, col){
+    if (MISS(v)) return null;
+    if (typeof v === 'number') return Number.isNaN(v) ? null : v;
+    if (typeof v !== 'string') throw new Error(`"${col}" has non-numeric values`);
+    const t = v.trim();
+    if (/^[-+]?inf(inity)?$/i.test(t)) return t[0] === '-' ? -Infinity : Infinity;
+    if (!STRICT_NUM_RE.test(t)) throw new Error(`"${col}" has non-numeric values`);
+    return Number(t);
+  }
+  // Row matcher with filter-rows semantics (numeric coercion, then string
+  // fallback, missing never matches). Copied shape, not shared code, so the
+  // locked filter behavior cannot regress from conditional edits.
+  function matchCond(v, op, t){
+    if (MISS(v)) return false;
+    const numeric = isNumV(t);
+    if (numeric){
+      if (!isNumV(v)) return false;
+      const a = numify(v), b = numify(t);
+      switch (op){
+        case '=': return a === b;  case '≠': return a !== b;
+        case '>': return a > b;    case '<': return a < b;
+        case '≥': return a >= b;   case '≤': return a <= b;
+        default: return false;
+      }
+    }
+    const s = String(v), u = String(t);
+    switch (op){
+      case '=': return s === u;   case '≠': return s !== u;
+      case '>': return s > u;     case '<': return s < u;
+      case '≥': return s >= u;    case '≤': return s <= u;
+      case 'contains': return s.toLowerCase().includes(u.toLowerCase());
+      default: return false;
+    }
+  }
+  // Safe arithmetic formulas, e.g. "[price] * [quantity]". Mirrors the
+  // backend grammar exactly (see transforms/create_column.py): numbers,
+  // [column] refs, four operators, parens, unary minus — nothing else can
+  // even be represented, so formulas are interpreted, never executed.
+  function parseFormula(src){
+    const toks = [];
+    let i = 0;
+    while (i < src.length){
+      const ch = src[i];
+      if (/\s/.test(ch)){ i++; continue; }
+      if ('+-*/()'.includes(ch)){ toks.push(ch); i++; continue; }
+      if (ch === '['){
+        const j = src.indexOf(']', i + 1);
+        if (j < 0) throw new Error('unclosed [column] reference');
+        const name = src.slice(i + 1, j).trim();
+        if (!name) throw new Error('empty [] reference');
+        toks.push({ t:'col', name }); i = j + 1; continue;
+      }
+      const m = /^(\d+(\.\d+)?|\.\d+)/.exec(src.slice(i));
+      if (m){ toks.push({ t:'num', v:parseFloat(m[0]) }); i += m[0].length; continue; }
+      throw new Error(`unexpected character "${ch}" (columns go in [brackets])`);
+    }
+    let pos = 0;
+    const peek = () => (pos < toks.length ? toks[pos] : null);
+    const next = () => { const t = peek(); if (t === null) throw new Error('formula ends mid-expression'); pos++; return t; };
+    function expr(){ let n = term(); while (peek() === '+' || peek() === '-'){ const op = next(); n = { t:'bin', op, l:n, r:term() }; } return n; }
+    function term(){ let n = factor(); while (peek() === '*' || peek() === '/'){ const op = next(); n = { t:'bin', op, l:n, r:factor() }; } return n; }
+    function factor(){
+      const t = next();
+      if (t && typeof t === 'object') return t;
+      if (t === '('){ const n = expr(); if (next() !== ')') throw new Error('unbalanced parenthesis'); return n; }
+      if (t === '-'){ return { t:'neg', x:factor() }; }
+      throw new Error(`expected a number, [column] or '('`);
+    }
+    const tree = expr();
+    if (peek() !== null) throw new Error('trailing input after formula');
+    return tree;
+  }
+  function formulaRefs(tree, acc){
+    acc = acc || [];
+    if (tree.t === 'col'){ if (!acc.includes(tree.name)) acc.push(tree.name); }
+    else if (tree.t === 'bin'){ formulaRefs(tree.l, acc); formulaRefs(tree.r, acc); }
+    else if (tree.t === 'neg'){ formulaRefs(tree.x, acc); }
+    return acc;
+  }
+  function evalFormula(tree, get){
+    if (tree.t === 'num') return tree.v;
+    if (tree.t === 'col') return get(tree.name);
+    if (tree.t === 'neg'){ const v = evalFormula(tree.x, get); return v === null ? null : -v; }
+    const l = evalFormula(tree.l, get), r = evalFormula(tree.r, get);
+    if (l === null || r === null) return null;
+    switch (tree.op){
+      case '+': return l + r;
+      case '-': return l - r;
+      case '*': return l * r;
+      default: return r === 0 ? null : l / r;
+    }
+  }
+  function formulaToPandas(tree){
+    if (tree.t === 'num') return String(tree.v);
+    if (tree.t === 'col') return `df[${py(tree.name)}]`;
+    if (tree.t === 'neg') return `(-${formulaToPandas(tree.x)})`;
+    return `(${formulaToPandas(tree.l)} ${tree.op} ${formulaToPandas(tree.r)})`;
+  }
   function decodeBytes(buf){
     try { return { text: new TextDecoder('utf-8', {fatal:true}).decode(buf), encoding: 'UTF-8' }; }
     catch(e){ return { text: new TextDecoder('windows-1252').decode(buf), encoding: 'Windows-1252' }; }
@@ -1211,6 +1314,291 @@ function EngineFactory(){
           `df[${out}] = (_e - _s).dt.total_seconds() / ${div}`
         ];
       }
+    },
+
+    'create-column': {
+      name:'Create Column', icon:'code', group:'Structure', rowStable:true,
+      blurb:'New column from a safe formula',
+      defaults: () => ({ formula:'', output:'' }),
+      schema: [
+        { k:'formula', t:'text', label:'Formula', ph:'[price] * [quantity]' },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Total' }
+      ],
+      summary: p => `${p.formula || '…'} → ${p.output || '…'}`,
+      hint: () => ({ num:true }),
+      run(d, p){
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        if (!p.formula || !String(p.formula).trim()) throw new Error('type a formula');
+        const tree = parseFormula(String(p.formula));
+        const refs = formulaRefs(tree);
+        if (!refs.length) throw new Error('reference at least one [column]');
+        const unknown = refs.filter(c => !d.columns.includes(c));
+        if (unknown.length) throw new Error(`unknown column${unknown.length > 1 ? 's' : ''} “${unknown.join('”, “')}”`);
+        const at = {};
+        for (const c of refs) at[c] = d.columns.indexOf(c);
+        return { columns: [...d.columns, out], rows: d.rows.map(r => {
+          const get = c => strictNum(r[at[c]], c);
+          let v = evalFormula(tree, get);
+          if (v !== null && !Number.isFinite(v)) v = null;
+          return r.concat([v]);
+        })};
+      },
+      code: (ctx, p) => {
+        const out = py(String(p.output).trim());
+        let expr;
+        try { expr = formulaToPandas(parseFormula(String(p.formula))); }
+        catch (e){ return [`# invalid formula — see the node error`]; }
+        return [`df[${out}] = ${expr}`, `df[${out}] = df[${out}].replace([np.inf, -np.inf], np.nan)`];
+      }
+    },
+
+    'conditional-column': {
+      name:'Conditional Column', icon:'filter', group:'Structure', rowStable:true,
+      blurb:'New column from IF / ELSE rules',
+      defaults: () => ({ rules:[{ column:'', op:'=', value:'', result:'' }], default:'', output:'' }),
+      schema: [
+        { k:'rules', t:'rules', label:'Rules — first match wins' },
+        { k:'default', t:'text', label:'Else value (blank = empty)', ph:'e.g. Senior' },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Group' }
+      ],
+      summary: p => `${(p.rules || []).length} rule${(p.rules || []).length === 1 ? '' : 's'} → ${p.output || '…'}`,
+      run(d, p){
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        if (!p.rules || !p.rules.length) throw new Error('add at least one rule');
+        const ops = ['=', '≠', '>', '<', '≥', '≤', 'contains'];
+        const rules = p.rules.map((r, i) => {
+          const ci = colIdx(d, r.column);
+          if (!ops.includes(r.op)) throw new Error(`rule ${i + 1}: unknown operator "${r.op}"`);
+          return { ci, op: r.op, value: r.value, result: r.result };
+        });
+        const els = (p.default === '' || p.default == null) ? null : p.default;
+        return { columns: [...d.columns, out], rows: d.rows.map(r => {
+          for (const q of rules) if (matchCond(r[q.ci], q.op, q.value)) return r.concat([q.result]);
+          return r.concat([els]);
+        })};
+      },
+      code: (ctx, p) => {
+        const out = py(String(p.output).trim());
+        const condCode = (col, op, val) => {
+          const c = py(col);
+          const lit = isNumV(val) ? String(numify(val)) : py(val);
+          if (op === '=') return `(df[${c}] == ${lit})`;
+          if (op === '≠') return `(df[${c}] != ${lit})`;
+          if (op === 'contains') return `(df[${c}].fillna("").astype(str).str.contains(${py(String(val))}, na=False, regex=False))`;
+          const o = op === '≥' ? '>=' : op === '≤' ? '<=' : op;
+          return `(df[${c}] ${o} ${lit})`;
+        };
+        const lines = (p.rules || []).map((r, i) => `_m${i + 1} = ${condCode(r.column, r.op, r.value)}`);
+        const lits = (p.rules || []).map(r => r.result == null ? 'None' : py(r.result));
+        const els = (p.default === '' || p.default == null) ? 'None' : py(p.default);
+        lines.push(`df[${out}] = np.select([${(p.rules || []).map((_, i) => `_m${i + 1}`).join(', ')}], [${lits.join(', ')}], default=${els})`);
+        return lines;
+      }
+    },
+
+    'validate-column': {
+      name:'Validate Column', icon:'check', group:'Data Quality', rowStable:true,
+      blurb:'Check rules; data passes through unchanged',
+      defaults: () => ({ column:'', vtype:'any', required:false, min:'', max:'', allowed:[], unique:false, pattern:'' }),
+      schema: [
+        { k:'column', t:'column', label:'Column' },
+        { k:'vtype', t:'seg', label:'Expected type', opts:[['any','Any'],['integer','Integer'],['number','Number'],['text','Text'],['date','Date']] },
+        { k:'required', t:'check', label:'Required (no gaps)' },
+        { k:'min', t:'text', label:'Minimum', ph:'blank = skip' },
+        { k:'max', t:'text', label:'Maximum', ph:'blank = skip' },
+        { k:'allowed', t:'lines', label:'Allowed values (one per line, blank = skip)' },
+        { k:'unique', t:'check', label:'Must be unique' },
+        { k:'pattern', t:'text', label:'Must match regex', ph:'blank = skip' }
+      ],
+      summary: p => {
+        let n = 0;
+        if (p.vtype && p.vtype !== 'any') n++;
+        if (p.required) n++;
+        if (p.min !== '' && p.min != null) n++;
+        if (p.max !== '' && p.max != null) n++;
+        if (p.allowed && p.allowed.length) n++;
+        if (p.unique) n++;
+        if (p.pattern) n++;
+        return `${p.column || '—'} · ${n} check${n === 1 ? '' : 's'}`;
+      },
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        // Same check shape the backend consumes: [{rule, ...}].
+        const checks = [];
+        if (p.vtype && p.vtype !== 'any') checks.push({ rule:'type', expected:p.vtype });
+        if (p.required) checks.push({ rule:'required' });
+        if (p.min !== '' && p.min != null) checks.push({ rule:'min', value:p.min });
+        if (p.max !== '' && p.max != null) checks.push({ rule:'max', value:p.max });
+        if (p.allowed && p.allowed.length) checks.push({ rule:'allowed', values:p.allowed.slice() });
+        if (p.unique) checks.push({ rule:'unique' });
+        if (p.pattern) checks.push({ rule:'pattern', pattern:p.pattern });
+        const numOf = v => {
+          try {
+            const n = strictNum(v, p.column);
+            return n === null ? NaN : n;
+          } catch (e){ return NaN; }
+        };
+        const evalCheck = c => {
+          const bad = new Array(d.rows.length).fill(false);
+          const hit = i => { bad[i] = true; };
+          if (c.rule === 'required'){
+            d.rows.forEach((r, i) => { if (MISS(r[ci])) hit(i); });
+          } else if (c.rule === 'type'){
+            d.rows.forEach((r, i) => {
+              const v = r[ci];
+              if (MISS(v)) return;
+              if (c.expected === 'text') return;
+              if (c.expected === 'date'){ if (!parseDate(v)) hit(i); return; }
+              const n = numOf(v);
+              if (Number.isNaN(n)) hit(i);
+              else if (c.expected === 'integer' && !Number.isInteger(n)) hit(i);
+            });
+          } else if (c.rule === 'min' || c.rule === 'max'){
+            const b = Number(c.value);
+            if (!Number.isFinite(b)) throw new Error(`${c.rule}imum must be numeric`);
+            d.rows.forEach((r, i) => {
+              const v = r[ci];
+              if (MISS(v)) return;
+              const n = numOf(v);
+              if (Number.isNaN(n)) hit(i);
+              else if (c.rule === 'min' ? n < b : n > b) hit(i);
+            });
+          } else if (c.rule === 'allowed'){
+            d.rows.forEach((r, i) => {
+              const v = r[ci];
+              if (MISS(v)) return;
+              if (!c.values.includes(v)) hit(i);
+            });
+          } else if (c.rule === 'unique'){
+            const freq = new Map();
+            d.rows.forEach(r => { const v = r[ci]; if (!MISS(v)) freq.set(v, (freq.get(v) || 0) + 1); });
+            d.rows.forEach((r, i) => { if (!MISS(r[ci]) && freq.get(r[ci]) > 1) hit(i); });
+          } else if (c.rule === 'pattern'){
+            let re;
+            try { re = new RegExp(c.pattern); } catch (e){ throw new Error('invalid pattern'); }
+            d.rows.forEach((r, i) => {
+              const v = r[ci];
+              if (MISS(v)) return;
+              if (!re.test(String(v))) hit(i);
+            });
+          } else throw new Error(`unknown rule "${c.rule}"`);
+          const rows = [];
+          bad.forEach((f, i) => { if (f) rows.push(i); });
+          const seen = new Set(), samples = [];
+          for (const i of rows){
+            const v = d.rows[i][ci];
+            const k = v === null ? '∅' : String(v);
+            if (!seen.has(k)){ seen.add(k); samples.push(v); }
+            if (samples.length >= 5) break;
+          }
+          return { rule:c.rule, invalid:rows.length, samples, rows };
+        };
+        const evaluated = checks.map(evalCheck);
+        const anyFail = new Array(d.rows.length).fill(false);
+        for (const e of evaluated) for (const i of e.rows) anyFail[i] = true;
+        return {
+          columns: d.columns, rows: d.rows,
+          report: {
+            column:p.column, total:d.rows.length,
+            invalid: anyFail.filter(Boolean).length,
+            checks: evaluated.map(({ rule, invalid, samples }) => ({ rule, invalid, samples }))
+          }
+        };
+      },
+      code: (ctx, p) => {
+        const c = py(p.column);
+        const present = `(df[${c}].notna() & (df[${c}].astype(object) != ''))`;
+        const lines = [`# validate ${p.column} (pass-through: data unchanged)`];
+        if (p.required) lines.push(`assert df[${c}].notna().all() and (df[${c}] != '').all(), '${p.column}: required'`);
+        if (p.vtype && p.vtype !== 'any'){
+          if (p.vtype === 'text') lines.push(`# ${p.column}: text accepts anything present`);
+          else if (p.vtype === 'date') lines.push(`assert (pd.to_datetime(df[${c}], format="mixed", errors="coerce").notna() | ~${present}).all(), '${p.column}: must be dates'`);
+          else if (p.vtype === 'integer') lines.push(`_k = pd.to_numeric(df[${c}], errors="coerce")`, `assert ((_k.notna() & (_k % 1 == 0)) | ~${present}).all(), '${p.column}: must be integers'`);
+          else lines.push(`assert (pd.to_numeric(df[${c}], errors="coerce").notna() | ~${present}).all(), '${p.column}: must be numeric'`);
+        }
+        for (const which of ['min', 'max']){
+          if (p[which] !== '' && p[which] != null){
+            const b = Number(p[which]);
+            const op = which === 'min' ? '>=' : '<=';
+            lines.push(`_k = pd.to_numeric(df[${c}], errors="coerce")`, `assert ((_k ${op} ${Number.isFinite(b) ? b : p[which]}) | ~${present}).all(), '${p.column}: ${which} ${p[which]}'`);
+          }
+        }
+        if (p.allowed && p.allowed.length) lines.push(`assert (df[${c}].isin(${JSON.stringify(p.allowed)}) | ~${present}).all(), '${p.column}: unexpected value'`);
+        if (p.unique) lines.push(`_p = df[${c}][${present}]`, `assert not _p.duplicated().any(), '${p.column}: must be unique'`);
+        if (p.pattern) lines.push(`assert (df[${c}].astype(str).str.contains(${py(p.pattern)}, na=False, regex=True) | ~${present}).all(), '${p.column}: pattern mismatch'`);
+        return lines;
+      }
+    },
+
+    'find-invalid': {
+      name:'Find Invalid Values', icon:'alert', group:'Data Quality', rowStable:true,
+      blurb:'List values that look wrong (data unchanged)',
+      defaults: () => ({ column:'', expect:'number', min:'', max:'' }),
+      schema: [
+        { k:'column', t:'column', label:'Column' },
+        { k:'expect', t:'seg', label:'Expected', opts:[['number','Number'],['text','Text'],['date','Date']] },
+        { k:'min', t:'text', label:'Minimum', ph:'numbers only', show:p=>p.expect==='number' },
+        { k:'max', t:'text', label:'Maximum', ph:'numbers only', show:p=>p.expect==='number' }
+      ],
+      summary: p => `${p.column || '—'} · expect ${p.expect}`,
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        if (!['number','text','date'].includes(p.expect)) throw new Error(`unknown expectation "${p.expect}"`);
+        let lo = null, hi = null;
+        if (p.expect === 'number'){
+          if (p.min !== '' && p.min != null){ lo = Number(p.min); if (!Number.isFinite(lo)) throw new Error('minimum must be numeric'); }
+          if (p.max !== '' && p.max != null){ hi = Number(p.max); if (!Number.isFinite(hi)) throw new Error('maximum must be numeric'); }
+        } else if ((p.min !== '' && p.min != null) || (p.max !== '' && p.max != null)){
+          throw new Error('bounds need numeric expectation');
+        }
+        const numOf = v => {
+          try {
+            const n = strictNum(v, p.column);
+            return n === null ? NaN : n;
+          } catch (e){ return NaN; }
+        };
+        const samples = [];
+        let invalid = 0;
+        d.rows.forEach(r => {
+          const v = r[ci];
+          if (MISS(v)) return;
+          let reason = null;
+          if (p.expect === 'number'){
+            const n = numOf(v);
+            if (Number.isNaN(n)) reason = 'not a number';
+            else if (lo !== null && n < lo) reason = `below minimum (${p.min})`;
+            else if (hi !== null && n > hi) reason = `above maximum (${p.max})`;
+          } else if (p.expect === 'date'){
+            if (!parseDate(v)) reason = 'not a date';
+          }
+          if (reason){
+            invalid++;
+            if (samples.length < 12 && !samples.some(s => s.value === v)) samples.push({ value:v, reason });
+          }
+        });
+        return { columns: d.columns, rows: d.rows, report:{ column:p.column, total:d.rows.length, invalid, samples } };
+      },
+      code: (ctx, p) => {
+        const c = py(p.column);
+        const head = [`# find-invalid ${p.column}: lists values that look wrong (data unchanged)`];
+        if (p.expect === 'number'){
+          const lines = [...head,
+            `_num = pd.to_numeric(df[${c}], errors="coerce")`,
+            `_present = df[${c}].notna() & (df[${c}].astype(object) != '')`,
+            `_bad = _present & _num.isna()`];
+          if (p.min !== '' && p.min != null) lines.push(`_bad = _bad | (_present & _num.notna() & (_num < ${Number(p.min)}))`);
+          if (p.max !== '' && p.max != null) lines.push(`_bad = _bad | (_present & _num.notna() & (_num > ${Number(p.max)}))`);
+          return lines;
+        }
+        if (p.expect === 'date') return [...head,
+          `_ok = pd.to_datetime(df[${c}], format="mixed", errors="coerce").notna()`,
+          `_bad = df[${c}].notna() & (df[${c}].astype(object) != '') & ~_ok`];
+        return [...head, `_bad = pd.Series(False, index=df.index)`];
+      }
     }
   };
   // One-hot codegen: categories are recomputed in pandas at runtime in the
@@ -1266,7 +1654,7 @@ function EngineFactory(){
       const op = OPS[n.type];
       const inD = { columns: outputs[outputs.length-1].columns, rows: outputs[outputs.length-1].rows };
       const inMeta = outputs[outputs.length-1].meta;
-      const res = { err:null, delta:null, hint:null, inColumns: inD.columns, inTypes: inMeta.types };
+      const res = { err:null, delta:null, hint:null, report:null, inColumns: inD.columns, inTypes: inMeta.types };
       let outRec;
       if (!op){ res.err = 'unknown operation'; outRec = { columns: inD.columns, rows: inD.rows, rowStable: true, meta: inMeta, error: res.err }; }
       else if (!n.enabled){
@@ -1278,6 +1666,9 @@ function EngineFactory(){
           const meta = metaOf(o.columns, o.rows, false);
           res.delta = deltaOf(inMeta, meta, inD, o, stable);
           res.hint = op.hint ? (op.hint(inD, n.params, inMeta) || null) : null;
+          // Quality nodes attach {column, invalid, checks/samples} here;
+          // rows still flow through unchanged.
+          res.report = o.report || null;
           outRec = { columns: o.columns, rows: o.rows, rowStable: stable, meta };
         } catch(e){
           res.err = String((e && e.message) || e);
@@ -1301,7 +1692,7 @@ function EngineFactory(){
     return `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
   }
 
-  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, runFrom, OPS, sanitizeCol, wirePath };
+  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, runFrom, OPS, sanitizeCol, wirePath, parseFormula, formulaRefs, evalFormula, formulaToPandas, strictNum, matchCond };
 }
 
 /* python string literal helper (used by op codegen) */

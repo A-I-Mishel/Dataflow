@@ -12,11 +12,14 @@ from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_empty_columns import apply_drop_empty_columns
 from transforms.drop_na import apply_drop_na
 from transforms.date_difference import apply_date_difference
+from transforms.conditional_column import apply_conditional_column
+from transforms.create_column import apply_create_column
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.extract_date_part import apply_extract_date_part
 from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.find_invalid import apply_find_invalid
 from transforms.group_rare import apply_group_rare
 from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
@@ -27,6 +30,7 @@ from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 from transforms.split_column import apply_split_column
+from transforms.validate_column import apply_validate_column
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,10 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "parse-date": apply_parse_date,
     "extract-date-part": apply_extract_date_part,
     "date-difference": apply_date_difference,
+    "create-column": apply_create_column,
+    "conditional-column": apply_conditional_column,
+    "validate-column": apply_validate_column,
+    "find-invalid": apply_find_invalid,
 }
 
 

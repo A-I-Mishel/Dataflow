@@ -209,6 +209,14 @@ button{font-family:var(--mono)}
 .f>label{display:block;font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
 select,input[type=text],textarea{width:100%;font-family:var(--mono);font-size:12px;font-weight:500;padding:7.5px 9px;border:1.5px solid var(--line2);border-radius:8px;background:var(--card);color:var(--ink);outline:none}
 textarea{min-height:76px;resize:vertical;line-height:1.6}
+.rulelist{display:grid;gap:6px;margin-bottom:8px}
+.rulerow{display:grid;grid-template-columns:minmax(0,1.2fr) 76px minmax(0,1fr) minmax(0,1fr) 24px;gap:6px;align-items:center}
+.rulerow select,.rulerow input{padding:6px 7px;font-size:11px}
+.rx{width:24px;height:24px;display:grid;place-items:center;background:var(--ink);color:var(--panel);border:none;border-radius:50%;cursor:pointer;flex:none}
+.rhint{font-size:10.5px;color:var(--ink3);padding:4px 2px}
+.repbox{border:1.5px solid var(--line2);border-radius:9px;padding:10px 12px;font-size:11px;color:var(--ink2);line-height:1.6;margin-bottom:8px}
+.repbox b{color:var(--ink)}
+.repbox .rsamp{font-family:var(--mono);font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 select:focus,input:focus{border-color:var(--ink)}
 .seg{display:flex;border:1.5px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--card)}
 .seg button{flex:1;padding:7px 3px;font-size:10.5px;font-weight:600;background:none;border:none;border-right:1px solid var(--line);color:var(--ink2);cursor:pointer}

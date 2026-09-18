@@ -70,7 +70,10 @@ Fully mapped: `fill-missing` (mean/median/mode/custom/ffill/bfill+limit)
 `extract-text` → `extract-text`, `group-rare` → `group-rare`,
 `label-encode` → `encode-categorical` (label), `normalize` → `normalize`,
 `convert-type`→date → `parse-date`, `extract-date-part` →
-`extract-date-part`, `date-difference` → `date-difference`.
+`extract-date-part`, `date-difference` → `date-difference`,
+`create-column` → `create-column`, `conditional-column` →
+`conditional-column`, `validate-column` → `validate-column`,
+`find-invalid` → `find-invalid`.
 
 Local-only (backend check skips the run and says why instead of comparing
 against different semantics): `drop-duplicates/keep-last` (backend always

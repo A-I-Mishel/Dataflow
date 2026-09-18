@@ -260,3 +260,76 @@ def test_parity_wave2_ops() -> None:
         ]
     )
     assert frames_equal(sieve, backend) == []
+
+
+def test_parity_wave3_ops() -> None:
+    """Wave-3 additions: create (strict numerics, missing propagation),
+    conditional (first-match + else default), and the two quality nodes
+    (pass-through — frames flow unchanged, reports stay local)."""
+    sieve = sieve_run(
+        [
+            {"type": "create-column", "params": {"formula": "[Age] + 1", "output": "AgePlus"}},
+            {
+                "type": "conditional-column",
+                "params": {
+                    "rules": [
+                        {"column": "Age", "op": "<", "value": "18", "result": "Minor"},
+                        {"column": "Age", "op": "<", "value": "60", "result": "Adult"},
+                    ],
+                    "default": "Senior",
+                    "output": "AgeGroup",
+                },
+            },
+            {
+                "type": "validate-column",
+                "params": {
+                    "column": "Age",
+                    "vtype": "any",
+                    "required": False,
+                    "min": "0",
+                    "max": "120",
+                    "allowed": [],
+                    "unique": False,
+                    "pattern": "",
+                },
+            },
+            {
+                "type": "find-invalid",
+                "params": {"column": "PerformanceScore", "expect": "number", "min": "0", "max": "5"},
+            },
+        ]
+    )
+    backend = backend_run(
+        [
+            _node("n1", "create-column", formula="[Age] + 1", output="AgePlus", columns=["Age"]),
+            _node(
+                "n2",
+                "conditional-column",
+                columns=["Age"],
+                rules=[
+                    {"column": "Age", "operator": "<", "value": 18, "result": "Minor"},
+                    {"column": "Age", "operator": "<", "value": 60, "result": "Adult"},
+                ],
+                default="Senior",
+                output="AgeGroup",
+            ),
+            _node(
+                "n3",
+                "validate-column",
+                columns=["Age"],
+                checks=[
+                    {"rule": "min", "value": "0"},
+                    {"rule": "max", "value": "120"},
+                ],
+            ),
+            _node(
+                "n4",
+                "find-invalid",
+                columns=["PerformanceScore"],
+                expect="number",
+                min_value="0",
+                max_value="5",
+            ),
+        ]
+    )
+    assert frames_equal(sieve, backend) == []

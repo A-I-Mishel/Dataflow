@@ -61,6 +61,21 @@ class NodeConfig(BaseModel):
     part: Optional[str] = None
     # date-difference unit (days/hours/minutes/seconds).
     unit: Optional[str] = None
+    # Wave-3 fields:
+    # create-column arithmetic formula, e.g. "[price] * [quantity]".
+    formula: Optional[str] = None
+    # conditional-column rules: [{column, operator, value, result}] plus the
+    # ELSE default (None = null).
+    rules: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    default: Optional[Any] = None
+    # find-invalid expected type (number/text/date).
+    expect: Optional[str] = None
+    # validate-column checks: [{rule, ...}] with rule in
+    # type/required/min/max/allowed/unique/pattern.
+    checks: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    # find-invalid numeric bounds.
+    min_value: Optional[Any] = None
+    max_value: Optional[Any] = None
 
 
 class PipelineNode(BaseModel):
@@ -86,6 +101,10 @@ class PipelineNode(BaseModel):
         "parse-date",
         "extract-date-part",
         "date-difference",
+        "create-column",
+        "conditional-column",
+        "validate-column",
+        "find-invalid",
     ]
     config: NodeConfig
 

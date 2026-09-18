@@ -11,6 +11,8 @@ from typing import List
 
 from engine import execute_pipeline, execute_pipeline_with_intermediates
 from models import NodeConfig, PipelineNode
+from transforms.conditional_column import apply_conditional_column
+from transforms.create_column import apply_create_column
 from transforms.date_difference import apply_date_difference
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
@@ -21,6 +23,7 @@ from transforms.extract_date_part import apply_extract_date_part
 from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.find_invalid import apply_find_invalid
 from transforms.group_rare import apply_group_rare
 from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
@@ -31,6 +34,7 @@ from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 from transforms.split_column import apply_split_column
+from transforms.validate_column import apply_validate_column
 
 
 @pytest.fixture
@@ -627,3 +631,73 @@ def test_date_difference() -> None:
     assert result["gap"].isna().tolist()[1] is True
     with pytest.raises(HTTPException):
         apply_date_difference(df, NodeConfig(columns=["s"], unit="days", output="gap"))
+
+
+def test_create_column() -> None:
+    df: pd.DataFrame = pd.DataFrame({"price": [100, 250, None], "qty": [2, 4, 1]})
+    result, code = apply_create_column(df, NodeConfig(output="total", formula="[price] * [qty]"))
+    _assert_valid_code(code)
+    assert result["total"].tolist()[:2] == [200, 1000]
+    assert result["total"].isna().tolist()[2] is True
+    # No eval anywhere: unknown columns, bad syntax and non-numerics refuse.
+    with pytest.raises(HTTPException):
+        apply_create_column(df, NodeConfig(output="t2", formula="[nope] + 1"))
+    with pytest.raises(HTTPException):
+        apply_create_column(df, NodeConfig(output="t2", formula="price *"))
+    with pytest.raises(HTTPException):
+        apply_create_column(
+            pd.DataFrame({"a": ["xx"]}), NodeConfig(output="t2", formula="[a] + 1")
+        )
+    with pytest.raises(HTTPException):
+        apply_create_column(df, NodeConfig(output="price", formula="[price] + 1"))
+
+
+def test_conditional_column() -> None:
+    df: pd.DataFrame = pd.DataFrame({"age": [17, 25, 65, None]})
+    rules = [
+        {"column": "age", "operator": "<", "value": 18, "result": "Minor"},
+        {"column": "age", "operator": "<", "value": 60, "result": "Adult"},
+    ]
+    result, code = apply_conditional_column(
+        df, NodeConfig(output="grp", rules=rules, default="Senior")
+    )
+    _assert_valid_code(code)
+    # Missing matches no rule, so it takes the default — same as Sieve.
+    assert result["grp"].tolist() == ["Minor", "Adult", "Senior", "Senior"]
+    with pytest.raises(HTTPException):
+        apply_conditional_column(df, NodeConfig(output="grp", rules=[]))
+    with pytest.raises(HTTPException):
+        apply_conditional_column(
+            df, NodeConfig(output="age", rules=rules, default="Senior")
+        )
+
+
+def test_validate_column_passthrough() -> None:
+    df: pd.DataFrame = pd.DataFrame({"age": [25, -5, None]})
+    before: pd.DataFrame = df.copy(deep=True)
+    result, code = apply_validate_column(
+        df,
+        NodeConfig(
+            columns=["age"],
+            checks=[{"rule": "min", "value": 0}, {"rule": "required"}],
+        ),
+    )
+    _assert_valid_code(code)
+    # Pass-through: data never changes, violations only warn + export.
+    pd.testing.assert_frame_equal(result, before)
+    assert "assert" in code
+    with pytest.raises(HTTPException):
+        apply_validate_column(df, NodeConfig(columns=["age"], checks=[]))
+    with pytest.raises(HTTPException):
+        apply_validate_column(df, NodeConfig(columns=["age"], checks=[{"rule": "nope"}]))
+
+
+def test_find_invalid_passthrough() -> None:
+    df: pd.DataFrame = pd.DataFrame({"age": [25, -5, "abc", None]})
+    before: pd.DataFrame = df.copy(deep=True)
+    result, code = apply_find_invalid(
+        df, NodeConfig(columns=["age"], expect="number", min_value=0)
+    )
+    _assert_valid_code(code)
+    pd.testing.assert_frame_equal(result, before)
+    assert "_bad" in code

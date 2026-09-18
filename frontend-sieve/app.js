@@ -427,6 +427,7 @@ function applyRun(from, res, nodesSlice){
     const n = nodesSlice[i]; if (!n) return;
     n._err = r.err; n._delta = r.delta; n._hint = r.hint;
     n._inColumns = r.inColumns; n._inTypes = r.inTypes;
+    n._report = r.report || null;
   });
   // res.outputs[0] is the run's base (= state.outputs[from]), NOT an extra
   // entry: splice from `from`, not `from + 1`, or every run appends a phantom
@@ -443,8 +444,9 @@ function refreshInspectorAfterRun(){
   const n = selectedNode();
   if (!n){ renderInspector(); return; }
   const errKey = n._err || '', colsKey = (n._inColumns || []).join('\u0001');
-  if (n._lastErrKey !== errKey || n._lastColsKey !== colsKey){
-    n._lastErrKey = errKey; n._lastColsKey = colsKey;
+  const repKey = JSON.stringify(n._report || null);
+  if (n._lastErrKey !== errKey || n._lastColsKey !== colsKey || n._lastRepKey !== repKey){
+    n._lastErrKey = errKey; n._lastColsKey = colsKey; n._lastRepKey = repKey;
     renderInspector();
   }
 }
@@ -506,6 +508,9 @@ function footText(n){
   if (d.ca !== d.cb) bits.push(`${d.cb} → ${d.ca} cols`);
   if (d.ma !== d.mb) bits.push(`missing ${fmt(d.mb)} → ${fmt(d.ma)}`);
   if (!bits.length) bits.push(d.changed > 0 ? `${fmt(d.changed)} cells changed` : 'no change');
+  // Quality nodes pass data through, so their deltas are always empty —
+  // the report is the result. Surface it first.
+  if (n._report && n._report.invalid > 0) bits.unshift(`⚠ ${fmt(n._report.invalid)} flagged`);
   return bits.join(' · ');
 }
 function nodeAria(id, inner){
@@ -995,6 +1000,47 @@ function buildField(f, node){
     ta.addEventListener('change', () => { P[f.k] = ta.value.split('\n').filter(x => x !== ''); onParam(node); });
     ta.addEventListener('input', () => { P[f.k] = ta.value.split('\n').filter(x => x !== ''); requestRun(state.nodes.indexOf(node)); });
     wrap.append(ta);
+  } else if (f.t === 'rules'){
+    // Ordered IF/ELSE-IF rule list (conditional-column): column + operator
+    // + value + result per row, first match wins at runtime.
+    wrap.innerHTML = `<label>${esc(f.label)}</label>`;
+    P.rules = Array.isArray(P.rules) ? P.rules : [];
+    const list = elDiv('rulelist');
+    const ops = [['=','='],['≠','≠'],['>','>'],['<','<'],['≥','≥'],['≤','≤'],['contains','contains']];
+    const cols = () => nodeCols(node);
+    const draw = () => {
+      list.innerHTML = '';
+      if (!P.rules.length) list.append(elDiv('rhint', 'No rules yet — add one below.'));
+      P.rules.forEach((r, i) => {
+        const row = elDiv('rulerow');
+        const cs = mkSelect(cols().map(c => [c, c]), r.column);
+        cs.onchange = () => { r.column = cs.value; onParam(node); };
+        const os = mkSelect(ops, r.op);
+        os.onchange = () => { r.op = os.value; onParam(node); };
+        const vi = document.createElement('input');
+        vi.type = 'text'; vi.placeholder = 'value'; vi.value = r.value ?? '';
+        vi.addEventListener('change', () => { r.value = vi.value; onParam(node); });
+        vi.addEventListener('input', () => { r.value = vi.value; requestRun(state.nodes.indexOf(node)); });
+        const ri = document.createElement('input');
+        ri.type = 'text'; ri.placeholder = 'then…'; ri.value = r.result ?? '';
+        ri.addEventListener('change', () => { r.result = ri.value; onParam(node); });
+        ri.addEventListener('input', () => { r.result = ri.value; requestRun(state.nodes.indexOf(node)); });
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'rx'; del.title = 'Remove rule'; del.setAttribute('aria-label', `Remove rule ${i + 1}`);
+        del.innerHTML = ic('x', 11);
+        del.onclick = () => { P.rules.splice(i, 1); draw(); onParam(node); };
+        row.append(cs, os, vi, ri, del);
+        list.append(row);
+      });
+    };
+    draw();
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'btn sm'; add.innerHTML = ic('plus', 12) + ' Add rule';
+    add.onclick = () => {
+      P.rules.push({ column: cols()[0] || '', op: '=', value: '', result: '' });
+      draw(); onParam(node);
+    };
+    wrap.append(list, add);
   } else if (f.t === 'rename'){
     wrap.innerHTML = `<label>${esc(f.label)}</label>`;
     P.map = P.map || {};
@@ -1036,6 +1082,22 @@ function renderInspector(){
       <div class="ih-s">Step ${idx+1} of ${state.nodes.length} · ${n.enabled ? 'active' : 'bypassed'}</div>`;
     B.innerHTML = '';
     if (n._err) B.append(elDiv('errbox', ic('alert',14) + `<div>${esc(n._err)}</div>`));
+    // Quality-node report: counts plus samples, then the schema below.
+    // Data passes through unchanged — the preview tab already shows that.
+    if (n._report && !n._err){
+      const rep = n._report;
+      const head = `<b>${rep.invalid ? `⚠ ${fmt(rep.invalid)} of ${fmt(rep.total)} rows flagged` : `✓ all ${fmt(rep.total)} rows clean`}</b>`
+        + `<span> · data passes through unchanged</span>`;
+      const box = elDiv('repbox', head);
+      const lines = (rep.checks || []).filter(c => c.invalid > 0).map(c =>
+        `<div class="rsamp">${esc(c.rule)} — ${fmt(c.invalid)} · e.g. ${c.samples.map(s => esc(s === null ? '∅' : String(s))).join(', ') || '—'}</div>`
+      );
+      const sl = (rep.samples || []).slice(0, 8).map(s =>
+        `<div class="rsamp">${esc(s.value === null ? '∅' : String(s.value))} — ${esc(s.reason)}</div>`
+      );
+      box.insertAdjacentHTML('beforeend', [...lines, ...sl].join('') || '<div class="rsamp">nothing to show</div>');
+      B.append(box);
+    }
     for (const f of op.schema){
       if (f.show && !f.show(n.params)) continue;
       B.append(buildField(f, n));
@@ -1625,7 +1687,7 @@ window.Sieve = { runSelfTests, state, E };  // debug handle
 /* ==================================================================
    CHROME — palette, tabs, header, DnD, keyboard, errors, boot
    ================================================================== */
-const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Categories','Numbers','Dates'];
+const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Categories','Numbers','Dates','Data Quality'];
 function buildPalette(){
   const host = $('#palList');
   for (const g of GROUPS){

@@ -486,3 +486,120 @@ describe('date ops', () => {
     assert.equal(out.rows[1][2], null);
   });
 });
+
+describe('parseFormula', () => {
+  it('parses precedence, parens and unary minus', () => {
+    assert.deepEqual(E.parseFormula('[a] + [b] * 2'), {
+      t: 'bin', op: '+', l: { t: 'col', name: 'a' }, r: { t: 'bin', op: '*', l: { t: 'col', name: 'b' }, r: { t: 'num', v: 2 } },
+    });
+    assert.deepEqual(E.parseFormula('-([a] + 1)'), {
+      t: 'neg', x: { t: 'bin', op: '+', l: { t: 'col', name: 'a' }, r: { t: 'num', v: 1 } },
+    });
+  });
+  it('rejects bad syntax with messages', () => {
+    for (const bad of ['', '[a', '[a] +', '[a] * * 2', 'price *', '([a]', '@']) {
+      assert.throws(() => E.parseFormula(bad));
+    }
+  });
+});
+
+describe('create-column', () => {
+  const data = { columns: ['price', 'qty'], rows: [[100, 2], [250, 4], [null, 1]] };
+  it('evaluates with missing propagation', () => {
+    const out = E.OPS['create-column'].run(data, { formula: '[price] * [qty]', output: 'total' });
+    assert.deepEqual(out.columns, ['price', 'qty', 'total']);
+    assert.deepEqual(
+      out.rows.map((r) => r[2]),
+      [200, 1000, null],
+    );
+  });
+  it('maps division by zero to null', () => {
+    const out = E.OPS['create-column'].run(
+      { columns: ['a', 'b'], rows: [[1, 0]] },
+      { formula: '[a] / [b]', output: 'c' },
+    );
+    assert.equal(out.rows[0][2], null);
+  });
+  it('refuses unknown columns and non-numerics', () => {
+    assert.throws(() =>
+      E.OPS['create-column'].run(data, { formula: '[nope] + 1', output: 'c' }),
+    );
+    assert.throws(() =>
+      E.OPS['create-column'].run(
+        { columns: ['a'], rows: [['xx']] },
+        { formula: '[a] + 1', output: 'c' },
+      ),
+    );
+    assert.throws(() =>
+      E.OPS['create-column'].run(data, { formula: '[price] + 1', output: 'price' }),
+    );
+  });
+});
+
+describe('conditional-column', () => {
+  const data = { columns: ['age'], rows: [[17], [25], [65], [null]] };
+  const params = {
+    rules: [
+      { column: 'age', op: '<', value: '18', result: 'Minor' },
+      { column: 'age', op: '<', value: '60', result: 'Adult' },
+    ],
+    default: 'Senior',
+    output: 'grp',
+  };
+  it('applies first match wins with else default', () => {
+    const out = E.OPS['conditional-column'].run(data, params);
+    assert.deepEqual(
+      out.rows.map((r) => r[1]),
+      ['Minor', 'Adult', 'Senior', 'Senior'],
+    );
+  });
+  it('blank default yields null', () => {
+    const out = E.OPS['conditional-column'].run(data, { ...params, default: '' });
+    assert.equal(out.rows[3][1], null);
+  });
+  it('requires rules and a fresh output', () => {
+    assert.throws(() => E.OPS['conditional-column'].run(data, { ...params, rules: [] }));
+    assert.throws(() => E.OPS['conditional-column'].run(data, { ...params, output: 'age' }));
+  });
+});
+
+describe('validate-column', () => {
+  const data = { columns: ['age'], rows: [[25], [-5], ['abc'], [null]] };
+  it('reports per-rule findings and passes data through', () => {
+    const out = E.OPS['validate-column'].run(data, {
+      column: 'age', vtype: 'any', required: false, min: '0', max: '', allowed: [], unique: false, pattern: '',
+    });
+    assert.deepEqual(out.columns, ['age']);
+    assert.equal(out.rows.length, 4);
+    assert.equal(out.report.invalid, 2);
+    assert.equal(out.report.checks[0].rule, 'min');
+    assert.equal(out.report.checks[0].invalid, 2);
+  });
+  it('required flags gaps and unique flags repeats', () => {
+    const req = E.OPS['validate-column'].run(
+      { columns: ['a'], rows: [[1], [null]] },
+      { column: 'a', vtype: 'any', required: true, min: '', max: '', allowed: [], unique: false, pattern: '' },
+    );
+    assert.equal(req.report.invalid, 1);
+    const dup = E.OPS['validate-column'].run(
+      { columns: ['a'], rows: [[1], [1], [2]] },
+      { column: 'a', vtype: 'any', required: false, min: '', max: '', allowed: [], unique: true, pattern: '' },
+    );
+    assert.equal(dup.report.invalid, 2);
+  });
+});
+
+describe('find-invalid', () => {
+  it('lists reasons and passes data through', () => {
+    const out = E.OPS['find-invalid'].run(
+      { columns: ['age'], rows: [[25], [-5], ['abc'], [null]] },
+      { column: 'age', expect: 'number', min: '0', max: '' },
+    );
+    assert.equal(out.rows.length, 4);
+    assert.equal(out.report.invalid, 2);
+    assert.deepEqual(
+      out.report.samples.map((s) => s.reason),
+      ['below minimum (0)', 'not a number'],
+    );
+  });
+});

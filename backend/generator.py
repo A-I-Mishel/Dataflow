@@ -1,5 +1,6 @@
 import importlib
 import logging
+import re
 from types import ModuleType
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -34,6 +35,10 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "parse-date": ("transforms.parse_date", "apply_parse_date"),
     "extract-date-part": ("transforms.extract_date_part", "apply_extract_date_part"),
     "date-difference": ("transforms.date_difference", "apply_date_difference"),
+    "create-column": ("transforms.create_column", "apply_create_column"),
+    "conditional-column": ("transforms.conditional_column", "apply_conditional_column"),
+    "validate-column": ("transforms.validate_column", "apply_validate_column"),
+    "find-invalid": ("transforms.find_invalid", "apply_find_invalid"),
 }
 
 
@@ -66,6 +71,20 @@ def _collect_referenced_columns(nodes: List[PipelineNode]) -> set[str]:
             for cond in cfg.conditions:
                 try:
                     c = cond.get("column")
+                except AttributeError:
+                    continue
+                if isinstance(c, str) and c:
+                    cols.add(c)
+        if cfg.formula:
+            # [column] references feed the dummy frame numeric stand-ins.
+            for ref in re.findall(r"\[([^\]]+)\]", str(cfg.formula)):
+                ref = ref.strip()
+                if ref:
+                    cols.add(ref)
+        if cfg.rules:
+            for rule in cfg.rules:
+                try:
+                    c = rule.get("column")
                 except AttributeError:
                     continue
                 if isinstance(c, str) and c:

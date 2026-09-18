@@ -306,6 +306,66 @@ export function sieveToBackend(sieveNodes) {
         type: 'date-difference',
         config: { columns: [p.start, p.end], unit: p.unit, output: String(p.output).trim() },
       });
+    } else if (t === 'create-column') {
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      if (!need(p.formula && String(p.formula).trim(), 'blank formula')) continue;
+      // Column refs feed the generator's dummy frame; the backend parses
+      // and validates the formula itself (unknown columns → 400 there).
+      const refs = [...String(p.formula).matchAll(/\[([^\]]+)\]/g)]
+        .map((m) => m[1].trim())
+        .filter((c, i, a) => c && a.indexOf(c) === i);
+      nodes.push({
+        id: id(),
+        type: 'create-column',
+        config: { formula: String(p.formula), output: String(p.output).trim(), columns: refs },
+      });
+    } else if (t === 'conditional-column') {
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      if (!need(p.rules && p.rules.length, 'no rules')) continue;
+      const rules = [];
+      let bad = null;
+      for (const [i, r] of (p.rules || []).entries()) {
+        if (!r.column) { bad = `rule ${i + 1} has no column`; break; }
+        const op = FILTER_OP[r.op];
+        if (!op) { bad = `rule ${i + 1} has unknown operator "${r.op}"`; break; }
+        rules.push({ column: r.column, operator: op, value: numIfNumeric(r.value), result: r.result ?? null });
+      }
+      if (bad) { skipped.push({ type: t, reason: bad }); continue; }
+      nodes.push({
+        id: id(),
+        type: 'conditional-column',
+        config: {
+          columns: [...new Set(rules.map((r) => r.column))],
+          rules,
+          default: p.default === '' || p.default == null ? null : p.default,
+        },
+      });
+    } else if (t === 'validate-column') {
+      if (!need(p.column, 'no column selected')) continue;
+      // Same flat→list shape the local engine evaluates, so both sides
+      // always check the identical rule set.
+      const checks = [];
+      if (p.vtype && p.vtype !== 'any') checks.push({ rule: 'type', expected: p.vtype });
+      if (p.required) checks.push({ rule: 'required' });
+      if (p.min !== '' && p.min != null) checks.push({ rule: 'min', value: p.min });
+      if (p.max !== '' && p.max != null) checks.push({ rule: 'max', value: p.max });
+      if (p.allowed && p.allowed.length) checks.push({ rule: 'allowed', values: [...p.allowed] });
+      if (p.unique) checks.push({ rule: 'unique' });
+      if (p.pattern) checks.push({ rule: 'pattern', pattern: p.pattern });
+      if (!need(checks.length, 'no checks enabled')) continue;
+      nodes.push({ id: id(), type: 'validate-column', config: { columns: [p.column], checks } });
+    } else if (t === 'find-invalid') {
+      if (!need(p.column, 'no column selected')) continue;
+      const expect = p.expect || 'number';
+      if (!['number', 'text', 'date'].includes(expect)) { skipped.push({ type: t, reason: `unknown expectation "${p.expect}"` }); continue; }
+      if (expect !== 'number' && ((p.min !== '' && p.min != null) || (p.max !== '' && p.max != null))) {
+        skipped.push({ type: t, reason: 'bounds need numeric expectation' });
+        continue;
+      }
+      const cfg = { columns: [p.column], expect };
+      if (p.min !== '' && p.min != null) cfg.min_value = p.min;
+      if (p.max !== '' && p.max != null) cfg.max_value = p.max;
+      nodes.push({ id: id(), type: 'find-invalid', config: cfg });
     } else if (LOCAL_ONLY[t]) {
       skipped.push({ type: t, reason: LOCAL_ONLY[t] });
     } else {

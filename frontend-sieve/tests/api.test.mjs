@@ -144,3 +144,86 @@ describe('sieveToBackend wave-2 mappings', () => {
     assert.equal(skipped.length, 1);
   });
 });
+
+describe('sieveToBackend wave-3 mappings', () => {
+  it('maps create/conditional with column extraction', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'create-column', enabled: true, params: { formula: '[Age] + 1', output: 'AgePlus' } },
+      {
+        type: 'conditional-column',
+        enabled: true,
+        params: {
+          rules: [
+            { column: 'Age', op: '<', value: '18', result: 'Minor' },
+            { column: 'Age', op: '<', value: '60', result: 'Adult' },
+          ],
+          default: 'Senior',
+          output: 'AgeGroup',
+        },
+      },
+    ]);
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes[0], {
+      id: 'n1',
+      type: 'create-column',
+      config: { formula: '[Age] + 1', output: 'AgePlus', columns: ['Age'] },
+    });
+    assert.deepEqual(nodes[1], {
+      id: 'n2',
+      type: 'conditional-column',
+      config: {
+        columns: ['Age'],
+        rules: [
+          { column: 'Age', operator: '<', value: 18, result: 'Minor' },
+          { column: 'Age', operator: '<', value: 60, result: 'Adult' },
+        ],
+        default: 'Senior',
+      },
+    });
+  });
+
+  it('assembles validate checks from flat params', () => {
+    const { nodes, skipped } = sieveToBackend([
+      {
+        type: 'validate-column',
+        enabled: true,
+        params: {
+          column: 'Age', vtype: 'any', required: true, min: '0', max: '',
+          allowed: [], unique: false, pattern: '',
+        },
+      },
+    ]);
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes[0], {
+      id: 'n1',
+      type: 'validate-column',
+      config: {
+        columns: ['Age'],
+        checks: [{ rule: 'required' }, { rule: 'min', value: '0' }],
+      },
+    });
+  });
+
+  it('skips empty validate/find-invalid configs with reasons', () => {
+    const { nodes, skipped } = sieveToBackend([
+      {
+        type: 'validate-column',
+        enabled: true,
+        params: {
+          column: 'Age', vtype: 'any', required: false, min: '', max: '',
+          allowed: [], unique: false, pattern: '',
+        },
+      },
+      {
+        type: 'find-invalid',
+        enabled: true,
+        params: { column: 'Age', expect: 'number', min: 'x', max: '' },
+      },
+    ]);
+    // find-invalid with garbage bounds still maps (the backend refuses it,
+    // exactly like the local engine) — only the check-less validate skips.
+    assert.equal(nodes.length, 1);
+    assert.equal(nodes[0].type, 'find-invalid');
+    assert.equal(skipped.length, 1);
+  });
+});
