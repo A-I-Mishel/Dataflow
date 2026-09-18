@@ -1,19 +1,41 @@
-import { BarChart3 } from 'lucide-react';
-import { Code } from 'lucide-react';
-import { Table } from 'lucide-react';
+import { BarChart3 } from "lucide-react";
+import { Code } from "lucide-react";
+import { Table } from "lucide-react";
 
-import { selectIsResultStale, usePipelineStore } from '../stores/pipelineStore';
-import type { ActiveTab } from '../stores/pipelineStore';
-import type { ProfileData } from '../types';
-import CodeView from './CodeView';
-import DataTable from './DataTable';
-import EmptyState from './EmptyState';
-import ProfileView from './ProfileView';
+import { Suspense, lazy } from "react";
+
+import { selectIsResultStale, usePipelineStore } from "../stores/pipelineStore";
+import type { ActiveTab } from "../stores/pipelineStore";
+import type { ProfileData } from "../types";
+import CodeView from "./CodeView";
+import DataTable from "./DataTable";
+import EmptyState from "./EmptyState";
+
+// Split recharts out of the initial bundle — it loads on first visit to the
+// Profile tab instead of blocking first paint (same pattern as CodeView).
+const ProfileView = lazy(() => import("./ProfileView"));
+
+function ProfileFallback() {
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+        <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+        <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+        <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+      </div>
+      <div className="mt-4 space-y-3">
+        <div className="h-32 animate-pulse rounded-2xl bg-elevated" />
+        <div className="h-32 animate-pulse rounded-2xl bg-elevated" />
+      </div>
+    </div>
+  );
+}
 
 const TABS: Array<{ key: ActiveTab; label: string; icon: typeof Table }> = [
-  { key: 'preview', label: 'Preview', icon: Table },
-  { key: 'profile', label: 'Profile', icon: BarChart3 },
-  { key: 'code', label: 'Code', icon: Code },
+  { key: "preview", label: "Preview", icon: Table },
+  { key: "profile", label: "Profile", icon: BarChart3 },
+  { key: "code", label: "Code", icon: Code },
 ];
 
 function profileFromUpload(
@@ -23,11 +45,11 @@ function profileFromUpload(
   missingValues: Record<string, number>,
 ): ProfileData {
   const totalMissing = Object.values(missingValues).reduce((sum, value) => sum + value, 0);
-  const profileColumns: ProfileData['columns'] = {};
+  const profileColumns: ProfileData["columns"] = {};
   for (const column of columns) {
     const nullCount = missingValues[column] ?? 0;
     profileColumns[column] = {
-      dtype: dtypes[column] ?? 'unknown',
+      dtype: dtypes[column] ?? "unknown",
       null_count: nullCount,
       null_pct: rowCount > 0 ? Math.round((nullCount / rowCount) * 10000) / 100 : 0,
       unique_count: 0,
@@ -74,10 +96,21 @@ export default function RightPanel() {
 
   const showSkeletons = isLoading && resultData === null;
 
+  const staleBanner =
+    isStale && resultData ? (
+      <p className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-500">
+        Result is stale — re-run to refresh
+      </p>
+    ) : null;
+
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="flex h-full w-full flex-col">
       <div className="p-2">
-        <div className="flex gap-1 p-1 rounded-full bg-elevated border border-line">
+        <div
+          role="tablist"
+          aria-label="Output views"
+          className="flex gap-1 rounded-full border border-line bg-elevated p-1"
+        >
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -85,11 +118,14 @@ export default function RightPanel() {
               <button
                 key={tab.key}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={tab.label}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold tracking-wide transition-all ${
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold tracking-wide transition-all ${
                   isActive
-                    ? 'bg-ink text-panel shadow-md'
-                    : 'text-ink3 hover:text-ink hover:bg-card'
+                    ? "bg-ink text-panel shadow-md"
+                    : "text-ink3 hover:bg-card hover:text-ink"
                 }`}
               >
                 <Icon size={14} />
@@ -101,20 +137,16 @@ export default function RightPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {activeTab === 'preview' &&
+        {activeTab === "preview" &&
           (showSkeletons ? (
             <div className="space-y-2">
-              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
-              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
-              <div className="h-10 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-10 animate-pulse rounded-2xl bg-elevated" />
+              <div className="h-10 animate-pulse rounded-2xl bg-elevated" />
+              <div className="h-10 animate-pulse rounded-2xl bg-elevated" />
             </div>
           ) : resultData ? (
             <div>
-              {isStale && (
-                <p className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-500">
-                  Result is stale — re-run to refresh
-                </p>
-              )}
+              {staleBanner}
               {viewingStep !== null && viewingLabel !== null ? (
                 <div>
                   <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-elevated px-3 py-2">
@@ -129,7 +161,7 @@ export default function RightPanel() {
                     <button
                       type="button"
                       onClick={() => setViewingNodeId(null)}
-                      className="ml-auto text-xs font-bold text-accenttext hover:underline"
+                      className="text-accenttext ml-auto text-xs font-bold hover:underline"
                     >
                       Back to final result
                     </button>
@@ -138,6 +170,7 @@ export default function RightPanel() {
                     data={viewingStep.preview}
                     columns={viewingStep.columns}
                     dtypes={viewingStep.dtypes}
+                    shape={viewingStep.shape}
                   />
                 </div>
               ) : (
@@ -145,21 +178,35 @@ export default function RightPanel() {
                   data={resultData.preview}
                   columns={resultData.columns}
                   dtypes={resultData.dtypes}
+                  shape={resultData.shape}
                 />
               )}
             </div>
           ) : originalData ? (
-            <div>
-              <p className="mb-2 rounded-xl border border-line bg-elevated px-3 py-2 text-xs font-semibold text-ink2">
-                Original data (first {originalData.preview.length} rows) — run a
-                pipeline to transform it
-              </p>
-              <DataTable
-                data={originalData.preview}
-                columns={originalData.columns}
-                dtypes={originalData.dtypes}
+            originalData.preview.length === 0 ? (
+              <EmptyState
+                icon={Table}
+                title="Session restored"
+                description={`${
+                  originalData.filename ?? "Your dataset"
+                } (${originalData.row_count.toLocaleString()} rows, ${
+                  originalData.columns.length
+                } cols) was kept as metadata only. Re-upload the CSV to preview and run.`}
               />
-            </div>
+            ) : (
+              <div>
+                <p className="mb-2 rounded-xl border border-line bg-elevated px-3 py-2 text-xs font-semibold text-ink2">
+                  Original data (first {originalData.preview.length} rows) — run a pipeline to
+                  transform it
+                </p>
+                <DataTable
+                  data={originalData.preview}
+                  columns={originalData.columns}
+                  dtypes={originalData.dtypes}
+                  shape={[originalData.row_count, originalData.columns.length]}
+                />
+              </div>
+            )
           ) : (
             <EmptyState
               icon={Table}
@@ -168,18 +215,25 @@ export default function RightPanel() {
             />
           ))}
 
-        {activeTab === 'profile' &&
+        {activeTab === "profile" &&
           (showSkeletons ? (
             <div className="grid grid-cols-2 gap-3">
-              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
-              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
-              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
-              <div className="h-24 bg-elevated rounded-2xl animate-pulse" />
+              <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+              <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+              <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
+              <div className="h-24 animate-pulse rounded-2xl bg-elevated" />
             </div>
           ) : resultData ? (
-            <ProfileView profile={resultData.profile} />
+            <div>
+              {staleBanner}
+              <Suspense fallback={<ProfileFallback />}>
+                <ProfileView profile={resultData.profile} />
+              </Suspense>
+            </div>
           ) : fallbackProfile ? (
-            <ProfileView profile={fallbackProfile} />
+            <Suspense fallback={<ProfileFallback />}>
+              <ProfileView profile={fallbackProfile} />
+            </Suspense>
           ) : (
             <EmptyState
               icon={BarChart3}
@@ -188,7 +242,12 @@ export default function RightPanel() {
             />
           ))}
 
-        {activeTab === 'code' && <CodeView code={generatedCode} />}
+        {activeTab === "code" && (
+          <div>
+            {staleBanner}
+            <CodeView code={generatedCode} />
+          </div>
+        )}
       </div>
     </div>
   );

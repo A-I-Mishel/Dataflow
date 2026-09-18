@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 
-import { usePipelineStore } from '../stores/pipelineStore';
-import type { PipelineEdge, PipelineNode } from '../types';
+import { usePipelineStore } from "../stores/pipelineStore";
+import type { PipelineEdge, PipelineNode } from "../types";
 
 /**
  * Topological order mirroring backend/toposort.py (Kahn's algorithm with an
@@ -52,23 +52,23 @@ export function topoOrder(nodes: PipelineNode[], edges: PipelineEdge[]): Pipelin
 function applySchemaEffect(columns: string[], node: PipelineNode): string[] {
   const config = node.data.config;
   switch (node.type) {
-    case 'drop-column': {
+    case "drop-column": {
       const doomed = config.columns ?? [];
       if (doomed.length === 0) return columns;
       return columns.filter((column) => !doomed.includes(column));
     }
-    case 'rename-column': {
+    case "rename-column": {
       // Unknown keys pass through untouched — a typo must not crash the fold.
       const mapping = config.mapping ?? {};
       return columns.map((column) => mapping[column] ?? column);
     }
-    case 'encode-categorical': {
+    case "encode-categorical": {
       // One-hot with explicit columns destroys them into col_value dummies
       // whose names need real data to compute — drop, never fake.
       // Auto mode (empty columns) leaves the schema unchanged; the backend
       // remains source of truth at run time.
       const explicit = config.columns ?? [];
-      if ((config.method ?? 'one-hot') === 'one-hot' && explicit.length > 0) {
+      if ((config.method ?? "one-hot") === "one-hot" && explicit.length > 0) {
         return columns.filter((column) => !explicit.includes(column));
       }
       return columns;
@@ -110,13 +110,13 @@ export function withSelected(schema: string[], selected: string | string[]): str
   const wanted = Array.isArray(selected) ? selected : [selected];
   const options = [...schema];
   for (const column of wanted) {
-    if (column !== '' && !options.includes(column)) options.push(column);
+    if (column !== "" && !options.includes(column)) options.push(column);
   }
   return options;
 }
 
 export function isMissingOption(schema: string[], column: string): boolean {
-  return column !== '' && !schema.includes(column);
+  return column !== "" && !schema.includes(column);
 }
 
 /** Pandas-numeric dtype strings (int64, float64, …). Unknown dtype → false. */
@@ -124,10 +124,10 @@ export function isNumericDtype(dtype: string | undefined): boolean {
   if (!dtype) return false;
   const lower = dtype.toLowerCase();
   return (
-    lower.includes('int') ||
-    lower.includes('float') ||
-    lower.includes('double') ||
-    lower.includes('number')
+    lower.includes("int") ||
+    lower.includes("float") ||
+    lower.includes("double") ||
+    lower.includes("number")
   );
 }
 
@@ -143,8 +143,7 @@ export function nonNumericSelected(
   if (!dtypes) return [];
   return selected.filter(
     (column) =>
-      Object.prototype.hasOwnProperty.call(dtypes, column) &&
-      !isNumericDtype(dtypes[column]),
+      Object.prototype.hasOwnProperty.call(dtypes, column) && !isNumericDtype(dtypes[column]),
   );
 }
 

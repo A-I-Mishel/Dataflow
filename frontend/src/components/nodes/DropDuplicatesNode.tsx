@@ -1,24 +1,26 @@
-import type { NodeProps } from '@xyflow/react';
-import { Copy } from 'lucide-react';
-import { useMemo } from 'react';
+import type { NodeProps } from "@xyflow/react";
+import { Copy } from "lucide-react";
+import { useMemo } from "react";
 
-import { useNodeColumns } from '../../lib/schema';
-import { getNodeErrors } from '../../lib/validatePipeline';
-import { usePipelineStore } from '../../stores/pipelineStore';
-import type { NodeConfig } from '../../types';
-import ColumnChecklist from './ColumnChecklist';
-import NodeShell, { hintClass } from './NodeShell';
+import { useNodeColumns } from "../../lib/schema";
+import { getNodeErrors } from "../../lib/validatePipeline";
+import { usePipelineStore } from "../../stores/pipelineStore";
+import type { NodeConfig } from "../../types";
+import ColumnChecklist from "./ColumnChecklist";
+import NodeShell, { hintClass } from "./NodeShell";
 
 export default function DropDuplicatesNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
-  const label = typeof data.label === 'string' ? data.label : 'Drop Duplicates';
-  const config = (data.config ?? {}) as NodeConfig;
+  const label = typeof data.label === "string" ? data.label : "Drop Duplicates";
+  // Memoized so downstream useMemo deps see a stable reference instead of a
+  // fresh `{}` on every render when no config exists yet.
+  const config = useMemo(() => (data.config ?? {}) as NodeConfig, [data.config]);
   const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
-        { id, type: 'drop-duplicates', position: { x: 0, y: 0 }, data: { label, config } },
+        { id, type: "drop-duplicates", position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
       ),

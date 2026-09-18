@@ -1,22 +1,37 @@
-import { useCallback } from 'react';
-import toast from 'react-hot-toast';
+import { useCallback } from "react";
+import toast from "react-hot-toast";
 
-import { executePipeline, generateCode } from '../lib/api';
+import { executePipeline, generateCode } from "../lib/api";
+import { LARGE_BLOCKED_TYPES } from "../lib/pipelineConfig";
 import {
   getDisconnectedNodes,
   hasCycle,
   validateLinearChain,
   validateNodeConfigs,
-} from '../lib/validatePipeline';
-import { usePipelineStore } from '../stores/pipelineStore';
+} from "../lib/validatePipeline";
+import { usePipelineStore } from "../stores/pipelineStore";
 
 function toMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-const LARGE_BLOCKED_TYPES = new Set(['sort', 'normalize', 'encode-categorical']);
+// Module-scoped so Header, Canvas and App share one cancellable run —
+// hook-local refs would isolate each component's controller.
+let currentRunController: AbortController | null = null;
 
-export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } {
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+export function cancelRun(): void {
+  currentRunController?.abort();
+}
+
+export function useRunPipeline(): {
+  run: () => Promise<void>;
+  cancel: () => void;
+  canRun: boolean;
+} {
   const sessionId = usePipelineStore((state) => state.sessionId);
   const nodes = usePipelineStore((state) => state.nodes);
   const edges = usePipelineStore((state) => state.edges);
@@ -27,15 +42,15 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
 
   const run = useCallback(async (): Promise<void> => {
     if (sessionId === null) {
-      toast.error('Upload a CSV file first.');
+      toast.error("Upload a CSV file first.");
       return;
     }
     if (nodes.length === 0) {
-      toast.error('Add at least one node to the canvas.');
+      toast.error("Add at least one node to the canvas.");
       return;
     }
     if (hasCycle(nodes, edges)) {
-      toast.error('Pipeline has a cycle. Remove circular connections to continue.');
+      toast.error("Pipeline has a cycle. Remove circular connections to continue.");
       return;
     }
     const linearError = validateLinearChain(nodes, edges);
@@ -46,17 +61,17 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
     if (isLargeFile) {
       const blocked = nodes.filter((node) => LARGE_BLOCKED_TYPES.has(node.type));
       if (blocked.length > 0) {
-        const names = blocked.map((node) => `"${node.data.label}"`).join(', ');
+        const names = blocked.map((node) => `"${node.data.label}"`).join(", ");
         toast.error(
           `Large-file mode: ${names} need the full dataset and are disabled. ` +
-            'Remove them or run the exported script locally instead.',
+            "Remove them or run the exported script locally instead.",
         );
         return;
       }
     }
     const disconnected = getDisconnectedNodes(nodes, edges);
     if (disconnected.length > 0) {
-      toast.error(`Disconnected nodes detected: ${disconnected.join(', ')}`);
+      toast.error(`Disconnected nodes detected: ${disconnected.join(", ")}`);
       return;
     }
     // Validate against the stable original columns. The live columnList
@@ -71,42 +86,57 @@ export function useRunPipeline(): { run: () => Promise<void>; canRun: boolean } 
       const message =
         configErrors.length === 1
           ? configErrors[0].message
-          : `Pipeline has ${configErrors.length} issues:\n${configErrors.map((e) => `• ${e.message}`).join('\n')}`;
+          : `Pipeline has ${configErrors.length} issues:\n${configErrors.map((e) => `• ${e.message}`).join("\n")}`;
       toast.error(message);
       return;
     }
 
+    // Abort any in-flight run before starting a new one.
+    currentRunController?.abort();
+    const controller = new AbortController();
+    currentRunController = controller;
     usePipelineStore.getState().setLoading(true);
     usePipelineStore.getState().setViewingNodeId(null);
-    usePipelineStore.getState().setAllNodeStatus('running');
+    usePipelineStore.getState().setAllNodeStatus("running");
     try {
       // /generate is sessionless (pure function of nodes/edges), so both
       // requests run in parallel. Codegen never blocks the result: if it
       // fails the preview still lands and the failure gets its own toast.
-      const genSettled = generateCode(sessionId, nodes, edges).then(
+      // Both share the run signal so Cancel stops everything at once.
+      const genSettled = generateCode(sessionId, nodes, edges, controller.signal).then(
         (value) => ({ ok: true as const, value }),
         (error: unknown) => ({ ok: false as const, error }),
       );
-      const result = await executePipeline(sessionId, nodes, edges);
+      const result = await executePipeline(sessionId, nodes, edges, controller.signal);
       usePipelineStore.getState().setResult(result);
-      usePipelineStore.getState().setAllNodeStatus('done');
-      toast.success(
-        `Pipeline executed — ${result.shape[0]} rows, ${result.shape[1]} columns`,
-      );
+      usePipelineStore.getState().setAllNodeStatus("done");
+      toast.success(`Pipeline executed — ${result.shape[0]} rows, ${result.shape[1]} columns`);
       const gen = await genSettled;
       if (gen.ok) {
         usePipelineStore.getState().setGeneratedCode(gen.value.code);
-      } else {
-        toast.error(`Pipeline ran, but code export failed: ${toMessage(gen.error, 'unknown error')}`);
+      } else if (!isAbort(gen.error)) {
+        toast.error(
+          `Pipeline ran, but code export failed: ${toMessage(gen.error, "unknown error")}`,
+        );
       }
-      usePipelineStore.getState().setActiveTab('preview');
+      usePipelineStore.getState().setActiveTab("preview");
     } catch (error: unknown) {
-      usePipelineStore.getState().setAllNodeStatus('error');
-      toast.error(toMessage(error, 'Pipeline execution failed.'));
+      if (isAbort(error) || controller.signal.aborted) {
+        usePipelineStore.getState().setAllNodeStatus(null);
+        toast.success("Run cancelled");
+      } else {
+        usePipelineStore.getState().setAllNodeStatus("error");
+        toast.error(toMessage(error, "Pipeline execution failed."));
+      }
     } finally {
+      if (currentRunController === controller) currentRunController = null;
       usePipelineStore.getState().setLoading(false);
     }
   }, [sessionId, nodes, edges, columnList, originalData, isLargeFile]);
 
-  return { run, canRun: sessionId !== null && nodes.length > 0 && !isLoading };
+  const cancel = useCallback((): void => {
+    cancelRun();
+  }, []);
+
+  return { run, cancel, canRun: sessionId !== null && nodes.length > 0 && !isLoading };
 }

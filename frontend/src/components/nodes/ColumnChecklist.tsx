@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { X } from "lucide-react";
 
-import { isMissingOption, withSelected } from '../../lib/schema';
-import { fieldLabelClass } from './NodeShell';
+import { isMissingOption, withSelected } from "../../lib/schema";
+import { fieldLabelClass } from "./NodeShell";
 
 interface ColumnChecklistProps {
   label: string;
@@ -47,9 +47,9 @@ export default function ColumnChecklist({
     const onPointerDown = (event: MouseEvent): void => {
       if (rootRef.current?.contains(event.target as Node) !== true) setOpen(false);
     };
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
-  }, [open ]);
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
 
   const secondaryFor = (column: string): string | undefined => {
     if (isMissingOption(columns, column) || secondaryLabels === undefined) return undefined;
@@ -60,14 +60,13 @@ export default function ColumnChecklist({
     <div ref={rootRef}>
       <p className={fieldLabelClass}>{label}</p>
       <div className="relative">
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-elevated/60 border border-line p-1.5 min-h-[38px]">
+        <div className="flex min-h-[38px] flex-wrap items-center gap-1.5 rounded-xl border border-line bg-elevated/60 p-1.5">
           {options.length === 0 && (
             <span className="px-1 py-1 text-xs text-ink2">Upload a CSV to see columns</span>
           )}
-          {options.length > 0 &&
-            selected.length === 0 && (
-              <span className="px-1 py-1 text-xs text-ink2">Pick columns…</span>
-            )}
+          {options.length > 0 && selected.length === 0 && (
+            <span className="px-1 py-1 text-xs text-ink2">Pick columns…</span>
+          )}
           {selected.map((column) => {
             const missing = isMissingOption(columns, column);
             return (
@@ -75,19 +74,19 @@ export default function ColumnChecklist({
                 key={column}
                 className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${
                   missing
-                    ? 'bg-warnsoft border-warn/30 text-warn'
-                    : 'bg-accentsoft border-accent/25 text-accenttext'
+                    ? "bg-warnsoft border-warn/30 text-warn"
+                    : "bg-accentsoft text-accenttext border-accent/25"
                 }`}
               >
-                <span className="truncate max-w-[140px]">
+                <span className="max-w-[140px] truncate">
                   {column}
-                  {missing ? ' (missing)' : ''}
+                  {missing ? " (missing)" : ""}
                 </span>
                 <button
                   type="button"
                   onClick={() => onToggle(column)}
                   aria-label={`Remove ${column}`}
-                  className="grid place-items-center rounded opacity-65 hover:opacity-100 shrink-0"
+                  className="grid shrink-0 place-items-center rounded opacity-65 hover:opacity-100"
                 >
                   <X size={10} />
                 </button>
@@ -99,14 +98,14 @@ export default function ColumnChecklist({
               type="button"
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
-              className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-1.5 py-0.5 text-[11px] font-semibold text-ink2 hover:text-ink hover:border-line-strong transition-colors"
+              className="inline-flex items-center gap-1 rounded-md border border-line bg-card px-1.5 py-0.5 text-[11px] font-semibold text-ink2 transition-colors hover:border-line-strong hover:text-ink"
             >
               + Add
             </button>
           )}
         </div>
         {open && options.length > 0 && (
-          <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-40 overflow-y-auto nowheel nopan nodrag rounded-xl bg-panel border border-line shadow-card p-1">
+          <div className="nowheel nopan nodrag absolute left-0 right-0 top-full z-30 mt-1 max-h-40 overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-card">
             {remaining.length === 0 && (
               <p className="px-2 py-1.5 text-xs text-ink3">All columns selected</p>
             )}
@@ -117,11 +116,11 @@ export default function ColumnChecklist({
                   key={column}
                   type="button"
                   onClick={() => onToggle(column)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-ink2 hover:bg-elevated text-left transition-colors"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-ink2 transition-colors hover:bg-elevated"
                 >
                   <span className="truncate">{column}</span>
                   {secondary !== undefined ? (
-                    <span className="text-xs text-ink3 shrink-0">· {secondary}</span>
+                    <span className="shrink-0 text-xs text-ink3">· {secondary}</span>
                   ) : null}
                 </button>
               );

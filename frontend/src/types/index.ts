@@ -1,25 +1,34 @@
-export type NodeType =
-  | 'drop-na'
-  | 'fill-na'
-  | 'drop-column'
-  | 'drop-duplicates'
-  | 'rename-column'
-  | 'filter-rows'
-  | 'normalize'
-  | 'encode-categorical'
-  | 'sort';
+export const NODE_TYPES = [
+  "drop-na",
+  "fill-na",
+  "drop-column",
+  "drop-duplicates",
+  "rename-column",
+  "filter-rows",
+  "normalize",
+  "encode-categorical",
+  "sort",
+] as const;
+
+export type NodeType = (typeof NODE_TYPES)[number];
 
 export interface NodeConfig {
   subset?: boolean;
   columns?: string[];
-  strategy?: 'mean' | 'median' | 'mode' | 'constant';
+  strategy?: "mean" | "median" | "mode" | "constant";
   value?: string | number;
   mapping?: Record<string, string>;
   conditions?: Array<{
     column: string;
     operator: string;
     value: string | number;
-    logic?: 'AND' | 'OR';
+    logic?: "AND" | "OR";
+    /**
+     * Client-only stable React key. Never sent to the backend —
+     * serializeNodes() strips it — so rows keep identity (and focus)
+     * across sibling add/remove. Optional for legacy configs.
+     */
+    id?: string;
   }>;
   method?: string;
   by?: string[];

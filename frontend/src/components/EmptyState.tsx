@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from "lucide-react";
 
 interface EmptyStateProps {
   icon: LucideIcon;
@@ -8,12 +8,12 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon: Icon, title, description }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center px-5 py-10">
-      <div className="h-16 w-16 rounded-2xl bg-accentsoft border border-accent/20 grid place-items-center mb-4">
+    <div className="flex h-full flex-col items-center justify-center px-5 py-10 text-center">
+      <div className="bg-accentsoft mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-accent/20">
         <Icon size={28} className="text-accenttext" />
       </div>
       <p className="text-[15px] font-extrabold tracking-tight text-ink">{title}</p>
-      <p className="text-sm text-ink3 mt-1.5 leading-relaxed max-w-[260px]">{description}</p>
+      <p className="mt-1.5 max-w-[260px] text-sm leading-relaxed text-ink3">{description}</p>
     </div>
   );
 }

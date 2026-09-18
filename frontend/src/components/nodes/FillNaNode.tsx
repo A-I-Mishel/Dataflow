@@ -1,47 +1,49 @@
-import type { NodeProps } from '@xyflow/react';
-import { Droplets } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { useMemo } from 'react';
+import type { NodeProps } from "@xyflow/react";
+import { Droplets } from "lucide-react";
+import type { ChangeEvent } from "react";
+import { useMemo } from "react";
 
-import { useNodeColumns } from '../../lib/schema';
-import { getNodeErrors } from '../../lib/validatePipeline';
-import { usePipelineStore } from '../../stores/pipelineStore';
-import type { NodeConfig } from '../../types';
-import ColumnChecklist from './ColumnChecklist';
-import NodeShell, { fieldLabelClass, inputClass } from './NodeShell';
+import { useNodeColumns } from "../../lib/schema";
+import { getNodeErrors } from "../../lib/validatePipeline";
+import { usePipelineStore } from "../../stores/pipelineStore";
+import type { NodeConfig } from "../../types";
+import ColumnChecklist from "./ColumnChecklist";
+import NodeShell, { fieldLabelClass, inputClass } from "./NodeShell";
 
-const STRATEGIES = ['mean', 'median', 'mode', 'constant'] as const;
+const STRATEGIES = ["mean", "median", "mode", "constant"] as const;
 
 export default function FillNaNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
   const originalData = usePipelineStore((state) => state.originalData);
   const resultData = usePipelineStore((state) => state.resultData);
-  const label = typeof data.label === 'string' ? data.label : 'Fill NA';
-  const config = (data.config ?? {}) as NodeConfig;
+  const label = typeof data.label === "string" ? data.label : "Fill NA";
+  // Memoized so downstream useMemo deps see a stable reference instead of a
+  // fresh `{}` on every render when no config exists yet.
+  const config = useMemo(() => (data.config ?? {}) as NodeConfig, [data.config]);
   const schemaCols = useNodeColumns(id);
   const dtypes = originalData?.dtypes ?? resultData?.dtypes;
   const errors = useMemo(
     () =>
       getNodeErrors(
-        { id, type: 'fill-na', position: { x: 0, y: 0 }, data: { label, config } },
+        { id, type: "fill-na", position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
         dtypes,
       ),
     [id, label, config, columnList, schemaCols, dtypes],
   );
-  const strategy = config.strategy ?? '';
-  const value = config.value ?? '';
+  const strategy = config.strategy ?? "";
+  const value = config.value ?? "";
   const columns = config.columns ?? [];
 
   const handleStrategyChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const next = event.target.value;
-    if (next === '') {
+    if (next === "") {
       updateNodeConfig(id, { strategy: undefined });
     } else {
       updateNodeConfig(id, {
-        strategy: next as NodeConfig['strategy'],
+        strategy: next as NodeConfig["strategy"],
       });
     }
   };
@@ -71,40 +73,31 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
       tone="blue"
       selected={selected}
       errors={errors}
-      configured={strategy !== ''}
+      configured={strategy !== ""}
     >
+      <div>
+        <p className={fieldLabelClass}>Strategy</p>
+        <select value={strategy} onChange={handleStrategyChange} className={inputClass}>
+          <option value="">Select strategy</option>
+          {STRATEGIES.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+      {strategy === "constant" && (
         <div>
-          <p className={fieldLabelClass}>Strategy</p>
-          <select
-            value={strategy}
-            onChange={handleStrategyChange}
-            className={inputClass}
-          >
-            <option value="">Select strategy</option>
-            {STRATEGIES.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <p className={fieldLabelClass}>Value</p>
+          <input type="text" value={value} onChange={handleValueChange} className={inputClass} />
         </div>
-        {strategy === 'constant' && (
-          <div>
-            <p className={fieldLabelClass}>Value</p>
-            <input
-              type="text"
-              value={value}
-              onChange={handleValueChange}
-              className={inputClass}
-            />
-          </div>
-        )}
-        <ColumnChecklist
-          label="Columns"
-          columns={schemaCols}
-          selected={columns}
-          onToggle={handleToggleColumn}
-        />
+      )}
+      <ColumnChecklist
+        label="Columns"
+        columns={schemaCols}
+        selected={columns}
+        onToggle={handleToggleColumn}
+      />
     </NodeShell>
   );
 }

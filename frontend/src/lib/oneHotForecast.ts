@@ -17,7 +17,7 @@
  * and cardinality before execution. The backend remains authoritative.
  */
 
-export type ForecastStatus = 'normal' | 'exceeds' | 'unavailable';
+export type ForecastStatus = "normal" | "exceeds" | "unavailable";
 
 export interface OneHotForecastInput {
   /** Current Encode input schema (position-aware, post upstream effects). */
@@ -77,18 +77,12 @@ function readCount(
   if (!schemaSet.has(column)) return null;
   if (!Object.prototype.hasOwnProperty.call(uniqueCounts, column)) return null;
   const value: unknown = uniqueCounts[column];
-  return typeof value === 'number' ? value : null;
+  return typeof value === "number" ? value : null;
 }
 
 export function calculateOneHotForecast(input: OneHotForecastInput): OneHotForecast {
-  const {
-    schemaCols,
-    selected,
-    rowCount,
-    uniqueCounts,
-    cardinalityAvailable,
-    oneHotMaxCells,
-  } = input;
+  const { schemaCols, selected, rowCount, uniqueCounts, cardinalityAvailable, oneHotMaxCells } =
+    input;
   const schemaSet = new Set(schemaCols);
   const selectedInSchema = selected.filter((column) => schemaSet.has(column));
 
@@ -104,9 +98,7 @@ export function calculateOneHotForecast(input: OneHotForecastInput): OneHotForec
   }
   const perColumn: ForecastColumn[] = selectedInSchema.map((column) => ({
     column,
-    uniqueValues: counts.has(column)
-      ? (counts.get(column) as number)
-      : null,
+    uniqueValues: counts.has(column) ? (counts.get(column) as number) : null,
   }));
 
   const unavailable = (): OneHotForecast => ({
@@ -119,7 +111,7 @@ export function calculateOneHotForecast(input: OneHotForecastInput): OneHotForec
     estimatedRows: null,
     estimatedCells: null,
     cardinalityAvailable,
-    status: 'unavailable',
+    status: "unavailable",
     expansionDrivers: [],
   });
 
@@ -146,14 +138,13 @@ export function calculateOneHotForecast(input: OneHotForecastInput): OneHotForec
   const keptColumns = schemaCols.length - selectedInSchema.length;
   const estimatedColumns = keptColumns + dummyColumns;
   const estimatedCells = rowCount * estimatedColumns;
-  const status: ForecastStatus = estimatedCells > oneHotMaxCells ? 'exceeds' : 'normal';
+  const status: ForecastStatus = estimatedCells > oneHotMaxCells ? "exceeds" : "normal";
 
   const expansionDrivers: string[] =
-    status === 'exceeds'
+    status === "exceeds"
       ? [...counts.keys()].filter((column) => {
           const without =
-            rowCount *
-            (keptColumns + (dummyColumns - (counts.get(column) as number)));
+            rowCount * (keptColumns + (dummyColumns - (counts.get(column) as number)));
           return without <= oneHotMaxCells;
         })
       : [];
@@ -175,7 +166,7 @@ export function calculateOneHotForecast(input: OneHotForecastInput): OneHotForec
 
 /** Compact display: 17842 → "17,842", 312500000 → "312.5M", 10000000 → "10M". */
 export function formatCompact(value: number): string {
-  if (!Number.isFinite(value)) return '—';
+  if (!Number.isFinite(value)) return "—";
   if (value >= 1_000_000) return `${parseFloat((value / 1_000_000).toFixed(1))}M`;
-  return value.toLocaleString('en-US');
+  return value.toLocaleString("en-US");
 }

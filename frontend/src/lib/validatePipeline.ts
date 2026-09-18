@@ -1,28 +1,18 @@
-import type { NodeType, PipelineEdge, PipelineNode } from '../types';
-import { computeNodeSchemas, nonNumericSelected } from './schema';
+import { NODE_TYPES } from "../types";
+import type { PipelineEdge, PipelineNode } from "../types";
+import { computeNodeSchemas, nonNumericSelected } from "./schema";
 
 export interface NodeConfigError {
   nodeId: string;
   message: string;
 }
 
-// Local whitelist for saved-pipeline validation. NOTE: third copy of the
-// node-type list (see NodeType in types/ and NODE_TYPES in PipelineCanvas) —
-// consolidate to one exported constant if a tenth type is ever added.
-const KNOWN_NODE_TYPES: readonly NodeType[] = [
-  'drop-na',
-  'fill-na',
-  'drop-column',
-  'drop-duplicates',
-  'rename-column',
-  'filter-rows',
-  'normalize',
-  'encode-categorical',
-  'sort',
-];
+// Whitelist for saved-pipeline validation — single source of truth lives in
+// types/NODE_TYPES; this alias exists so the check below reads clearly.
+const KNOWN_NODE_TYPES: readonly string[] = NODE_TYPES;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -35,19 +25,20 @@ export function validateLoadedPipeline(data: unknown): {
   nodes: PipelineNode[];
   edges: PipelineEdge[];
 } {
-  if (!isRecord(data)) throw new Error('Saved pipeline is corrupt: not an object');
+  if (!isRecord(data)) throw new Error("Saved pipeline is corrupt: not an object");
   const { nodes, edges } = data;
-  if (!Array.isArray(nodes)) throw new Error('Saved pipeline is corrupt: nodes missing');
-  if (!Array.isArray(edges)) throw new Error('Saved pipeline is corrupt: edges missing');
+  if (!Array.isArray(nodes)) throw new Error("Saved pipeline is corrupt: nodes missing");
+  if (!Array.isArray(edges)) throw new Error("Saved pipeline is corrupt: edges missing");
   const ids = new Set<string>();
   for (const [index, node] of nodes.entries()) {
     if (!isRecord(node)) throw new Error(`Saved pipeline is corrupt: node ${index} malformed`);
-    if (typeof node.id !== 'string' || node.id === '') {
+    if (typeof node.id !== "string" || node.id === "") {
       throw new Error(`Saved pipeline is corrupt: node ${index} has no id`);
     }
-    if (ids.has(node.id)) throw new Error(`Saved pipeline is corrupt: duplicate node id "${node.id}"`);
+    if (ids.has(node.id))
+      throw new Error(`Saved pipeline is corrupt: duplicate node id "${node.id}"`);
     ids.add(node.id);
-    if (typeof node.type !== 'string' || !(KNOWN_NODE_TYPES as readonly string[]).includes(node.type)) {
+    if (typeof node.type !== "string" || !KNOWN_NODE_TYPES.includes(node.type)) {
       throw new Error(
         `Saved pipeline uses unknown node type "${String(node.type)}" — it may come from a newer app version`,
       );
@@ -58,13 +49,11 @@ export function validateLoadedPipeline(data: unknown): {
   }
   for (const [index, edge] of edges.entries()) {
     if (!isRecord(edge)) throw new Error(`Saved pipeline is corrupt: edge ${index} malformed`);
-    if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
+    if (typeof edge.source !== "string" || typeof edge.target !== "string") {
       throw new Error(`Saved pipeline is corrupt: edge ${index} has no endpoints`);
     }
     if (!ids.has(edge.source) || !ids.has(edge.target)) {
-      throw new Error(
-        `Saved pipeline is corrupt: edge ${index} references a missing node`,
-      );
+      throw new Error(`Saved pipeline is corrupt: edge ${index} references a missing node`);
     }
   }
   return {
@@ -72,7 +61,7 @@ export function validateLoadedPipeline(data: unknown): {
     edges: edges.map((edge) => {
       const record = edge as Record<string, unknown>;
       return {
-        id: typeof record.id === 'string' ? record.id : `${record.source}-${record.target}`,
+        id: typeof record.id === "string" ? record.id : `${record.source}-${record.target}`,
         source: record.source as string,
         target: record.target as string,
       };
@@ -123,15 +112,12 @@ export function hasCycle(nodes: PipelineNode[], edges: PipelineEdge[]): boolean 
  * with messages that name the offending nodes.
  * Returns an error message, or null when the pipeline is a single chain.
  */
-export function validateLinearChain(
-  nodes: PipelineNode[],
-  edges: PipelineEdge[],
-): string | null {
+export function validateLinearChain(nodes: PipelineNode[], edges: PipelineEdge[]): string | null {
   if (nodes.length <= 1) return null;
   const labelOf = (id: string): string => {
     const node = nodes.find((n) => n.id === id);
     if (node === undefined) return `"${id}"`;
-    return node.data.label !== '' ? `"${node.data.label}"` : `"${node.id}"`;
+    return node.data.label !== "" ? `"${node.data.label}"` : `"${node.id}"`;
   };
   const inDegree = new Map<string, number>();
   const outDegree = new Map<string, number>();
@@ -150,12 +136,12 @@ export function validateLinearChain(
   }
   const roots = nodes.filter((n) => (inDegree.get(n.id) ?? 0) === 0);
   if (roots.length > 1) {
-    const names = roots.map((n) => labelOf(n.id)).join(', ');
+    const names = roots.map((n) => labelOf(n.id)).join(", ");
     return `Pipeline must be a single chain: ${roots.length} starting nodes (${names}). Connect them in one sequence.`;
   }
   const fork = nodes.find((n) => (outDegree.get(n.id) ?? 0) > 1);
   if (fork !== undefined) {
-    const targets = (targetsOf.get(fork.id) ?? []).map(labelOf).join(', ');
+    const targets = (targetsOf.get(fork.id) ?? []).map(labelOf).join(", ");
     return `Node ${labelOf(fork.id)} splits into multiple branches (${targets}). Only linear chains are supported — remove the extra connections.`;
   }
   const merge = nodes.find((n) => (inDegree.get(n.id) ?? 0) > 1);
@@ -227,7 +213,7 @@ function unknownHint(unknown: string[], known: Set<string>): string {
       hints.push(`"${name}" differs only by case — did you mean "${caseMatch}"?`);
     }
   }
-  return hints.length > 0 ? ` ${hints.join(' ')}` : '';
+  return hints.length > 0 ? ` ${hints.join(" ")}` : "";
 }
 
 export function validateNodeConfigs(
@@ -247,40 +233,36 @@ export function validateNodeConfigs(
   for (const node of nodes) {
     const config = node.data.config;
     const known = new Set(schemas.get(node.id) ?? columnList);
-    if (node.type === 'fill-na' && config.strategy === undefined) {
+    if (node.type === "fill-na" && config.strategy === undefined) {
       errors.push({
         nodeId: node.id,
         message: `Node "${node.data.label}" needs a fill strategy (mean, median, mode, or constant)`,
       });
     }
     if (
-      node.type === 'fill-na' &&
-      (config.strategy === 'mean' || config.strategy === 'median') &&
+      node.type === "fill-na" &&
+      (config.strategy === "mean" || config.strategy === "median") &&
       config.columns !== undefined
     ) {
       const bad = nonNumericSelected(config.columns, dtypes);
       if (bad.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" fills non-numeric columns with ${config.strategy}: ${bad.join(', ')}`,
+          message: `Node "${node.data.label}" fills non-numeric columns with ${config.strategy}: ${bad.join(", ")}`,
         });
       }
     }
-    if (
-      node.type === 'normalize' &&
-      config.method !== undefined &&
-      config.columns !== undefined
-    ) {
+    if (node.type === "normalize" && config.method !== undefined && config.columns !== undefined) {
       const bad = nonNumericSelected(config.columns, dtypes);
       if (bad.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" normalizes non-numeric columns: ${bad.join(', ')}`,
+          message: `Node "${node.data.label}" normalizes non-numeric columns: ${bad.join(", ")}`,
         });
       }
     }
     if (
-      (node.type === 'normalize' || node.type === 'encode-categorical') &&
+      (node.type === "normalize" || node.type === "encode-categorical") &&
       config.method === undefined
     ) {
       errors.push({
@@ -293,7 +275,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" references unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
+          message: `Node "${node.data.label}" references unknown columns: ${unknownColumns.join(", ")}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -302,7 +284,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" sorts by unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
+          message: `Node "${node.data.label}" sorts by unknown columns: ${unknownColumns.join(", ")}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -311,7 +293,7 @@ export function validateNodeConfigs(
       if (unknownKeys.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" renames unknown columns: ${unknownKeys.join(', ')}.${unknownHint(unknownKeys, known)}`,
+          message: `Node "${node.data.label}" renames unknown columns: ${unknownKeys.join(", ")}.${unknownHint(unknownKeys, known)}`,
         });
       }
     }
@@ -322,7 +304,7 @@ export function validateNodeConfigs(
       if (unknownColumns.length > 0) {
         errors.push({
           nodeId: node.id,
-          message: `Node "${node.data.label}" filters on unknown columns: ${unknownColumns.join(', ')}.${unknownHint(unknownColumns, known)}`,
+          message: `Node "${node.data.label}" filters on unknown columns: ${unknownColumns.join(", ")}.${unknownHint(unknownColumns, known)}`,
         });
       }
     }
@@ -344,28 +326,25 @@ export function getNodeErrors(
   const knownColumns = inputSchema ?? columnList;
 
   switch (node.type) {
-    case 'fill-na': {
-      if (!cfg.strategy) errors.push('Select a fill strategy');
-      if (
-        (cfg.strategy === 'mean' || cfg.strategy === 'median') &&
-        cfg.columns !== undefined
-      ) {
+    case "fill-na": {
+      if (!cfg.strategy) errors.push("Select a fill strategy");
+      if ((cfg.strategy === "mean" || cfg.strategy === "median") && cfg.columns !== undefined) {
         const bad = nonNumericSelected(cfg.columns, dtypes);
         if (bad.length > 0) {
-          errors.push(`Fill ${cfg.strategy} needs numeric columns: ${bad.join(', ')}`);
+          errors.push(`Fill ${cfg.strategy} needs numeric columns: ${bad.join(", ")}`);
         }
       }
       break;
     }
-    case 'drop-column':
-      if (!cfg.columns || cfg.columns.length === 0) errors.push('Select at least one column');
+    case "drop-column":
+      if (!cfg.columns || cfg.columns.length === 0) errors.push("Select at least one column");
       break;
-    case 'drop-duplicates':
+    case "drop-duplicates":
       // Empty columns = whole-row dedup; always valid.
       break;
-    case 'rename-column':
+    case "rename-column":
       if (!cfg.mapping || Object.keys(cfg.mapping).length === 0) {
-        errors.push('Add at least one mapping');
+        errors.push("Add at least one mapping");
       } else {
         for (const key of Object.keys(cfg.mapping)) {
           if (key.trim() !== key) {
@@ -374,9 +353,9 @@ export function getNodeErrors(
         }
       }
       break;
-    case 'filter-rows':
+    case "filter-rows":
       if (!cfg.conditions || cfg.conditions.length === 0) {
-        errors.push('Add at least one condition');
+        errors.push("Add at least one condition");
       } else {
         cfg.conditions.forEach((c, i) => {
           if (!c.column) errors.push(`Condition ${i + 1}: Select a column`);
@@ -384,23 +363,23 @@ export function getNodeErrors(
         });
       }
       break;
-    case 'normalize': {
-      if (!cfg.method) errors.push('Select a normalization method');
+    case "normalize": {
+      if (!cfg.method) errors.push("Select a normalization method");
       if (cfg.columns !== undefined) {
         const bad = nonNumericSelected(cfg.columns, dtypes);
         if (bad.length > 0) {
-          errors.push(`Normalize needs numeric columns: ${bad.join(', ')}`);
+          errors.push(`Normalize needs numeric columns: ${bad.join(", ")}`);
         }
       }
       break;
     }
-    case 'encode-categorical':
+    case "encode-categorical":
       // Empty columns = auto mode (backend encodes all object/category
       // columns), so it must not raise an error ring.
-      if (!cfg.method) errors.push('Select an encoding method');
+      if (!cfg.method) errors.push("Select an encoding method");
       break;
-    case 'sort':
-      if (!cfg.by || cfg.by.length === 0) errors.push('Select at least one sort column');
+    case "sort":
+      if (!cfg.by || cfg.by.length === 0) errors.push("Select at least one sort column");
       break;
   }
 

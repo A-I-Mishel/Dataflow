@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DataFlow Cleaner</title>
+    <script>
+      // Pre-paint theme: runs before CSS/first paint so reloads never flash
+      // the wrong theme. Mirrors the zustand persist key (v2 shape:
+      // { state: { theme }, version }). Defaults to dark on any failure.
+      try {
+        var stored = JSON.parse(localStorage.getItem("dataflow-pipeline") || "{}");
+        var savedTheme = stored && stored.state ? stored.state.theme : null;
+        if (savedTheme === "light") {
+          document.documentElement.classList.add("light");
+          document.documentElement.classList.remove("dark");
+        } else {
+          document.documentElement.classList.add("dark");
+          document.documentElement.classList.remove("light");
+        }
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,17 +28,8 @@
       rel="stylesheet"
     />
   </head>
-  <body class="bg-canvas text-ink antialiased overflow-hidden">
+  <body class="overflow-hidden bg-canvas text-ink antialiased">
     <div id="root"></div>
-    <script>
-      try {
-        var stored = JSON.parse(localStorage.getItem('dataflow-pipeline') || '{}');
-        if (stored && stored.state && stored.state.theme === 'light') {
-          document.documentElement.classList.add('light');
-          document.documentElement.classList.remove('dark');
-        }
-      } catch (e) {}
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

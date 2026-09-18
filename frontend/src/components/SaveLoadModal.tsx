@@ -1,29 +1,29 @@
-import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import toast from 'react-hot-toast';
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import toast from "react-hot-toast";
 
-import { deletePipeline, getPipelines, loadPipeline, savePipeline } from '../lib/api';
-import { confirmDiscardResult } from '../lib/confirmDiscard';
-import { validateLoadedPipeline } from '../lib/validatePipeline';
-import { usePipelineStore } from '../stores/pipelineStore';
+import { useConfirm } from "../hooks/useConfirm";
+import { deletePipeline, getPipelines, loadPipeline, savePipeline } from "../lib/api";
+import { validateLoadedPipeline } from "../lib/validatePipeline";
+import { usePipelineStore } from "../stores/pipelineStore";
 
 interface SaveLoadModalProps {
   onClose: () => void;
 }
 
-type ModalTab = 'save' | 'load';
+type ModalTab = "save" | "load";
 
 function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return iso;
   const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) return "just now";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? '' : 's'} ago`;
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 function toMessage(error: unknown, fallback: string): string {
@@ -31,13 +31,14 @@ function toMessage(error: unknown, fallback: string): string {
 }
 
 export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
-  const [tab, setTab] = useState<ModalTab>('save');
-  const [name, setName] = useState('');
+  const [tab, setTab] = useState<ModalTab>("save");
+  const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const nodes = usePipelineStore((state) => state.nodes);
   const savedPipelines = usePipelineStore((state) => state.savedPipelines);
   const setSavedPipelines = usePipelineStore((state) => state.setSavedPipelines);
   const setCanvas = usePipelineStore((state) => state.setCanvas);
+  const { confirm, dialog: confirmDialog, isOpen: isConfirmOpen } = useConfirm();
 
   const refresh = useCallback((): void => {
     getPipelines()
@@ -45,7 +46,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
         setSavedPipelines(list);
       })
       .catch((error: unknown) => {
-        toast.error(toMessage(error, 'Failed to load pipelines'));
+        toast.error(toMessage(error, "Failed to load pipelines"));
       });
   }, [setSavedPipelines]);
 
@@ -55,176 +56,197 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
+      // Let the nested confirm dialog own Esc while it is open.
+      if (event.key === "Escape" && !isConfirmOpen) {
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, isConfirmOpen]);
 
   const handleSave = (): void => {
     const trimmed = name.trim();
     // Read fresh nodes/edges at click time to avoid stale closure if modal was open while canvas changed
     const { nodes: freshNodes, edges: freshEdges } = usePipelineStore.getState();
-    if (trimmed === '' || freshNodes.length === 0 || isSaving) return;
+    if (trimmed === "" || freshNodes.length === 0 || isSaving) return;
     setIsSaving(true);
     savePipeline(trimmed, freshNodes, freshEdges)
       .then(() => getPipelines())
       .then((list) => {
         setSavedPipelines(list);
-        setName('');
-        setTab('load');
+        setName("");
+        setTab("load");
         toast.success(`Saved pipeline "${trimmed}"`);
       })
       .catch((error: unknown) => {
-        toast.error(toMessage(error, 'Save failed'));
+        toast.error(toMessage(error, "Save failed"));
       })
       .finally(() => setIsSaving(false));
   };
 
   const handleLoad = (id: string, pipelineName: string): void => {
-    if (!confirmDiscardResult()) return;
-    loadPipeline(id)
-      .then((data) => {
-        let validated;
-        try {
-          validated = validateLoadedPipeline(data);
-        } catch (error: unknown) {
-          toast.error(toMessage(error, 'Saved pipeline is corrupt'));
-          return;
-        }
-        setCanvas(validated.nodes, validated.edges);
-        toast.success(`Loaded pipeline "${pipelineName}"`);
-        onClose();
-      })
-      .catch((error: unknown) => {
-        toast.error(toMessage(error, 'Load failed'));
-      });
+    const needsConfirm = usePipelineStore.getState().resultData !== null;
+    const proceed = needsConfirm
+      ? confirm({
+          title: "Discard run result?",
+          message:
+            "This will discard the current run result (undo will not bring it back). Continue?",
+          confirmLabel: "Discard",
+          danger: true,
+        })
+      : Promise.resolve(true);
+    void proceed.then((ok) => {
+      if (!ok) return;
+      loadPipeline(id)
+        .then((data) => {
+          let validated;
+          try {
+            validated = validateLoadedPipeline(data);
+          } catch (error: unknown) {
+            toast.error(toMessage(error, "Saved pipeline is corrupt"));
+            return;
+          }
+          setCanvas(validated.nodes, validated.edges);
+          toast.success(`Loaded pipeline "${pipelineName}"`);
+          onClose();
+        })
+        .catch((error: unknown) => {
+          toast.error(toMessage(error, "Load failed"));
+        });
+    });
   };
 
   const handleDelete = (id: string, pipelineName: string): void => {
-    const confirmed = window.confirm(`Delete saved pipeline "${pipelineName}"?`);
-    if (!confirmed) return;
-    deletePipeline(id)
-      .then(() => getPipelines())
-      .then((list) => {
-        setSavedPipelines(list);
-        toast.success(`Deleted pipeline "${pipelineName}"`);
-      })
-      .catch((error: unknown) => {
-        toast.error(toMessage(error, 'Delete failed'));
-      });
+    void confirm({
+      title: "Delete saved pipeline?",
+      message: `Delete saved pipeline "${pipelineName}"?`,
+      confirmLabel: "Delete",
+      danger: true,
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      deletePipeline(id)
+        .then(() => getPipelines())
+        .then((list) => {
+          setSavedPipelines(list);
+          toast.success(`Deleted pipeline "${pipelineName}"`);
+        })
+        .catch((error: unknown) => {
+          toast.error(toMessage(error, "Delete failed"));
+        });
+    });
   };
 
-  if (typeof document === 'undefined') return null;
+  if (typeof document === "undefined") return null;
   const modal = (
     <div
-      className="fixed inset-0 bg-[rgb(var(--canvas)/0.72)] backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(var(--canvas)/0.72)] p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-panel border border-line rounded-[24px] w-[30rem] max-h-[82vh] flex flex-col shadow-card overflow-hidden"
+        className="flex max-h-[82vh] w-[30rem] flex-col overflow-hidden rounded-[24px] border border-line bg-panel shadow-card"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="p-1 m-2 rounded-full bg-elevated border border-line flex">
+        <div className="m-2 flex rounded-full border border-line bg-elevated p-1">
           <button
             type="button"
-            onClick={() => setTab('save')}
+            onClick={() => setTab("save")}
             className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-all ${
-              tab === 'save'
-                ? 'bg-ink text-panel shadow-md'
-                : 'text-ink3 hover:text-ink'
+              tab === "save" ? "bg-ink text-panel shadow-md" : "text-ink3 hover:text-ink"
             }`}
           >
             Save New
           </button>
           <button
             type="button"
-            onClick={() => setTab('load')}
+            onClick={() => setTab("load")}
             className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-all ${
-              tab === 'load'
-                ? 'bg-ink text-panel shadow-md'
-                : 'text-ink3 hover:text-ink'
+              tab === "load" ? "bg-ink text-panel shadow-md" : "text-ink3 hover:text-ink"
             }`}
           >
             Load Saved
           </button>
         </div>
 
-        {tab === 'save' ? (
-          <div className="p-5 space-y-4">
+        {tab === "save" ? (
+          <div className="space-y-4 p-5">
             <div>
-              <p className="text-[11px] font-extrabold tracking-widest uppercase text-ink3 mb-2">Pipeline name</p>
+              <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-ink3">
+                Pipeline name
+              </p>
               <input
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
+                  if (event.key === "Enter") {
                     handleSave();
                   }
                 }}
                 placeholder="e.g. My Churn Cleaning"
-                className="w-full rounded-2xl bg-elevated/60 border border-line px-4 py-3 text-sm text-ink placeholder:text-ink2 focus:outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent/10"
+                className="w-full rounded-2xl border border-line bg-elevated/60 px-4 py-3 text-sm text-ink placeholder:text-ink2 focus:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent/10"
               />
             </div>
             <button
               type="button"
               onClick={handleSave}
-              disabled={name.trim() === '' || nodes.length === 0 || isSaving}
-              className={`w-full rounded-full px-4 py-3 text-sm font-extrabold transition-all inline-flex items-center justify-center gap-2 ${
-                name.trim() === '' || nodes.length === 0 || isSaving
-                  ? 'bg-elevated text-ink3 cursor-not-allowed border border-line'
-                  : 'bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white shadow-md hover:scale-[1.01] active:scale-[0.99]'
+              disabled={name.trim() === "" || nodes.length === 0 || isSaving}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold transition-all ${
+                name.trim() === "" || nodes.length === 0 || isSaving
+                  ? "cursor-not-allowed border border-line bg-elevated text-ink3"
+                  : "bg-accentbtn hover:bg-accentbtnhover active:bg-accentbtnpressed text-white shadow-md hover:scale-[1.01] active:scale-[0.99]"
               }`}
             >
               {isSaving ? (
                 <>
-                  <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                   Saving…
                 </>
               ) : (
-                'Save Current Pipeline'
+                "Save Current Pipeline"
               )}
             </button>
-            {nodes.length === 0 && <p className="text-xs text-center text-amber-500 font-medium">Add at least one node to save</p>}
+            {nodes.length === 0 && (
+              <p className="text-center text-xs font-medium text-amber-500">
+                Add at least one node to save
+              </p>
+            )}
           </div>
         ) : (
-          <div className="p-5 overflow-y-auto">
+          <div className="overflow-y-auto p-5">
             {savedPipelines.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="mx-auto h-12 w-12 rounded-2xl bg-elevated border border-line grid place-items-center mb-3">📂</div>
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl border border-line bg-elevated">
+                  📂
+                </div>
                 <p className="text-sm font-bold text-ink">No saved pipelines yet</p>
-                <p className="text-xs text-ink3 mt-1">Save one from the Save New tab.</p>
+                <p className="mt-1 text-xs text-ink3">Save one from the Save New tab.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
                 {savedPipelines.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-card border border-line px-4 py-3 hover:border-accent/20 transition-colors"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 transition-colors hover:border-accent/20"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-ink truncate">
-                        {item.name}
-                      </p>
+                      <p className="truncate text-sm font-bold text-ink">{item.name}</p>
                       <p className="text-xs text-ink3">{timeAgo(item.created_at)}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleLoad(item.id, item.name)}
-                        className="rounded-full bg-ink text-panel hover:bg-ink/90 px-4 py-1.5 text-xs font-bold"
+                        className="rounded-full bg-ink px-4 py-1.5 text-xs font-bold text-panel hover:bg-ink/90"
                       >
                         Load
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id, item.name)}
-                        className="rounded-full bg-elevated border border-line hover:border-red-500/30 px-3 py-1.5 text-xs font-bold text-ink3 hover:text-red-500"
+                        className="rounded-full border border-line bg-elevated px-3 py-1.5 text-xs font-bold text-ink3 hover:border-red-500/30 hover:text-red-500"
                       >
                         Delete
                       </button>
@@ -234,9 +256,15 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
               </div>
             )}
           </div>
-          )}
+        )}
       </div>
     </div>
   );
-  return createPortal(modal, document.body);
+  return createPortal(
+    <>
+      {modal}
+      {confirmDialog}
+    </>,
+    document.body,
+  );
 }

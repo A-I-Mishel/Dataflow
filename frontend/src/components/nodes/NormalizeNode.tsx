@@ -1,37 +1,39 @@
-import type { NodeProps } from '@xyflow/react';
-import { Scale } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { useMemo } from 'react';
+import type { NodeProps } from "@xyflow/react";
+import { Scale } from "lucide-react";
+import type { ChangeEvent } from "react";
+import { useMemo } from "react";
 
-import { useNodeColumns } from '../../lib/schema';
-import { getNodeErrors } from '../../lib/validatePipeline';
-import { usePipelineStore } from '../../stores/pipelineStore';
-import type { NodeConfig } from '../../types';
-import ColumnChecklist from './ColumnChecklist';
-import NodeShell, { fieldLabelClass, inputClass } from './NodeShell';
+import { useNodeColumns } from "../../lib/schema";
+import { getNodeErrors } from "../../lib/validatePipeline";
+import { usePipelineStore } from "../../stores/pipelineStore";
+import type { NodeConfig } from "../../types";
+import ColumnChecklist from "./ColumnChecklist";
+import NodeShell, { fieldLabelClass, inputClass } from "./NodeShell";
 
-const METHODS = ['min-max', 'z-score'];
+const METHODS = ["min-max", "z-score"];
 
 export default function NormalizeNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
   const originalData = usePipelineStore((state) => state.originalData);
   const resultData = usePipelineStore((state) => state.resultData);
-  const label = typeof data.label === 'string' ? data.label : 'Normalize';
-  const config = (data.config ?? {}) as NodeConfig;
+  const label = typeof data.label === "string" ? data.label : "Normalize";
+  // Memoized so downstream useMemo deps see a stable reference instead of a
+  // fresh `{}` on every render when no config exists yet.
+  const config = useMemo(() => (data.config ?? {}) as NodeConfig, [data.config]);
   const schemaCols = useNodeColumns(id);
   const dtypes = originalData?.dtypes ?? resultData?.dtypes;
   const errors = useMemo(
     () =>
       getNodeErrors(
-        { id, type: 'normalize', position: { x: 0, y: 0 }, data: { label, config } },
+        { id, type: "normalize", position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
         dtypes,
       ),
     [id, label, config, columnList, schemaCols, dtypes],
   );
-  const method = config.method ?? '';
+  const method = config.method ?? "";
   const columns = config.columns ?? [];
 
   const handleMethodChange = (event: ChangeEvent<HTMLSelectElement>): void => {
@@ -59,29 +61,25 @@ export default function NormalizeNode({ id, data, selected }: NodeProps) {
       tone="purple"
       selected={selected}
       errors={errors}
-      configured={method !== '' || columns.length > 0}
+      configured={method !== "" || columns.length > 0}
     >
-        <div>
-          <p className={fieldLabelClass}>Method</p>
-          <select
-            value={method}
-            onChange={handleMethodChange}
-            className={inputClass}
-          >
-            <option value="">Select method</option>
-            {METHODS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-        <ColumnChecklist
-          label="Columns"
-          columns={schemaCols}
-          selected={columns}
-          onToggle={handleToggleColumn}
-        />
+      <div>
+        <p className={fieldLabelClass}>Method</p>
+        <select value={method} onChange={handleMethodChange} className={inputClass}>
+          <option value="">Select method</option>
+          {METHODS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+      <ColumnChecklist
+        label="Columns"
+        columns={schemaCols}
+        selected={columns}
+        onToggle={handleToggleColumn}
+      />
     </NodeShell>
   );
 }

@@ -1,25 +1,27 @@
-import type { NodeProps } from '@xyflow/react';
-import { Trash2 } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { useMemo } from 'react';
+import type { NodeProps } from "@xyflow/react";
+import { Trash2 } from "lucide-react";
+import type { ChangeEvent } from "react";
+import { useMemo } from "react";
 
-import { useNodeColumns } from '../../lib/schema';
-import { getNodeErrors } from '../../lib/validatePipeline';
-import { usePipelineStore } from '../../stores/pipelineStore';
-import type { NodeConfig } from '../../types';
-import ColumnChecklist from './ColumnChecklist';
-import NodeShell from './NodeShell';
+import { useNodeColumns } from "../../lib/schema";
+import { getNodeErrors } from "../../lib/validatePipeline";
+import { usePipelineStore } from "../../stores/pipelineStore";
+import type { NodeConfig } from "../../types";
+import ColumnChecklist from "./ColumnChecklist";
+import NodeShell from "./NodeShell";
 
 export default function DropNaNode({ id, data, selected }: NodeProps) {
   const updateNodeConfig = usePipelineStore((state) => state.updateNodeConfig);
   const columnList = usePipelineStore((state) => state.columnList);
-  const label = typeof data.label === 'string' ? data.label : 'Drop NA';
-  const config = (data.config ?? {}) as NodeConfig;
+  const label = typeof data.label === "string" ? data.label : "Drop NA";
+  // Memoized so downstream useMemo deps see a stable reference instead of a
+  // fresh `{}` on every render when no config exists yet.
+  const config = useMemo(() => (data.config ?? {}) as NodeConfig, [data.config]);
   const schemaCols = useNodeColumns(id);
   const errors = useMemo(
     () =>
       getNodeErrors(
-        { id, type: 'drop-na', position: { x: 0, y: 0 }, data: { label, config } },
+        { id, type: "drop-na", position: { x: 0, y: 0 }, data: { label, config } },
         columnList,
         schemaCols,
       ),
@@ -55,18 +57,18 @@ export default function DropNaNode({ id, data, selected }: NodeProps) {
       errors={errors}
       configured={subset || columns.length > 0}
     >
-        <label className="flex items-center gap-2 text-xs font-medium text-ink2">
-          <input type="checkbox" checked={subset} onChange={handleSubsetChange} />
-          Subset only selected columns
-        </label>
-        {subset && (
-          <ColumnChecklist
-            label="Columns"
-            columns={schemaCols}
-            selected={columns}
-            onToggle={handleToggleColumn}
-          />
-        )}
+      <label className="flex items-center gap-2 text-xs font-medium text-ink2">
+        <input type="checkbox" checked={subset} onChange={handleSubsetChange} />
+        Subset only selected columns
+      </label>
+      {subset && (
+        <ColumnChecklist
+          label="Columns"
+          columns={schemaCols}
+          selected={columns}
+          onToggle={handleToggleColumn}
+        />
+      )}
     </NodeShell>
   );
 }
