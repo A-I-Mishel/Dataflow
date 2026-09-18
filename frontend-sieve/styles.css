@@ -217,6 +217,16 @@ textarea{min-height:76px;resize:vertical;line-height:1.6}
 .repbox{border:1.5px solid var(--line2);border-radius:9px;padding:10px 12px;font-size:11px;color:var(--ink2);line-height:1.6;margin-bottom:8px}
 .repbox b{color:var(--ink)}
 .repbox .rsamp{font-family:var(--mono);font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---- saved templates dialog ---- */
+.trow{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.trow input{flex:1;min-width:0}
+.tnote{font-size:11px;color:var(--ink2);line-height:1.6;border:1px dashed var(--line2);border-radius:9px;padding:9px 12px;margin-bottom:10px}
+.tempty{font-size:11.5px;color:var(--ink3);padding:14px 4px;text-align:center}
+#tplList{display:grid;gap:7px;max-height:min(46vh,380px);overflow-y:auto}
+#tplList .trow{border:1.5px solid var(--line2);border-radius:9px;padding:8px 10px;margin-bottom:0;align-items:center}
+.tname{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdate{font-size:10px;color:var(--ink3);white-space:nowrap}
+.tgrow{flex:1}
 select:focus,input:focus{border-color:var(--ink)}
 .seg{display:flex;border:1.5px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--card)}
 .seg button{flex:1;padding:7px 3px;font-size:10.5px;font-weight:600;background:none;border:none;border-right:1px solid var(--line);color:var(--ink2);cursor:pointer}

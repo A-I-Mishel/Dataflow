@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { sieveToBackend } from '../api.js';
 import { EngineFactory } from '../engine.js';
 import { getApiBase, getApiSource } from '../api.js';
+import { linearEdges } from '../api.js';
 
 const one = (type, params) => [{ type, enabled: true, params }];
 
@@ -290,5 +291,16 @@ describe('backend origin transparency', () => {
     // soft into local-only mode, never throw at import or call time.
     assert.equal(getApiBase(), '');
     assert.equal(getApiSource(), '');
+  });
+});
+
+describe('template payloads', () => {
+  it('builds linear edges matching the save contract', () => {
+    assert.deepEqual(linearEdges([]), []);
+    assert.deepEqual(linearEdges([{ id: 'a' }]), []);
+    assert.deepEqual(linearEdges([{ id: 'a' }, { id: 'b' }, { id: 'c' }]), [
+      { source: 'a', target: 'b' },
+      { source: 'b', target: 'c' },
+    ]);
   });
 });

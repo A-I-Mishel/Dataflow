@@ -1,5 +1,5 @@
 import { EngineFactory, py } from './engine.js';
-import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId } from './api.js';
+import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId, apiListPipelines, apiSavePipeline, apiLoadPipeline, apiDeletePipeline } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -1770,9 +1770,102 @@ function setDrawer(which){
   document.body.classList.toggle('show-pal', which === 'pal');
   document.body.classList.toggle('show-insp', which === 'insp');
 }
+/* ==================================================================
+   SERVER TEMPLATES — saved pipelines live on the backend (never the
+   dataset). Local-only mode has no templates; the dialog says so.
+   ================================================================== */
+function snapshotNodesForSave(){
+  return state.nodes.map(n => ({
+    type: n.type, enabled: n.enabled,
+    params: JSON.parse(JSON.stringify(n.params)),
+  }));
+}
+async function refreshTemplateList(){
+  const host = $('#tplList'), note = $('#tplNote');
+  try {
+    const items = await apiListPipelines(backend.base);
+    note.hidden = true;
+    if (!items.length){
+      host.innerHTML = '<div class="tempty">No saved templates yet — name the current pipeline above and save it.</div>';
+      return;
+    }
+    host.innerHTML = '';
+    for (const t of items){
+      const row = elDiv('trow');
+      const when = t.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '';
+      row.innerHTML = `<span class="tname" title="${esc(t.name)}">${esc(t.name)}</span>`
+        + (when ? `<span class="tdate">${esc(when)}</span>` : '')
+        + `<span class="tgrow"></span>`;
+      const apply = document.createElement('button');
+      apply.type = 'button'; apply.className = 'btn sm'; apply.textContent = 'Apply';
+      apply.onclick = () => applyTemplate(t.id, t.name);
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'btn sm danger'; del.textContent = 'Delete';
+      del.onclick = async () => {
+        if (!confirm(`Delete template "${t.name}"?`)) return;
+        try {
+          await apiDeletePipeline(backend.base, t.id);
+          toast(`Deleted “${t.name}”`, 'trash');
+          await refreshTemplateList();
+        } catch (err){ toast('Delete failed: ' + err.message, 'alert'); }
+      };
+      row.append(apply, del);
+      host.append(row);
+    }
+  } catch (err){
+    note.hidden = false;
+    note.textContent = 'Could not load templates: ' + err.message;
+    host.innerHTML = '';
+  }
+}
+async function openTemplates(){
+  const dlg = $('#dlgTemplates'), note = $('#tplNote');
+  if (!backend.base){
+    note.hidden = false;
+    note.textContent = 'Connect a backend first — templates live on the server, and this browser is local-only.';
+    $('#tplList').innerHTML = '';
+  } else {
+    note.hidden = true;
+    await refreshTemplateList();
+  }
+  if (!dlg.open) dlg.showModal();
+}
+async function saveCurrentTemplate(){
+  try {
+    if (!backend.base){ toast('Connect a backend first — templates live on the server', 'alert'); return; }
+    if (!state.data){ toast('Load a dataset first', 'alert'); return; }
+    const name = $('#inpTemplateName').value;
+    await apiSavePipeline(backend.base, name, snapshotNodesForSave());
+    $('#inpTemplateName').value = '';
+    toast('Template saved', 'check');
+    await refreshTemplateList();
+  } catch (err){ toast('Save failed: ' + err.message, 'alert'); }
+}
+async function applyTemplate(id, name){
+  try {
+    if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
+    const t = await apiLoadPipeline(backend.base, id);
+    const nodes = (t.nodes || []).filter(x => x && E.OPS[x.type]).map(x => {
+      const n = makeNode(x.type);
+      n.enabled = x.enabled !== false;
+      try { n.params = { ...n.params, ...(x.params || {}) }; } catch (e){}
+      return n;
+    });
+    if (!nodes.length){ toast('Template has no usable steps', 'alert'); return; }
+    state.nodes = nodes;
+    state.selected = null;
+    state.viewStep = 'final';
+    arrange();
+    fitView();
+    requestRun(0);
+    renderNodes(); renderInspector(); renderPreview(); renderCode();
+    pushHist('applied template ' + name);
+    $('#dlgTemplates').close();
+    toast(`“${name}” applied — ${nodes.length} step${nodes.length === 1 ? '' : 's'}`, 'check');
+  } catch (err){ toast('Apply failed: ' + err.message, 'alert'); }
+}
 function initChrome(){
-  $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);
-  $('#btnPalette').innerHTML = ic('plus',14) + ' Steps';
+  $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);  $('#btnPalette').innerHTML = ic('plus',14) + ' Steps';
   $('#btnPalette').onclick = () => setDrawer(document.body.classList.contains('show-pal') ? null : 'pal');
   $('#btnInspector').innerHTML = ic('columns',14) + ' Inspector';
   $('#btnInspector').onclick = () => setDrawer(document.body.classList.contains('show-insp') ? null : 'insp');
@@ -1839,6 +1932,18 @@ function initChrome(){
   $('#btnCloseKeys').onclick = () => dlg.close();
   $('#btnSelfTest').onclick = () => runSelfTests();
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+  $('#btnTemplates').innerHTML = ic('save',14) + ' Saved';
+  $('#btnTemplates').onclick = openTemplates;
+  const tdlg = $('#dlgTemplates');
+  $('#btnOkTemplates').onclick = () => tdlg.close();
+  $('#btnCloseTemplates').onclick = () => tdlg.close();
+  $('#btnSaveTemplate').onclick = saveCurrentTemplate;
+  $('#inpTemplateName').addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); saveCurrentTemplate(); }
+    e.stopPropagation();
+  });
+  tdlg.addEventListener('click', e => { if (e.target === tdlg) tdlg.close(); });
 
   const ov = $('#dropOverlay');
   ['dragover','dragenter'].forEach(ev => window.addEventListener(ev, e => {

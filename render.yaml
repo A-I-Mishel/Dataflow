@@ -20,9 +20,10 @@ services:
         # slash) or browsers block the API.
         value: https://dataflow-cleaner.vercel.app
       - key: PIPELINES_READ_ONLY
-        # Shared templates are anonymous: listing/reading stays open but
-        # save/delete are refused (403) so strangers cannot vandalize them.
-        value: "true"
+        # Shared templates are user-facing now (Saved button in the app):
+        # listing/reading is open to all, save/delete allowed. Flip back to
+        # "true" if template vandalism ever appears.
+        value: "false"
       # Uncomment the DATABASE_URL block below together with the database
       # below to keep saved pipelines across sleeps (free Postgres expires
       # after 90 days; without it the app uses SQLite on ephemeral disk).

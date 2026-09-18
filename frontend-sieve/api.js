@@ -142,6 +142,38 @@ export function getSessionId() {
   try { return localStorage.getItem(LS_SES) || ''; } catch (_) { return ''; }
 }
 
+/* ---------- shared pipeline templates (server) ---------- */
+// The backend stores step templates (nodes + linear edges); datasets are
+// never uploaded with them. All four are inert without a configured
+// backend — callers check getApiBase() first and explain local-only mode.
+
+export const apiListPipelines = (base) => req('/pipelines', base, {}, 15000);
+
+export function apiSavePipeline(base, name, nodes) {
+  const clean = String(name || '').trim();
+  if (!clean) throw new Error('name the template');
+  if (!nodes.length) throw new Error('nothing to save — the pipeline is empty');
+  return req('/pipelines/save', base, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: clean, nodes, edges: linearEdges(nodes) }),
+  }, 30000);
+}
+
+export const apiLoadPipeline = (base, id) =>
+  req(`/pipelines/${encodeURIComponent(id)}`, base, {}, 15000);
+
+export function apiDeletePipeline(base, id) {
+  return req(`/pipelines/${encodeURIComponent(id)}`, base, { method: 'DELETE' }, 15000);
+}
+
+// Sieve pipelines always run as a linear chain; edges are derived from
+// node order so saved templates stay minimal and unambiguous.
+export function linearEdges(nodes) {
+  const ids = nodes.map((n) => n.id);
+  return ids.slice(1).map((id, k) => ({ source: ids[k], target: id }));
+}
+
 /* ---------- sieve → backend node translation ---------- */
 
 const FILTER_OP = { '=': '==', '≠': '!=', '>': '>', '<': '<', '≥': '>=', '≤': '<=', contains: 'contains' };

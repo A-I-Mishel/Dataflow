@@ -84,6 +84,18 @@ keeps first), `standardize` (new column vs in-place normalize),
 `convert-type`→number/text (no backend cast op), `clean-text`,
 `remove-outliers`.
 
+## Saved templates (server)
+
+The topbar `Saved` button opens the template library: name the current
+pipeline to save it, Apply to replace the canvas with a template, Delete
+to remove one. Templates store steps only — never datasets — and applying
+one to a different dataset surfaces the usual per-node errors for columns
+that do not exist (undo restores the previous pipeline).
+
+Templates need a backend (local-only mode explains itself in the dialog)
+and live in its database: on free-tier hosting they reset when the service
+sleeps. `PIPELINES_READ_ONLY=true` turns the library read-only.
+
 ## Cutover status
 
 Done — `frontend/` (React) retired. This directory is the production

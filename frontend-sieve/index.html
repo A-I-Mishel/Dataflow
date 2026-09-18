@@ -28,6 +28,7 @@
     <button class="btn ghost" id="btnBackend" title="Backend API status — click to configure (empty = local-only)"></button>
     <span class="savechip" id="saveChip" title="Your dataset and pipeline are stored in this browser only">autosaves locally</span>
     <button class="btn ghost" id="btnSamples"></button>
+    <button class="btn ghost" id="btnTemplates" title="Saved pipeline templates"></button>
     <button class="btn ghost" id="btnUpload"></button>
     <input type="file" id="fileInput" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden>
     <button class="btn ghost" id="btnReset" title="Clear the saved workspace from this browser"></button>
@@ -122,6 +123,21 @@
   <b>Drop your CSV here</b><span>it will become the source of your pipeline</span>
 </div></div>
 <div id="popSample" hidden></div>
+
+<dialog id="dlgTemplates" aria-label="Saved pipeline templates">
+  <div class="dlg-h"><b>Saved templates</b><button class="navb" id="btnCloseTemplates" aria-label="Close">✕</button></div>
+  <div class="dlg-b">
+    <div class="trow">
+      <input type="text" id="inpTemplateName" placeholder="Name this pipeline…" maxlength="128" aria-label="Template name">
+      <button class="btn sm primary" id="btnSaveTemplate">Save current</button>
+    </div>
+    <div id="tplNote" class="tnote" hidden></div>
+    <div id="tplList"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn sm primary" id="btnOkTemplates">Done</button>
+  </div>
+</dialog>
 
 <dialog id="dlgKeys" aria-label="Keyboard shortcuts">
   <div class="dlg-h"><b>Shortcuts &amp; diagnostics</b><button class="navb" id="btnCloseKeys" aria-label="Close">✕</button></div>
