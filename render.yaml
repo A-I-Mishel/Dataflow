@@ -7,7 +7,12 @@ services:
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    # Pinned to one worker ON PURPOSE: sessions/results live in process
+    # memory (see backend/session_store.py). Any --workers > 1, autoscale
+    # replica, or second instance shards sessions (upload on A → 404 on B).
+    # Migrate to a shared store before scaling; see README.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
     envVars:
       - key: FRONTEND_URLS
         # Replace with your Vercel URL after deploying the frontend.

@@ -1,27 +1,35 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from constants import ONE_HOT_MAX_CELLS
 
 # Note: Any is unavoidable here — NodeConfig.value/conditions and API previews
 # must accept arbitrary JSON values coming from user CSVs and pipeline configs.
 
+# Structural payload caps (DoS guard): real pipelines have a handful of nodes
+# and conditions; unbounded lists let one request burn CPU/RAM (each step
+# deep-copies the frame). Violations fail fast with 422, before any compute.
+MAX_NODES = 100
+MAX_EDGES = 200
+MAX_LIST_ITEMS = 200
+MAX_ID_LENGTH = 128
+
 
 class NodeConfig(BaseModel):
     subset: Optional[bool] = None
-    columns: Optional[List[str]] = None
+    columns: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
     strategy: Optional[str] = None
     value: Optional[Any] = None
-    mapping: Optional[Dict[str, str]] = None
-    conditions: Optional[List[Dict[str, Any]]] = None
+    mapping: Optional[Dict[str, str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    conditions: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=MAX_LIST_ITEMS)
     method: Optional[str] = None
-    by: Optional[List[str]] = None
+    by: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
     ascending: Optional[bool] = True
 
 
 class PipelineNode(BaseModel):
-    id: str
+    id: str = Field(max_length=MAX_ID_LENGTH)
     type: Literal[
         "drop-na",
         "fill-na",
@@ -37,9 +45,9 @@ class PipelineNode(BaseModel):
 
 
 class ExecuteRequest(BaseModel):
-    session_id: str
-    nodes: List[PipelineNode]
-    edges: List[Dict[str, str]]
+    session_id: str = Field(max_length=MAX_ID_LENGTH)
+    nodes: List[PipelineNode] = Field(max_length=MAX_NODES)
+    edges: List[Dict[str, str]] = Field(max_length=MAX_EDGES)
 
 
 class UploadResponse(BaseModel):

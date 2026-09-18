@@ -64,6 +64,57 @@ def _find_cycle(adjacency: Dict[str, List[str]]) -> Optional[List[str]]:
     return None
 
 
+def validate_linear_chain(
+    nodes: List[PipelineNode], edges: List[Dict[str, str]]
+) -> None:
+    """Reject fork/merge/multi-root shapes: the engine applies nodes
+    sequentially and cannot branch or merge dataframes.
+
+    Mirrors frontend validateLinearChain (same messages, node ids instead of
+    labels since the wire model carries no labels). Raises ValueError, which
+    callers surface as HTTP 400. Assumes refs are valid — call after
+    topological_sort, which enforces that.
+    """
+    if len(nodes) <= 1:
+        return
+    in_degree: Dict[str, int] = {node.id: 0 for node in nodes}
+    out_degree: Dict[str, int] = {node.id: 0 for node in nodes}
+    targets_of: Dict[str, List[str]] = {node.id: [] for node in nodes}
+    for edge in edges:
+        source = edge.get("source")
+        target = edge.get("target")
+        if source not in in_degree or target not in in_degree:
+            continue
+        out_degree[source] += 1
+        in_degree[target] += 1
+        targets_of[source].append(target)
+    roots: List[str] = [nid for nid, deg in in_degree.items() if deg == 0]
+    if len(roots) > 1:
+        names = ", ".join(f'"{nid}"' for nid in roots)
+        raise ValueError(
+            f"Pipeline must be a single chain: {len(roots)} starting nodes "
+            f"({names}). Connect them in one sequence."
+        )
+    for node in nodes:
+        if out_degree[node.id] > 1:
+            targets = ", ".join(f'"{t}"' for t in targets_of[node.id])
+            raise ValueError(
+                f'Node "{node.id}" splits into multiple branches ({targets}). '
+                "Only linear chains are supported — remove the extra connections."
+            )
+    for node in nodes:
+        if in_degree[node.id] > 1:
+            raise ValueError(
+                f'Node "{node.id}" has multiple incoming connections. '
+                "Only linear chains are supported — keep one."
+            )
+    if len(edges) != len(nodes) - 1:
+        raise ValueError(
+            f"Pipeline must be a single chain of {len(nodes)} nodes "
+            f"({len(nodes) - 1} connections), but found {len(edges)} connections."
+        )
+
+
 def topological_sort(
     nodes: List[PipelineNode], edges: List[Dict[str, str]]
 ) -> List[PipelineNode]:

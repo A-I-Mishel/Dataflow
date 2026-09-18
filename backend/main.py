@@ -10,7 +10,7 @@ import pandas as pd
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import crud
@@ -21,6 +21,8 @@ from engine import (
 )
 from generator import generate_script
 from models import (
+    MAX_EDGES,
+    MAX_NODES,
     ExecuteRequest,
     ExecuteResponse,
     GenerateResponse,
@@ -77,8 +79,8 @@ class ProfileRequest(BaseModel):
 # blobs (ids, types, configs, positions) that must round-trip byte-identically.
 class PipelineSaveRequest(BaseModel):
     name: str
-    nodes: List[Dict[str, Any]]
-    edges: List[Dict[str, str]]
+    nodes: List[Dict[str, Any]] = Field(max_length=MAX_NODES)
+    edges: List[Dict[str, str]] = Field(max_length=MAX_EDGES)
 
 
 class PipelineSummary(BaseModel):

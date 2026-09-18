@@ -7,7 +7,7 @@ import pandas as pd
 from fastapi import HTTPException
 
 from models import NodeConfig, PipelineNode
-from toposort import topological_sort
+from toposort import topological_sort, validate_linear_chain
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,9 @@ def generate_script(
 ) -> str:
     try:
         sorted_nodes: List[PipelineNode] = topological_sort(nodes, edges)
+        # Same linearity contract as /execute: never export a script whose
+        # step order silently linearizes a forked canvas.
+        validate_linear_chain(nodes, edges)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

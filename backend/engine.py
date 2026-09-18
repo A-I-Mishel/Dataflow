@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from models import NodeConfig, NodePreview, PipelineNode
 from sanitize import dtypes_dict, sanitize_records
-from toposort import topological_sort
+from toposort import topological_sort, validate_linear_chain
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_na import apply_drop_na
@@ -38,7 +38,12 @@ def sort_nodes(
     nodes: List[PipelineNode], edges: List[Dict[str, str]]
 ) -> List[PipelineNode]:
     try:
-        return topological_sort(nodes, edges)
+        ordered: List[PipelineNode] = topological_sort(nodes, edges)
+        # The engine applies nodes strictly sequentially: forks, merges and
+        # multi-root shapes would silently linearize, so reject them with the
+        # same messages the frontend run gate shows.
+        validate_linear_chain(nodes, edges)
+        return ordered
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -74,10 +79,7 @@ def execute_pipeline_with_intermediates(
     """
     if not nodes:
         return df.copy(deep=True), []
-    try:
-        sorted_nodes: List[PipelineNode] = topological_sort(nodes, edges)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    sorted_nodes: List[PipelineNode] = sort_nodes(nodes, edges)
     current: pd.DataFrame = df.copy(deep=True)
     previews: List[NodePreview] = []
     for node in sorted_nodes:
