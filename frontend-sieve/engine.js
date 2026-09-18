@@ -5,6 +5,7 @@
 function EngineFactory(){
   const MISS = v => v == null || v === '';
   const rnd  = v => Math.round(v * 10000) / 10000;
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
   const fmtInt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
   function numify(v){
@@ -86,8 +87,16 @@ function EngineFactory(){
     const seen = {};
     const columns = dataRows[0].map((c, i) => {
       let n = String(c).trim() || `column_${i+1}`;
-      if (seen[n]){ seen[n]++; warnings.push({level:'warn', msg:`Duplicate header “${String(c).trim()}” renamed to “${n}_${seen[n]}”.`}); n = `${n}_${seen[n]}`; }
-      else seen[n] = 1;
+      if (seen[n]){
+        // Reserve the new name too: ['a','a','a_2'] must not collapse the
+        // third column onto the generated 'a_2'.
+        let k = seen[n], m;
+        do { k++; m = `${n}_${k}`; } while (seen[m]);
+        seen[n] = k;
+        warnings.push({level:'warn', msg:`Duplicate header “${String(c).trim()}” renamed to “${m}”.`});
+        n = m;
+      }
+      seen[n] = 1;
       return n;
     });
     let shortR = 0, longR = 0;
@@ -110,7 +119,7 @@ function EngineFactory(){
     let totalMissing = 0;
     const uniq = deep ? columns.map(() => new Set()) : null;
     const dupSeen = deep ? new Set() : null;
-    let dupCount;
+    let dupCount = 0;
     for (let ri = 0; ri < rows.length; ri++){
       const r = rows[ri];
       if (deep){ const k = JSON.stringify(r); if (dupSeen.has(k)) dupCount++; else dupSeen.add(k); }

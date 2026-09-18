@@ -57,6 +57,7 @@ from session_store import (
 # basicConfig attaches a handler to root exactly once; uvicorn's later
 # dictConfig leaves it alone (disable_existing_loggers=False).
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create SQLite tables on import so they exist under uvicorn, TestClient,
 # and pytest alike (lifespan/startup hooks do not run for bare TestClient).
@@ -67,8 +68,6 @@ with SessionLocal() as _upgrade_db:
         crud.ensure_owner_column(_upgrade_db)
     except Exception:
         logger.warning("owner-column upgrade skipped", exc_info=True)
-
-logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_SIZE_BYTES: int = 200 * 1024 * 1024
 UPLOAD_CHUNK_SIZE_BYTES: int = 1024 * 1024
@@ -115,9 +114,9 @@ def _pipeline_created_at(row: SavedPipeline) -> str:
 
 app = FastAPI(title="Data Cleaning Pipeline API")
 
-# Comma-separated extra origins, e.g. FRONTEND_URLS="https://my-app.vercel.app".
-# Localhost is always allowed for development (Vite default 5173 + static
-# servers like `npx serve .` on 3000 for the Sieve frontend).
+# Production origin, e.g. FRONTEND_URLS="https://dataflow-sieve.vercel.app".
+# Must match the Vercel project URL (see render.yaml) or browsers block
+# every API call. Localhost is always allowed for development.
 ALLOW_ORIGINS: List[str] = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",

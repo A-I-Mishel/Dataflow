@@ -15,8 +15,8 @@ services:
     healthCheckPath: /health
     envVars:
       - key: FRONTEND_URLS
-        # Replace with your Sieve Vercel URL after deploying the frontend
-        # (Vercel project with Root Directory `frontend-sieve`).
+        # Production Sieve URL on Vercel (project Root Directory
+        # `frontend-sieve`). Must match exactly or browsers block the API.
         value: https://dataflow-sieve.vercel.app
       # Uncomment the DATABASE_URL block below together with the database
       # below to keep saved pipelines across sleeps (free Postgres expires

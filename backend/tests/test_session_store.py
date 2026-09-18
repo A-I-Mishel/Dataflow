@@ -131,6 +131,45 @@ def test_restoring_same_key_refreshes_position(
     assert "overflow" in ss.sessions
 
 
+def test_restoring_large_key_with_new_path_refreshes_position(
+    isolated_stores: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression: re-storing a large-file key under a new temp path unlinked
+    # the old file but skipped the pop, so the dict kept the stale insertion
+    # position and the just-refreshed entry could be evicted as "oldest".
+    monkeypatch.setattr(ss, "MAX_LARGE_FILES", 2)
+    first = tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".csv", encoding="utf-8"
+    )
+    first.write("A\n1\n")
+    first.close()
+    store_large_session("large-0", first.name, _tiny_df(), 1, "utf-8")
+    second = tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".csv", encoding="utf-8"
+    )
+    second.write("A\n1\n")
+    second.close()
+    store_large_session("large-1", second.name, _tiny_df(), 1, "utf-8")
+    refresh = tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".csv", encoding="utf-8"
+    )
+    refresh.write("A\n1\n")
+    refresh.close()
+    # Re-storing large-0 under a new path must move it to the back and
+    # unlink the abandoned temp file; the next insert evicts large-1.
+    store_large_session("large-0", refresh.name, _tiny_df(), 1, "utf-8")
+    assert not os.path.exists(first.name)
+    overflow = tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".csv", encoding="utf-8"
+    )
+    overflow.write("A\n1\n")
+    overflow.close()
+    store_large_session("overflow", overflow.name, _tiny_df(), 1, "utf-8")
+    assert "large-0" in ss.large_files
+    assert "large-1" not in ss.large_files
+    assert "overflow" in ss.large_files
+
+
 def test_no_eager_sklearn_import() -> None:
     import transforms.encode_categorical as ec
 

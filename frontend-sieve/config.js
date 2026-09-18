@@ -1,14 +1,11 @@
-// Production backend URL (Render). Baked default for the deployed site —
-// Vercel serves static files with no runtime env injection, so the API base
-// lives here instead.
+// Production backend URL (Render). Single source of truth for the
+// deployed site — Vercel serves static files with no runtime env
+// injection, so the API base lives here.
 //
-// Deploy order:
-//   1. Deploy the backend on Render first (Blueprint via render.yaml).
-//   2. Put its URL below (must be the exact https origin, no trailing slash).
-//   3. Redeploy the frontend on Vercel.
-//   4. Set that same Vercel URL as FRONTEND_URLS on the Render service.
+//   Backend:  https://dataflow-cleaner-api.onrender.com (Render Blueprint)
+//   Frontend: https://dataflow-sieve.vercel.app (Vercel, Root frontend-sieve)
 //
 // Per-browser overrides always win over this file: the topbar backend
-// button (localStorage) and the ?api=<url> query param. Empty either of
-// those to run local-only.
+// button (localStorage) and the ?api=<url> query param. Clearing both
+// runs local-only.
 window.SIEVE_API_URL = 'https://dataflow-cleaner-api.onrender.com';

@@ -108,3 +108,37 @@ describe('one-hot', () => {
     assert.doesNotMatch(code, /PLACEHOLDER|__col|replace the/);
   });
 });
+
+describe('deep stats', () => {
+  // Regression: `let dupCount;` + `dupCount++` produced NaN, so the
+  // duplicate-rows tile always showed 0.
+  it('counts duplicate rows', () => {
+    const meta = E.metaOf(
+      ['a'],
+      [['x'], ['y'], ['x'], ['x']],
+      true,
+    );
+    assert.equal(meta.dupCount, 2);
+  });
+});
+
+describe('remove-outliers clip', () => {
+  // Regression: `clamp` was only defined in app.js scope, so clip threw
+  // ReferenceError both on the main thread and in the stringified worker.
+  it('clips values at the IQR fences', () => {
+    const out = E.OPS['remove-outliers'].run(
+      { columns: ['v'], rows: [[10], [20], [30], [40], [1000]] },
+      { column: 'v', action: 'clip' },
+    );
+    assert.equal(out.rows[4][0], 70);
+  });
+});
+
+describe('duplicate headers', () => {
+  // Regression: the generated rename was never reserved, so
+  // ['a','a','a_2'] collapsed into two 'a_2' columns.
+  it('never emits duplicate column names', () => {
+    const parsed = E.parseCSVText('a,a,a_2\n1,2,3\n');
+    assert.deepEqual(parsed.columns, ['a', 'a_2', 'a_2_2']);
+  });
+});

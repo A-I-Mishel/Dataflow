@@ -12,12 +12,13 @@ results. CSP allows backend calls (`connect-src http: https:`).
 
 ## Deploy (Vercel frontend + Render backend)
 
-1. Render Blueprint deploy of `backend/` first (`render.yaml` at repo
-   root); note the service URL.
-2. Put that URL in `config.js` (`window.SIEVE_API_URL`) and push.
-3. Vercel: import repo → Root Directory `frontend-sieve`, Framework
-   Preset Other, Build Command empty, Output Directory `.`, no env vars.
-4. Set `FRONTEND_URLS` on Render to the Vercel URL; restart backend.
+Backend `https://dataflow-cleaner-api.onrender.com` (Render Blueprint,
+`render.yaml` at repo root) → baked into `config.js`
+(`window.SIEVE_API_URL`) → frontend `https://dataflow-sieve.vercel.app`
+(Vercel, Root Directory `frontend-sieve`, Preset Other, Build empty,
+Output `.`, no env vars) → `FRONTEND_URLS` on Render matches the Vercel
+URL. Security headers live in `vercel.json`; unit tests are excluded from
+deploys via `.vercelignore`.
 
 Per-browser overrides: topbar backend button (localStorage) and
 `?api=<url>` beat `config.js`; clearing both runs local-only.
@@ -25,7 +26,9 @@ Per-browser overrides: topbar backend button (localStorage) and
 ## Structure
 
 - `index.html` — shell + markup (loads `config.js`, then `app.js` module)
-- `config.js` — baked production backend URL (`window.SIEVE_API_URL`)
+- `config.js` — production backend URL (`window.SIEVE_API_URL`)
+- `vercel.json` — production response headers (nosniff, same-origin
+  referrer, no framing, no camera/mic/geolocation)
 - `styles.css` — full theme
 - `engine.js` — pure engine (`EngineFactory`, `py`); imports cleanly in
   node, stringifies into the Web Worker unchanged

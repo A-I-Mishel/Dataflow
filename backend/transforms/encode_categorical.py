@@ -24,7 +24,11 @@ def apply_encode_categorical(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.D
     cols: Optional[List[str]] = config.columns
 
     if not cols:
-        target: List[str] = df.select_dtypes(include=["object", "category"]).columns.tolist()
+        # 'str' listed explicitly: pandas 3 still includes it under
+        # 'object' but only with a deprecation warning (removed in pandas 4).
+        # Generated export scripts keep ['object', 'category'] on purpose:
+        # pandas 2.x rejects 'str' outright, and users run any version.
+        target: List[str] = df.select_dtypes(include=["object", "str", "category"]).columns.tolist()
         auto: bool = True
     else:
         target = list(cols)

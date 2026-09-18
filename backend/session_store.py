@@ -178,8 +178,10 @@ def store_large_session(
     old: Optional[Tuple[datetime, LargeFileEntry]] = large_files.get(session_id)
     if old is not None and old[1].path != path:
         _unlink_quietly(old[1].path)
-    else:
-        large_files.pop(session_id, None)
+    # Pop-then-set in every branch: reassigning an existing dict key keeps
+    # its original insertion position, which would let a just-refreshed
+    # entry be evicted as "oldest" below.
+    large_files.pop(session_id, None)
     large_files[session_id] = (
         datetime.now(),
         LargeFileEntry(

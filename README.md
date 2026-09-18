@@ -41,7 +41,8 @@ uvicorn main:app --reload
 
 Connect them: open the frontend, click the `Local-only` button in the
 topbar, and enter `http://localhost:8000` (persisted in localStorage;
-`?api=<url>` works too, e.g. your Render URL). Empty = local-only mode.
+`?api=https://dataflow-cleaner-api.onrender.com` points at production).
+Empty = local-only mode.
 
 ## Tests
 
@@ -59,18 +60,19 @@ ephemeral disk, so uploads reset on sleep/redeploy.
 Order matters — backend first, then frontend, then point them at each other:
 
 1. **Backend → Render.** Push this repo to GitHub → Render → New →
-   Blueprint → select the repo (`render.yaml` included). Note the service
-   URL, e.g. `https://dataflow-cleaner-api.onrender.com`.
-2. **Bake the backend URL into the frontend.** Put that exact Render URL
-   in `frontend-sieve/config.js` (`window.SIEVE_API_URL`, no trailing
-   slash) and push.
-3. **Frontend → Vercel.** Import the same repo → Root Directory
-   `frontend-sieve`, Framework Preset Other, Build Command empty, Output
-   Directory `.`. No environment variables. Note the Vercel URL, e.g.
-   `https://dataflow-sieve.vercel.app`.
-4. **CORS.** Set `FRONTEND_URLS` on the Render service to the Vercel URL
-   (or do it in `render.yaml` before step 1) and redeploy/restart the
-   backend.
+   Blueprint → select the repo (`render.yaml` included). Keep the default
+   service name `dataflow-cleaner-api` so the URL is
+   `https://dataflow-cleaner-api.onrender.com`.
+2. **Bake the backend URL into the frontend.** `frontend-sieve/config.js`
+   already points at that Render URL — only touch it if your service URL
+   differs. Push.
+3. **Frontend → Vercel.** Import the same repo → name the project
+   `dataflow-sieve` so the URL is `https://dataflow-sieve.vercel.app` →
+   Root Directory `frontend-sieve`, Framework Preset Other, Build Command
+   empty, Output Directory `.`. No environment variables.
+4. **CORS.** `render.yaml` already sets `FRONTEND_URLS` to the Vercel URL;
+   confirm it matches your actual project URL and redeploy/restart the
+   backend if you changed it.
 
 The deployed site boots with the baked URL; the topbar shows
 `Backend ✓` once `/health` answers. Any browser can still override via
