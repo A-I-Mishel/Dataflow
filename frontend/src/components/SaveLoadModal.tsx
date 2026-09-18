@@ -182,11 +182,15 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
         {tab === "save" ? (
           <div className="space-y-4 p-5">
             <div>
-              <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-ink3">
+              <label
+                htmlFor="save-pipeline-name"
+                className="mb-2 block text-[11px] font-extrabold uppercase tracking-widest text-ink3"
+              >
                 Pipeline name
-              </p>
+              </label>
               <input
                 ref={nameInputRef}
+                id="save-pipeline-name"
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}

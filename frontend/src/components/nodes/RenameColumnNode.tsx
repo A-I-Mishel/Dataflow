@@ -1,7 +1,7 @@
 import type { NodeProps } from "@xyflow/react";
 import { Type } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useMemo, useRef } from "react";
+import { useId, useMemo, useRef } from "react";
 
 import { useNodeColumns } from "../../lib/schema";
 import { getNodeErrors } from "../../lib/validatePipeline";
@@ -29,6 +29,7 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
   const mapping = config.mapping ?? {};
   const entries = Object.entries(mapping);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const uid = useId().replace(/:/g, "");
 
   // Read mapping fresh from the store: handlers that close over render-scope
   // snapshots can rebuild from stale entries under rapid keystrokes.
@@ -93,14 +94,22 @@ export default function RenameColumnNode({ id, data, selected }: NodeProps) {
         // which is acceptable for a discrete click action.
         <div key={index} className="space-y-1">
           <div className="flex gap-2">
+            <label htmlFor={`${uid}-old-${index}`} className="sr-only">
+              Old column name, row {index + 1}
+            </label>
             <input
+              id={`${uid}-old-${index}`}
               type="text"
               value={oldName}
               onChange={(event) => handleOldNameChange(event, oldName)}
               placeholder="Old name"
               className={`${fieldInput} w-1/2`}
             />
+            <label htmlFor={`${uid}-new-${index}`} className="sr-only">
+              New column name, row {index + 1}
+            </label>
             <input
+              id={`${uid}-new-${index}`}
               type="text"
               value={newName}
               onChange={(event) => handleNewNameChange(event, oldName)}

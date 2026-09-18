@@ -1,7 +1,7 @@
 import type { NodeProps } from "@xyflow/react";
 import { Tags } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import {
   calculateOneHotForecast,
@@ -121,6 +121,7 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
       ),
     [id, label, config, columnList, schemaCols],
   );
+  const uid = useId().replace(/:/g, "");
   const method = config.method ?? "";
   // Memoized for the same reason as `config` above: a fresh `[]` every
   // render would defeat the forecast useMemo below.
@@ -188,8 +189,15 @@ export default function EncodeNode({ id, data, selected }: NodeProps) {
       configured={method !== "" || columns.length > 0}
     >
       <div>
-        <p className={fieldLabelClass}>Method</p>
-        <select value={method} onChange={handleMethodChange} className={inputClass}>
+        <label htmlFor={`${uid}-method`} className={`${fieldLabelClass} block`}>
+          Method
+        </label>
+        <select
+          id={`${uid}-method`}
+          value={method}
+          onChange={handleMethodChange}
+          className={inputClass}
+        >
           <option value="">Select method</option>
           {METHODS.map((option) => (
             <option key={option} value={option}>

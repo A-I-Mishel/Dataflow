@@ -1,7 +1,7 @@
 import type { NodeProps } from "@xyflow/react";
 import { Droplets } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import { useNodeColumns } from "../../lib/schema";
 import { getNodeErrors } from "../../lib/validatePipeline";
@@ -36,6 +36,8 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
   const strategy = config.strategy ?? "";
   const value = config.value ?? "";
   const columns = config.columns ?? [];
+  // Unique field ids so <label> associates correctly with many nodes mounted.
+  const uid = useId().replace(/:/g, "");
 
   const handleStrategyChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     const next = event.target.value;
@@ -76,8 +78,15 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
       configured={strategy !== ""}
     >
       <div>
-        <p className={fieldLabelClass}>Strategy</p>
-        <select value={strategy} onChange={handleStrategyChange} className={inputClass}>
+        <label htmlFor={`${uid}-strategy`} className={`${fieldLabelClass} block`}>
+          Strategy
+        </label>
+        <select
+          id={`${uid}-strategy`}
+          value={strategy}
+          onChange={handleStrategyChange}
+          className={inputClass}
+        >
           <option value="">Select strategy</option>
           {STRATEGIES.map((option) => (
             <option key={option} value={option}>
@@ -88,8 +97,16 @@ export default function FillNaNode({ id, data, selected }: NodeProps) {
       </div>
       {strategy === "constant" && (
         <div>
-          <p className={fieldLabelClass}>Value</p>
-          <input type="text" value={value} onChange={handleValueChange} className={inputClass} />
+          <label htmlFor={`${uid}-value`} className={`${fieldLabelClass} block`}>
+            Value
+          </label>
+          <input
+            id={`${uid}-value`}
+            type="text"
+            value={value}
+            onChange={handleValueChange}
+            className={inputClass}
+          />
         </div>
       )}
       <ColumnChecklist

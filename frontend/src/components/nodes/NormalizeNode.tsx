@@ -1,7 +1,7 @@
 import type { NodeProps } from "@xyflow/react";
 import { Scale } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 import { useNodeColumns } from "../../lib/schema";
 import { getNodeErrors } from "../../lib/validatePipeline";
@@ -35,6 +35,7 @@ export default function NormalizeNode({ id, data, selected }: NodeProps) {
   );
   const method = config.method ?? "";
   const columns = config.columns ?? [];
+  const uid = useId().replace(/:/g, "");
 
   const handleMethodChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     updateNodeConfig(id, { method: event.target.value });
@@ -64,8 +65,15 @@ export default function NormalizeNode({ id, data, selected }: NodeProps) {
       configured={method !== "" || columns.length > 0}
     >
       <div>
-        <p className={fieldLabelClass}>Method</p>
-        <select value={method} onChange={handleMethodChange} className={inputClass}>
+        <label htmlFor={`${uid}-method`} className={`${fieldLabelClass} block`}>
+          Method
+        </label>
+        <select
+          id={`${uid}-method`}
+          value={method}
+          onChange={handleMethodChange}
+          className={inputClass}
+        >
           <option value="">Select method</option>
           {METHODS.map((option) => (
             <option key={option} value={option}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
@@ -41,6 +41,7 @@ export default function ColumnChecklist({
   const remaining = options.filter((column) => !selectedSet.has(column));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const labelId = `${useId().replace(/:/g, "")}-label`;
 
   useEffect(() => {
     if (!open) return;
@@ -57,8 +58,12 @@ export default function ColumnChecklist({
   };
 
   return (
-    <div ref={rootRef}>
-      <p className={fieldLabelClass}>{label}</p>
+    // Group semantics: this composite (chips + toggle + popup) has no single
+    // native control to point a <label> at, so the group carries the name.
+    <div ref={rootRef} role="group" aria-labelledby={labelId}>
+      <p id={labelId} className={fieldLabelClass}>
+        {label}
+      </p>
       <div className="relative">
         <div className="flex min-h-[38px] flex-wrap items-center gap-1.5 rounded-xl border border-line bg-elevated/60 p-1.5">
           {options.length === 0 && (
@@ -74,7 +79,7 @@ export default function ColumnChecklist({
                 key={column}
                 className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${
                   missing
-                    ? "bg-warnsoft border-warn/30 text-warn"
+                    ? "border-warn/30 bg-warn-soft text-warn"
                     : "bg-accentsoft text-accenttext border-accent/25"
                 }`}
               >

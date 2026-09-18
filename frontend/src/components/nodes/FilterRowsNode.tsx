@@ -151,8 +151,14 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
           className="space-y-2 rounded-md border border-line bg-panel p-2"
         >
           <div>
-            <p className={fieldLabelClass}>Column</p>
+            <label
+              htmlFor={`filter-${condition.id ?? `row-${index}`}-column`}
+              className={`${fieldLabelClass} block`}
+            >
+              Column
+            </label>
             <select
+              id={`filter-${condition.id ?? `row-${index}`}-column`}
               value={condition.column ?? ""}
               onChange={(event) => handleColumnChange(condition.id ?? "", event)}
               className={inputClass}
@@ -167,8 +173,14 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
             </select>
           </div>
           <div>
-            <p className={fieldLabelClass}>Operator</p>
+            <label
+              htmlFor={`filter-${condition.id ?? `row-${index}`}-operator`}
+              className={`${fieldLabelClass} block`}
+            >
+              Operator
+            </label>
             <select
+              id={`filter-${condition.id ?? `row-${index}`}-operator`}
               value={condition.operator ?? ""}
               onChange={(event) => handleOperatorChange(condition.id ?? "", event)}
               className={inputClass}
@@ -182,8 +194,14 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
             </select>
           </div>
           <div>
-            <p className={fieldLabelClass}>Value</p>
+            <label
+              htmlFor={`filter-${condition.id ?? `row-${index}`}-value`}
+              className={`${fieldLabelClass} block`}
+            >
+              Value
+            </label>
             <input
+              id={`filter-${condition.id ?? `row-${index}`}-value`}
               type="text"
               value={condition.value ?? ""}
               onChange={(event) => handleValueChange(condition.id ?? "", event)}
@@ -193,8 +211,14 @@ export default function FilterRowsNode({ id, data, selected }: NodeProps) {
           </div>
           {index > 0 && (
             <div>
-              <p className={fieldLabelClass}>Logic</p>
+              <label
+                htmlFor={`filter-${condition.id ?? `row-${index}`}-logic`}
+                className={`${fieldLabelClass} block`}
+              >
+                Logic
+              </label>
               <select
+                id={`filter-${condition.id ?? `row-${index}`}-logic`}
                 value={condition.logic ?? "AND"}
                 onChange={(event) => handleLogicChange(condition.id ?? "", event)}
                 className={inputClass}
