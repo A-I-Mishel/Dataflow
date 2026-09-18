@@ -722,6 +722,24 @@ describe('log-transform', () => {
   });
 });
 
+describe('text decoding and delimiters', () => {
+  it('sniffs tab delimiters like the backend rule', () => {
+    const parsed = E.parseCSVText('A\tB\n1\tx\n2\ty\n');
+    assert.deepEqual(parsed.columns, ['A', 'B']);
+    assert.equal(parsed.rows.length, 2);
+  });
+  it('decodes UTF-16 with a byte-order mark', () => {
+    const bytes = [0xFF, 0xFE];
+    for (const ch of 'A,B\n1,x\n') {
+      const code = ch.charCodeAt(0);
+      bytes.push(code & 0xFF, (code >> 8) & 0xFF);
+    }
+    const dec = E.decodeBytes(new Uint8Array(bytes).buffer);
+    assert.equal(dec.encoding, 'UTF-16');
+    assert.deepEqual(E.parseCSVText(dec.text).columns, ['A', 'B']);
+  });
+});
+
 describe('operation registry', () => {
   // Mirror of the GROUPS list in app.js: an op whose group is missing here
   // silently vanishes from the palette.

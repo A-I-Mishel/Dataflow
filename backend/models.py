@@ -141,6 +141,10 @@ class UploadResponse(BaseModel):
     preview: List[Dict[str, Any]]
     missing_values: Dict[str, int]
     large: bool = False
+    # True when dtypes come from the preview sample only (large files):
+    # exact for missing counts, estimates for types. Honest clients never
+    # present these as exact.
+    estimated: bool = False
     # Exact upload-time per-column cardinality (nunique(dropna=True)).
     # None for large files (no full scan) and absent on older responses.
     # A missing key is unknown — never zero.

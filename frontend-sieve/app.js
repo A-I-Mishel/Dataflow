@@ -1,5 +1,5 @@
 import { EngineFactory, py } from './engine.js';
-import { getApiBase, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId } from './api.js';
+import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -1884,6 +1884,12 @@ async function boot(){
   initChrome();
   backend.base = getApiBase();
   renderBackendBtn();
+  // A ?api= link override is session-only by design (see api.js): say
+  // plainly where data is going so a shared link can never silently
+  // redirect uploads.
+  if (backend.base && getApiSource() === 'param') {
+    toast(`Backend checks go to ${backend.base} for this session`, 'info');
+  }
   if (backend.base) backendCheck(true);
   initCanvasEvents();
   updateChip();

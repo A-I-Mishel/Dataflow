@@ -1,0 +1,7 @@
+# Test-only dependencies (CI installs requirements.txt + this file).
+-r requirements.txt
+pytest==9.1.1
+# Starlette's TestClient imports httpx at module load: without it the suite
+# cannot even be collected (caught by CI, never locally where it arrives
+# transitively).
+httpx==0.28.1

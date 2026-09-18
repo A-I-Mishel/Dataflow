@@ -1,15 +1,11 @@
-# Pinned exact versions for reproducible Render builds.
-# Regenerate with: pip freeze | grep -Ei 'fastapi|uvicorn|pandas|multipart|pytest|pydantic|scikit|sqlalchemy|psycopg2|starlette|httpx|numpy|scipy'
+# Production dependencies (installed on Render).
+# Pinned exact versions for reproducible builds; regenerate from a known-good
+# env with: pip freeze | grep -Ei 'fastapi|uvicorn|pandas|multipart|pydantic|scikit|sqlalchemy|psycopg2'
 fastapi==0.141.1
 uvicorn[standard]==0.53.0
 pandas==3.0.5
 python-multipart==0.0.32
-pytest==9.1.1
 pydantic==2.13.5
 scikit-learn==1.9.1
 sqlalchemy==2.0.54
 psycopg2-binary==2.9.13
-# Test-only: starlette's TestClient imports httpx at module load, so the
-# suite cannot even be collected without it (caught by CI, not locally,
-# where it arrived transitively).
-httpx==0.28.1

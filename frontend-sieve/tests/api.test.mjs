@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 import { sieveToBackend } from '../api.js';
 import { EngineFactory } from '../engine.js';
+import { getApiBase, getApiSource } from '../api.js';
 
 const one = (type, params) => [{ type, enabled: true, params }];
 
@@ -280,5 +281,14 @@ describe('translator coverage', () => {
         );
       }
     }
+  });
+});
+
+describe('backend origin transparency', () => {
+  it('resolves local-only with no browser globals, without throwing', () => {
+    // Node has no location/localStorage/window: every lookup must fail
+    // soft into local-only mode, never throw at import or call time.
+    assert.equal(getApiBase(), '');
+    assert.equal(getApiSource(), '');
   });
 });

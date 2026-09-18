@@ -154,19 +154,23 @@ def execute_pipeline_large_file(
     edges: List[Dict[str, str]],
     chunk_size: int = 10000,
     encoding: str = "utf-8",
+    sep: str = ",",
 ) -> pd.DataFrame:
     """Execute a pipeline over a CSV that is too large to load at once.
 
     The file is streamed in ``chunk_size``-row pieces and each piece runs
     through :func:`execute_pipeline`; results are concatenated at the end.
 
-    Note: transforms with global state (normalize statistics, categorical
-    vocabularies, cross-chunk sort order) are computed per chunk, so results
-    on large files are approximate. Row-local transforms (drop-na, fill-na,
-    drop-column, drop-duplicates, rename-column, filter-rows) are exact.
-
-    Sort, normalize and encode-categorical are rejected outright: per-chunk
-    results for these are not just approximate but misleading.
+    Only strictly row-local transforms are exact here: drop-na, fill-na
+    with constant/ffill/bfill, drop-column, rename-column, filter-rows, and
+    the other per-row transforms (create/conditional/replace/round/clip/
+    split/merge/extract/parse/date ops); validate/find-invalid pass data
+    through untouched. Anything needing global state is rejected outright
+    with a 400 pointing at the exported script, because per-chunk results
+    would be silently wrong, not merely approximate: sort order, normalize
+    statistics, category vocabularies (encode-categorical, group-rare),
+    fill-na mean/median/mode, and cross-chunk deduplication
+    (drop-duplicates).
     """
     # Validate the DAG once up front so a bad pipeline fails fast instead
     # of after partially streaming a 200MB file.
@@ -175,28 +179,43 @@ def execute_pipeline_large_file(
         "sort": "needs the full dataset to order rows",
         "normalize": "needs global column statistics",
         "encode-categorical": "needs the global category vocabulary",
+        "group-rare": "needs the global category vocabulary",
+        "drop-duplicates": "needs the full dataset for exact deduplication",
     }
-    blocked_types: List[str] = sorted(
-        {node.type for node in sorted_for_check if node.type in blocked}
+    problems: List[Tuple[str, str]] = []
+    for node_type in sorted(set(blocked) & {node.type for node in sorted_for_check}):
+        ids: str = ", ".join(
+            sorted(node.id for node in sorted_for_check if node.type == node_type)
+        )
+        problems.append((node_type, f"{node_type} ({blocked[node_type]}; nodes {ids})"))
+    # fill-na is row-local only for constant/ffill/bfill: mean/median/mode
+    # need global column statistics (the default strategy is mean).
+    stat_fill: List[str] = sorted(
+        node.id
+        for node in sorted_for_check
+        if node.type == "fill-na"
+        and (node.config.strategy or "mean").lower() in ("mean", "median", "mode")
     )
-    if blocked_types:
-        offending: List[str] = [
-            f"'{node.id}' ({node.type})"
-            for node in sorted_for_check
-            if node.type in blocked
-        ]
-        reasons: str = "; ".join(f"{t} {blocked[t]}" for t in blocked_types)
+    if stat_fill:
+        problems.append(
+            (
+                "fill-na(mean/median/mode)",
+                f"fill-na(mean/median/mode) (needs global column statistics; nodes {', '.join(stat_fill)})",
+            )
+        )
+    if problems:
+        labels: str = ", ".join(label for label, _ in problems)
+        reasons: str = "; ".join(reason for _, reason in problems)
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Large-file mode does not support {', '.join(blocked_types)} "
-                f"(nodes {', '.join(offending)}): {reasons}. "
+                f"Large-file mode does not support {labels}: {reasons}. "
                 "Run these steps locally with the exported script instead."
             ),
         )
 
     try:
-        chunk_iter = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding)
+        chunk_iter = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding, sep=sep)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Uploaded file no longer available") from exc
     except Exception as exc:
@@ -214,7 +233,7 @@ def execute_pipeline_large_file(
 
     if not result_chunks:
         try:
-            header_df: pd.DataFrame = pd.read_csv(file_path, nrows=0, encoding=encoding)
+            header_df: pd.DataFrame = pd.read_csv(file_path, nrows=0, encoding=encoding, sep=sep)
             header_df.columns = [str(c) for c in header_df.columns]
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed reading CSV: {exc}") from exc

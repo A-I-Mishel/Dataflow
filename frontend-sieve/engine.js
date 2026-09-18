@@ -191,7 +191,15 @@ function EngineFactory(){
   }
   function decodeBytes(buf){
     try { return { text: new TextDecoder('utf-8', {fatal:true}).decode(buf), encoding: 'UTF-8' }; }
-    catch(e){ return { text: new TextDecoder('windows-1252').decode(buf), encoding: 'Windows-1252' }; }
+    catch(e){
+      // UTF-16 with a byte-order mark next (mirrors the backend ladder);
+      // anything else falls through to single-byte Western text.
+      const b = new Uint8Array(buf);
+      if (b.length >= 2 && ((b[0] === 0xFF && b[1] === 0xFE) || (b[0] === 0xFE && b[1] === 0xFF))){
+        try { return { text: new TextDecoder('utf-16').decode(buf), encoding: 'UTF-16' }; } catch(_){}
+      }
+      return { text: new TextDecoder('windows-1252').decode(buf), encoding: 'Windows-1252' };
+    }
   }
 
   function parseCSVText(raw){

@@ -1,17 +1,19 @@
+import codecs
 import json
 import logging
 import os
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import crud
@@ -69,6 +71,15 @@ with SessionLocal() as _upgrade_db:
         crud.ensure_owner_column(_upgrade_db)
     except Exception:
         logger.warning("owner-column upgrade skipped", exc_info=True)
+# Telemetry retention: session metadata and execution logs accumulate one
+# row per upload/run with no other cleanup. Purge at boot (workers restart
+# often on free-tier hosting, so this runs frequently enough) instead of
+# per request.
+with SessionLocal() as _purge_db:
+    try:
+        crud.purge_old_records(_purge_db)
+    except Exception:
+        logger.warning("telemetry purge skipped", exc_info=True)
 
 MAX_UPLOAD_SIZE_BYTES: int = 200 * 1024 * 1024
 UPLOAD_CHUNK_SIZE_BYTES: int = 1024 * 1024
@@ -113,17 +124,48 @@ class DeleteResult(BaseModel):
 def _pipeline_created_at(row: SavedPipeline) -> str:
     return row.created_at.isoformat() if row.created_at else ""
 
-app = FastAPI(title="Data Cleaning Pipeline API")
+app = FastAPI(
+    title="Data Cleaning Pipeline API",
+    # API explorer stays on for local development; on Render the schema and
+    # docs endpoints are disabled to shrink the probing surface.
+    **({} if not os.environ.get("RENDER") else {"docs_url": None, "redoc_url": None, "openapi_url": None}),
+)
+
+# JSON bodies are capped: /upload streams multipart to disk under its own
+# 200MB cap, but /execute and /pipelines/save accept arbitrary JSON
+# (NodeConfig.value/default take Any) with no framework limit otherwise.
+MAX_JSON_BODY_BYTES: int = 10 * 1024 * 1024
+
+
+@app.middleware("http")
+async def limit_json_body_size(request: Request, call_next: Callable) -> JSONResponse:
+    if request.url.path != "/upload":
+        length: Optional[str] = request.headers.get("content-length")
+        if length is not None:
+            try:
+                if int(length) > MAX_JSON_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body too large. Maximum 10MB."},
+                    )
+            except ValueError:
+                pass
+    return await call_next(request)  # type: ignore[no-any-return]
 
 # Production origin, FRONTEND_URLS="https://dataflow-cleaner.vercel.app".
 # Must match the Vercel project URL (see render.yaml) or browsers block
-# every API call. Localhost is always allowed for development.
-ALLOW_ORIGINS: List[str] = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-] + [
+# every API call. Localhost origins exist for development only and are
+# excluded on Render (RENDER=true is set automatically there).
+ALLOW_ORIGINS: List[str] = (
+    [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    if not os.environ.get("RENDER")
+    else []
+) + [
     url.strip()
     for url in (os.environ.get("FRONTEND_URLS") or "").split(",")
     if url.strip()
@@ -138,8 +180,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS", "DELETE"],
+    allow_headers=["Content-Type", "X-Session-Id", "X-Api-Key"],
 )
 
 
@@ -170,14 +212,47 @@ def _detect_csv_encoding(path: str) -> str:
         pd.read_csv(path, nrows=5)
         return "utf-8"
     except UnicodeDecodeError:
-        return "latin-1"
+        pass
     except Exception:
         return "utf-8"
-
-
-def _read_preview_df(path: str, encoding: str) -> pd.DataFrame:
     try:
-        df: pd.DataFrame = pd.read_csv(path, nrows=PREVIEW_ROWS, encoding=encoding)
+        with open(path, "rb") as handle:
+            head: bytes = handle.read(4)
+        if head.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+            return "utf-16"
+    except OSError:
+        pass
+    # Deliberately windows-1252, not latin-1: it decodes the same bytes but
+    # maps 0x80-0x9F to smart quotes/dashes (Windows reality), matching the
+    # Sieve fallback ladder (utf-8 strict -> utf-16 BOM -> windows-1252).
+    return "windows-1252"
+
+
+def _detect_delimiter(path: str, encoding: str) -> str:
+    """Header sniffing with the exact Sieve rule (see engine.js
+    parseCSVText): most frequent of , ; tab | on the first line wins, ties
+    keep list order, all-zero falls back to comma. Same rule on both sides
+    keeps local and backend parses cell-identical on TSV/SSV files."""
+    candidates: List[str] = [",", ";", "\t", "|"]
+    try:
+        with open(path, "r", encoding=encoding, errors="strict") as handle:
+            head: str = handle.readline()
+    except Exception:
+        return ","
+    counts: List[Tuple[str, int]] = [(d, head.count(d)) for d in candidates]
+    # Stable max: first candidate with the highest count wins (ties included).
+    top: int = max(count for _, count in counts)
+    if top <= 0:
+        return ","
+    for delim, count in counts:
+        if count == top:
+            return delim
+    return ","  # unreachable; keeps type checkers calm.
+
+
+def _read_preview_df(path: str, encoding: str, sep: str = ",") -> pd.DataFrame:
+    try:
+        df: pd.DataFrame = pd.read_csv(path, nrows=PREVIEW_ROWS, encoding=encoding, sep=sep)
     except pd.errors.EmptyDataError as exc:
         raise HTTPException(status_code=400, detail="CSV is empty or invalid") from exc
     except Exception as exc:
@@ -189,12 +264,12 @@ def _read_preview_df(path: str, encoding: str) -> pd.DataFrame:
     return df
 
 
-def _scan_large_file(path: str, encoding: str) -> Tuple[int, Dict[str, int]]:
+def _scan_large_file(path: str, encoding: str, sep: str = ",") -> Tuple[int, Dict[str, int]]:
     """Single pass over a large CSV counting rows and per-column missing values."""
     total_rows: int = 0
     missing: Dict[str, int] = {}
     try:
-        for chunk_df in pd.read_csv(path, chunksize=LARGE_SCAN_CHUNK_ROWS, encoding=encoding):
+        for chunk_df in pd.read_csv(path, chunksize=LARGE_SCAN_CHUNK_ROWS, encoding=encoding, sep=sep):
             total_rows += int(chunk_df.shape[0])
             for col in chunk_df.columns:
                 missing[str(col)] = missing.get(str(col), 0) + int(chunk_df[col].isna().sum())
@@ -218,14 +293,16 @@ def _handle_small_upload(
     session_id: str,
     filename: Optional[str],
     db: Session,
+    encoding: str,
+    sep: str,
 ) -> UploadResponse:
     try:
         df: pd.DataFrame
         try:
-            df = pd.read_csv(tmp_path)
+            df = pd.read_csv(tmp_path, encoding=encoding, sep=sep)
         except UnicodeDecodeError:
             try:
-                df = pd.read_csv(tmp_path, encoding="latin-1")
+                df = pd.read_csv(tmp_path, encoding="windows-1252", sep=sep)
             except Exception as exc:
                 raise HTTPException(status_code=400, detail=f"Failed parsing CSV: {exc}") from exc
         except pd.errors.EmptyDataError as exc:
@@ -277,9 +354,10 @@ def _handle_large_upload(
 ) -> UploadResponse:
     try:
         encoding: str = _detect_csv_encoding(tmp_path)
-        preview_df: pd.DataFrame = _read_preview_df(tmp_path, encoding)
-        total_rows, missing = _scan_large_file(tmp_path, encoding)
-        store_large_session(key, tmp_path, preview_df, total_rows, encoding)
+        sep: str = _detect_delimiter(tmp_path, encoding)
+        preview_df: pd.DataFrame = _read_preview_df(tmp_path, encoding, sep)
+        total_rows, missing = _scan_large_file(tmp_path, encoding, sep)
+        store_large_session(key, tmp_path, preview_df, total_rows, encoding, sep)
     except HTTPException:
         _unlink_upload_tmp(tmp_path)
         raise
@@ -298,12 +376,15 @@ def _handle_large_upload(
         session_id=session_id,
         filename=filename or "upload.csv",
         columns=columns,
+        # Preview-sample statistics: dtypes come from the first 1,000 rows
+        # and may miss later type changes — flagged, never presented as exact.
         dtypes=_dtypes_dict(preview_df),
         row_count=total_rows,
         preview=_sanitize_records(preview_df, 5),
         # Missing-value counts are exact (computed in the scan pass above).
         missing_values={col: missing.get(col, 0) for col in columns},
         large=True,
+        estimated=True,
         # No full scan for cardinality on large files by design:
         # cardinality stays unavailable rather than fabricated.
         unique_counts=None,
@@ -369,7 +450,9 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
     if total_size <= LARGE_FILE_THRESHOLD_BYTES:
-        return _handle_small_upload(tmp_path, key, session_id, file.filename, db)
+        encoding: str = _detect_csv_encoding(tmp_path)
+        sep: str = _detect_delimiter(tmp_path, encoding)
+        return _handle_small_upload(tmp_path, key, session_id, file.filename, db, encoding, sep)
     return _handle_large_upload(tmp_path, key, session_id, file.filename, db)
 
 
@@ -387,14 +470,14 @@ def execute(
         large = get_large_session(key)
         result = execute_pipeline_large_file(
             large.path, request.nodes, request.edges,
-            chunk_size=EXEC_CHUNK_ROWS, encoding=large.encoding,
+            chunk_size=EXEC_CHUNK_ROWS, encoding=large.encoding, sep=large.sep,
         )
         # Step previews for large files come from the first chunk only and
         # are explicitly approximate (per-chunk stats, no global sort). A
         # preview failure must never fail an otherwise successful run.
         try:
             first_chunk: pd.DataFrame = pd.read_csv(
-                large.path, nrows=EXEC_CHUNK_ROWS, encoding=large.encoding
+                large.path, nrows=EXEC_CHUNK_ROWS, encoding=large.encoding, sep=large.sep
             )
             first_chunk.columns = [str(c) for c in first_chunk.columns]
             _ignored, intermediates = execute_pipeline_with_intermediates(
@@ -465,6 +548,7 @@ def _csv_chunks(df: pd.DataFrame, chunk_rows: int = 50000) -> Iterator[str]:
 @app.get("/download/{session_id}")
 def download(
     session_id: str,
+    bom: bool = False,
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> StreamingResponse:
     evict_old_sessions()
@@ -473,11 +557,29 @@ def download(
     # Neutralize spreadsheet-formula cells (=HYPERLINK(...) etc.) so the
     # downloaded CSV cannot execute code when opened in Excel/Sheets.
     # Operates on a copy — the stored result frame is never mutated.
+    # The BOM is opt-in (?bom=1) for Excel users: on by default it would
+    # corrupt naive Unix parsers (a leading \ufeff lands in the first
+    # column name), including re-imports of our own exports.
+    stream = _csv_chunks(_neutralize_formulas(df))
+    if bom:
+        stream = _with_bom(stream)
     return StreamingResponse(
-        _csv_chunks(_neutralize_formulas(df)),
+        stream,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=cleaned_data.csv"},
     )
+
+
+def _with_bom(chunks: Iterator[str]) -> Iterator[bytes]:
+    """Prepend a UTF-8 BOM for Excel, yielding bytes thereafter."""
+    first: bool = True
+    for text in chunks:
+        data: bytes = text.encode("utf-8")
+        if first:
+            first = False
+            yield codecs.BOM_UTF8 + data
+        else:
+            yield data
 
 
 def _pipelines_read_only() -> bool:
@@ -591,4 +693,12 @@ def delete_pipeline(
 
 @app.get("/health")
 def health() -> Dict[str, str]:
-    return {"status": "ok"}
+    # Liveness stays unconditional (Render restarts on non-200); database
+    # state rides along so dashboards can tell a sick DB from a live app.
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        db_state: str = "ok"
+    except Exception:
+        db_state = "error"
+    return {"status": "ok", "db": db_state}

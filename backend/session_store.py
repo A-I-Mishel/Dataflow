@@ -35,6 +35,9 @@ class LargeFileEntry:
     preview_df: pd.DataFrame = field(repr=False)
     total_rows: int
     encoding: str
+    # Delimiter sniffed at upload (shared rule with the Sieve parser), so
+    # chunk re-reads split identically without re-sniffing.
+    sep: str = ","
 
 
 large_files: Dict[str, Tuple[datetime, LargeFileEntry]] = {}
@@ -174,6 +177,7 @@ def store_large_session(
     preview_df: pd.DataFrame,
     total_rows: int,
     encoding: str,
+    sep: str = ",",
 ) -> None:
     old: Optional[Tuple[datetime, LargeFileEntry]] = large_files.get(session_id)
     if old is not None and old[1].path != path:
@@ -189,6 +193,7 @@ def store_large_session(
             preview_df=preview_df.copy(deep=True),
             total_rows=total_rows,
             encoding=encoding,
+            sep=sep,
         ),
     )
     while len(large_files) > MAX_LARGE_FILES:
@@ -228,6 +233,7 @@ def get_large_session(session_id: str) -> LargeFileEntry:
         preview_df=large.preview_df.copy(deep=True),
         total_rows=large.total_rows,
         encoding=large.encoding,
+        sep=large.sep,
     )
 
 

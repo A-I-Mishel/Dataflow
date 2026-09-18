@@ -90,13 +90,21 @@ def _large_session_id(csv_text: str = CSV_TEXT) -> str:
     return up.json()["session_id"]
 
 
-@pytest.mark.parametrize("node_type", ["sort", "normalize", "encode-categorical"])
+@pytest.mark.parametrize(
+    "node_type", ["sort", "normalize", "encode-categorical", "group-rare", "drop-duplicates"]
+)
 def test_large_execute_rejects_stateful_nodes(
     monkeypatch: pytest.MonkeyPatch, node_type: str
 ) -> None:
     _force_large_path(monkeypatch)
     sid: str = _large_session_id()
-    config = {"sort": {"by": ["A"]}, "normalize": {"method": "min-max"}, "encode-categorical": {"method": "one-hot"}}[node_type]
+    config = {
+        "sort": {"by": ["A"]},
+        "normalize": {"method": "min-max"},
+        "encode-categorical": {"method": "one-hot"},
+        "group-rare": {"threshold": "2"},
+        "drop-duplicates": {},
+    }[node_type]
     ex = client.post(
         "/execute",
         json={
@@ -110,6 +118,22 @@ def test_large_execute_rejects_stateful_nodes(
     assert "n1" in ex.json()["detail"]
 
 
+def test_large_execute_rejects_statistical_fill(monkeypatch: pytest.MonkeyPatch) -> None:
+    # mean/median/mode need global statistics; constant/ffill stay allowed.
+    _force_large_path(monkeypatch)
+    sid: str = _large_session_id()
+    ex = client.post(
+        "/execute",
+        json={
+            "session_id": sid,
+            "nodes": [{"id": "n1", "type": "fill-na", "config": {"strategy": "mean"}}],
+            "edges": [],
+        },
+    )
+    assert ex.status_code == 400, ex.text
+    assert "fill-na(mean/median/mode)" in ex.json()["detail"]
+
+
 def test_large_execute_allows_row_local_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
     _force_large_path(monkeypatch)
     sid: str = _large_session_id()
@@ -119,7 +143,7 @@ def test_large_execute_allows_row_local_nodes(monkeypatch: pytest.MonkeyPatch) -
             "session_id": sid,
             "nodes": [
                 {"id": "n1", "type": "drop-na", "config": {}},
-                {"id": "n2", "type": "drop-duplicates", "config": {}},
+                {"id": "n2", "type": "filter-rows", "config": {"conditions": []}},
             ],
             "edges": [{"source": "n1", "target": "n2"}],
         },

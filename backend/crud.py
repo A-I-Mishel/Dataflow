@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -122,3 +123,22 @@ def create_session_meta(
     db.commit()
     db.refresh(row)
     return row
+
+
+def purge_old_records(db: Session, days: int = 30) -> int:
+    """Delete telemetry older than `days` (session metadata + execution logs).
+
+    Saved pipelines are user data and are never touched. Cutoff is naive
+    UTC: SQLite returns naive datetimes, and Postgres interprets naive
+    comparisons in the session timezone (UTC on Render).
+    """
+    cutoff: datetime = datetime.now(timezone.utc).replace(tzinfo=None)
+    removed: int = 0
+    removed += (
+        db.query(SessionMeta).filter(SessionMeta.created_at < cutoff).delete()
+    )
+    removed += (
+        db.query(ExecutionLog).filter(ExecutionLog.executed_at < cutoff).delete()
+    )
+    db.commit()
+    return removed

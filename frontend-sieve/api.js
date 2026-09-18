@@ -20,16 +20,13 @@ const LS_API = 'sieve.apiBase';
 const LS_SES = 'sieve.sessionId';
 
 export function getApiBase() {
-  // Precedence: explicit ?api= param (persisted) > stored button choice
-  // ('' = explicitly local-only) > baked window.SIEVE_API_URL from
-  // config.js (production default) > '' (local-only).
+  // Precedence: explicit ?api= param (SESSION-ONLY, never persisted: a
+  // shared link must not permanently redirect a victim's uploads) > stored
+  // button choice ('' = explicitly local-only) > baked window.SIEVE_API_URL
+  // from config.js (production default) > '' (local-only).
   try {
     const q = new URLSearchParams(location.search).get('api');
-    if (q !== null) {
-      const v = normalizeBase(q);
-      try { localStorage.setItem(LS_API, v); } catch (_) {}
-      return v;
-    }
+    if (q !== null) return normalizeBase(q);
   } catch (_) {}
   try {
     const stored = localStorage.getItem(LS_API);
@@ -38,6 +35,21 @@ export function getApiBase() {
   try {
     const baked = typeof window.SIEVE_API_URL === 'string' ? normalizeBase(window.SIEVE_API_URL) : '';
     if (baked) return baked;
+  } catch (_) {}
+  return '';
+}
+
+// Where the current base came from (for transparency UI). Mirrors
+// getApiBase precedence without duplicating its normalization.
+export function getApiSource() {
+  try {
+    if (new URLSearchParams(location.search).get('api') !== null) return 'param';
+  } catch (_) {}
+  try {
+    if (localStorage.getItem(LS_API) !== null) return 'stored';
+  } catch (_) {}
+  try {
+    if (typeof window.SIEVE_API_URL === 'string' && normalizeBase(window.SIEVE_API_URL)) return 'baked';
   } catch (_) {}
   return '';
 }
@@ -67,20 +79,33 @@ function numIfNumeric(v) {
   return Number.isFinite(n) ? n : v;
 }
 
-async function req(path, base, opts = {}, timeoutMs = 30000) {
+async function reqOnce(path, base, opts, timeoutMs) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const r = await fetch(base + path, { ...opts, signal: ctl.signal });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(body.detail || `backend ${r.status} on ${path}`);
-    return body;
+    return await fetch(base + path, { ...opts, signal: ctl.signal });
   } catch (e) {
     if (e && e.name === 'AbortError') throw new Error(`backend timed out on ${path}`);
     throw e;
   } finally {
     clearTimeout(t);
   }
+}
+
+async function req(path, base, opts = {}, timeoutMs = 30000) {
+  let r = await reqOnce(path, base, opts, timeoutMs);
+  // Honor the server's Retry-After once (uploads/executes are safe to
+  // repeat: uploads mint a fresh session, executes are idempotent).
+  if (r.status === 429) {
+    let wait = parseInt(r.headers.get('Retry-After') || '5', 10);
+    if (!Number.isFinite(wait) || wait < 0) wait = 5;
+    await new Promise((res) => setTimeout(res, Math.min(wait, 30) * 1000));
+    r = await reqOnce(path, base, opts, timeoutMs);
+    if (r.status === 429) throw new Error(`backend rate limit exceeded on ${path} — try again shortly`);
+  }
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `backend ${r.status} on ${path}`);
+  return body;
 }
 
 export const apiHealth = (base, timeoutMs = 8000) =>
