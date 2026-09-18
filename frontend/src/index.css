@@ -208,7 +208,44 @@ body,
   cursor: pointer;
 }
 
-/* Light theme uses the same native OS cursors above (user preference): custom hand art was tried and reverted — keep native. */
+/* Light theme grab hands: white fill + thick black edge (native hand + black
+   outline look — CSS cannot style native cursors, so this traces it). Art is
+   defined once as vars and shared by the pane/handle rules below plus the
+   app-wide dragging rule, so all three can never drift apart. Arrow/text and
+   pointer stay native in both themes. */
+.light {
+  --cursor-grab: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='%23ffffff' stroke='%23000000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>");
+  --cursor-grabbing: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><g fill='%23ffffff' stroke='%23000000' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2'/><path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/><path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/><path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/></g></svg>");
+}
+.light .react-flow__pane.draggable {
+  cursor:
+    var(--cursor-grab) 13 13,
+    grab;
+}
+.light .react-flow__pane.dragging,
+.light .react-flow__node .node-drag-handle:active {
+  cursor:
+    var(--cursor-grabbing) 13 13,
+    grabbing;
+}
+.light .react-flow__node .node-drag-handle,
+.light .react-flow__node .cursor-grab {
+  cursor:
+    var(--cursor-grab) 13 13,
+    grab !important;
+}
+/* While a canvas drag is active the pointer may cross onto the palette,
+   header, or output panel — whose own cursor rules would otherwise win.
+   This body flag (toggled by PipelineCanvas drag callbacks) forces the
+   grabbing hand app-wide until drop. Scoped to .light because the art vars
+   only exist there (an unset var would void the whole declaration); dark
+   theme keeps native cursors throughout the drag. */
+.light body.is-canvas-dragging,
+.light body.is-canvas-dragging * {
+  cursor:
+    var(--cursor-grabbing) 13 13,
+    grabbing !important;
+}
 
 /* Scroll inside nodes — wheel over a node scrolls its content instead of
    zooming the canvas (React Flow `nowheel` opt-out) and doesn't chain to pane. */

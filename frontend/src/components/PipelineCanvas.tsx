@@ -1,7 +1,7 @@
 import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow } from "@xyflow/react";
 import type { Connection, EdgeChange, NodeChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { DragEvent } from "react";
 
 import { Loader2 } from "lucide-react";
@@ -151,6 +151,28 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
     [setSelectedNodeId, setSelectedEdgeId],
   );
 
+  // Keep the grabbing hand while a drag crosses onto the palette, header, or
+  // output panel (cursor resolves from the element under the pointer, so
+  // canvas-scoped rules stop applying outside it). Counter-based so an
+  // overlapping node-drag + pan can never clear each other's flag early.
+  const activeDrags = useRef(0);
+  const setDragging = useCallback((active: boolean): void => {
+    activeDrags.current = Math.max(0, activeDrags.current + (active ? 1 : -1));
+    document.body.classList.toggle("is-canvas-dragging", activeDrags.current > 0);
+  }, []);
+  useEffect(() => {
+    // Backstop: a drag ending off-window without stop callbacks must not
+    // leave the flag (and custom cursor) stuck.
+    return () => {
+      activeDrags.current = 0;
+      document.body.classList.remove("is-canvas-dragging");
+    };
+  }, []);
+  const handleNodeDragStart = useCallback((): void => setDragging(true), [setDragging]);
+  const handleNodeDragStop = useCallback((): void => setDragging(false), [setDragging]);
+  const handleMoveStart = useCallback((): void => setDragging(true), [setDragging]);
+  const handleMoveEnd = useCallback((): void => setDragging(false), [setDragging]);
+
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
@@ -211,6 +233,10 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
           onSelectionChange={handleSelectionChange}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
+          onMoveStart={handleMoveStart}
+          onMoveEnd={handleMoveEnd}
           // Deletion is owned solely by App.tsx's key handler (which pushes
           // undo history via removeNode/removeEdge). ReactFlow's built-in
           // delete would bypass history via onNodesChange, causing
