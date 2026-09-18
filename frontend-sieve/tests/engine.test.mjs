@@ -73,6 +73,20 @@ describe('sort direction', () => {
   });
 });
 
+describe('wirePath', () => {
+  it('builds a valid cubic between ports', () => {
+    assert.equal(E.wirePath(0, 100, 300, 100, 236, 18), 'M 236 118 C 272 118, 264 118, 300 118');
+  });
+  it('never emits NaN for hostile coordinates', () => {
+    for (const bad of [undefined, null, NaN, 'abc', {}, []]) {
+      const d = E.wirePath(bad, bad, 300, 100, 236, 18);
+      assert.doesNotMatch(d, /NaN|undefined/);
+    }
+    // Numeric strings (legacy storage) still resolve correctly
+    assert.equal(E.wirePath('40', '120', 300, 100, 236, 18).slice(0, 11), 'M 276 138 C');
+  });
+});
+
 describe('one-hot', () => {
   it('flags match first-appearance categories, missing never matches', () => {
     const out = E.runFrom({ columns: ['c'], rows: [['a'], ['b'], ['a'], ['']] }, [

@@ -651,7 +651,19 @@ function EngineFactory(){
     return { base: { columns: base.columns, rows: base.rows, meta: srcMeta }, outputs, results };
   }
 
-  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, runFrom, OPS, sanitizeCol };
+  // SVG wire path between two node ports. Coerces every coordinate:
+  // restored workspaces may carry string/missing positions, and "40"+236
+  // concatenates (wire flies off-canvas and vanishes) while nodes still
+  // render — the classic missing-wire symptom. Never returns NaN.
+  function wirePath(ax, ay, bx, by, w, portY){
+    const X = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const x1 = X(ax) + X(w), y1 = X(ay) + X(portY);
+    const x2 = X(bx), y2 = X(by) + X(portY);
+    const dx = Math.max(36, Math.min(170, (x2 - x1) * .5));
+    return `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
+  }
+
+  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, runFrom, OPS, sanitizeCol, wirePath };
 }
 
 /* python string literal helper (used by op codegen) */

@@ -107,9 +107,9 @@ button{font-family:var(--mono)}
 @keyframes nflash{0%,100%{box-shadow:var(--sh)}45%{box-shadow:0 0 0 5px var(--acc-t),var(--sh)}}
 .node.appear{animation:nin .38s both}
 @keyframes nin{from{opacity:0;transform:translateY(12px) scale(.95)}}
-.node::before,.node::after{content:'';position:absolute;width:9px;height:9px;border-radius:50%;background:var(--card);border:1.5px solid var(--ink);top:13.5px;z-index:1}
-.node::before{left:-5.5px}
-.node::after{right:-5.5px}
+.node::before,.node::after{content:'';position:absolute;width:11px;height:11px;border-radius:50%;background:var(--card);border:2px solid var(--acc);top:12.5px;z-index:1}
+.node::before{left:-6.5px}
+.node::after{right:-6.5px}
 .node.src::before{display:none}
 .node.out::after{display:none}
 .nh{display:flex;align-items:center;gap:8px;height:36px;padding:0 11px;border-bottom:1px solid var(--line)}

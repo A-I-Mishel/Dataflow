@@ -199,14 +199,27 @@ function pushHist(label, cokey){
   updateUndoBtns(); persistSoon();
 }
 function histReset(){ hist.stack = []; hist.idx = -1; updateUndoBtns(); }
+// Restored positions must be finite numbers: a string/"missing" coordinate
+// still positions the node element (or pins it at origin) but corrupts wire
+// math downstream ("40"+236 concatenates → wire off-canvas, node looks
+// fine). Snapshots are written by this app so this is defense-in-depth
+// against corrupt/legacy storage, not the normal path.
+function asXY(p, fb){
+  const sane = v => (typeof v === 'number' && Number.isFinite(v)) ? v : NaN;
+  const x = sane(p && p.x), y = sane(p && p.y);
+  return { x: Number.isNaN(x) ? fb.x : x, y: Number.isNaN(y) ? fb.y : y };
+}
 function restoreSnap(s){
   state.nodes = s.nodes.map(x => {
     if (!E.OPS[x.type]) return null;
     const n = makeNode(x.type);
-    n.enabled = x.enabled; n.params = JSON.parse(JSON.stringify(x.params)); n.x = x.x; n.y = x.y;
+    n.enabled = x.enabled; n.params = JSON.parse(JSON.stringify(x.params));
+    const pos = asXY(x, { x: 0, y: 0 });
+    n.x = pos.x; n.y = pos.y;
     return n;
   }).filter(Boolean);
-  state.srcPos = { ...s.srcPos }; state.outPos = { ...s.outPos };
+  state.srcPos = asXY(s.srcPos, { x: 40, y: 120 });
+  state.outPos = asXY(s.outPos, { x: 340, y: 120 });
   state.selected = null; state.viewStep = 'final';
   requestRun(0); renderNodes(); renderInspector(); updateUndoBtns(); persistSoon();
 }
@@ -392,9 +405,7 @@ function renderWires(){
   const ch = chainNodes(); let html = WIRE_DEFS;
   for (let i = 0; i < ch.length - 1; i++){
     const a = ch[i], b = ch[i+1];
-    const x1 = a.x + NW, y1 = a.y + PORTY, x2 = b.x, y2 = b.y + PORTY;
-    const dx = clamp((x2 - x1) * .5, 36, 170);
-    html += `<path id="w-${a.id}" d="M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}" marker-end="url(#arr)"/>`;
+    html += `<path id="w-${a.id}" d="${E.wirePath(a.x, a.y, b.x, b.y, NW, PORTY)}" marker-end="url(#arr)"/>`;
   }
   $('#wires').innerHTML = html;
 }
@@ -1490,11 +1501,12 @@ async function boot(){
         const n = makeNode(x.type);
         n.enabled = x.enabled !== false;
         n.params = x.params || n.params;
-        n.x = x.x || 0; n.y = x.y || 0;
+        const pos = asXY(x, { x: 0, y: 0 });
+        n.x = pos.x; n.y = pos.y;
         return n;
       });
-      if (saved.srcPos) state.srcPos = saved.srcPos;
-      if (saved.outPos) state.outPos = saved.outPos;
+      if (saved.srcPos) state.srcPos = asXY(saved.srcPos, { x: 40, y: 120 });
+      if (saved.outPos) state.outPos = asXY(saved.outPos, { x: 340, y: 120 });
     }
     hideWelcome();
     requestRun(0);
