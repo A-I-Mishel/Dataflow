@@ -11,15 +11,22 @@ from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_empty_columns import apply_drop_empty_columns
 from transforms.drop_na import apply_drop_na
+from transforms.date_difference import apply_date_difference
 from transforms.encode_categorical import apply_encode_categorical
+from transforms.extract_date_part import apply_extract_date_part
+from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.group_rare import apply_group_rare
+from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
+from transforms.parse_date import apply_parse_date
 from transforms.rename_column import apply_rename_column
 from transforms.reorder_columns import apply_reorder_columns
 from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
+from transforms.split_column import apply_split_column
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +46,13 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "reorder-columns": apply_reorder_columns,
     "drop-empty-columns": apply_drop_empty_columns,
     "replace-values": apply_replace_values,
+    "split-column": apply_split_column,
+    "merge-columns": apply_merge_columns,
+    "extract-text": apply_extract_text,
+    "group-rare": apply_group_rare,
+    "parse-date": apply_parse_date,
+    "extract-date-part": apply_extract_date_part,
+    "date-difference": apply_date_difference,
 }
 
 

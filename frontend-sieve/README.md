@@ -65,12 +65,18 @@ Fully mapped: `fill-missing` (mean/median/mode/custom/ffill/bfill+limit)
 `drop-columns` → `drop-column`, `rename-columns` → `rename-column`,
 `one-hot` → `encode-categorical`, `round-values` → `round-values`,
 `reorder-columns` → `reorder-columns`, `drop-empty-columns` →
-`drop-empty-columns`, `replace-values` → `replace-values`.
+`drop-empty-columns`, `replace-values` → `replace-values`,
+`split-column` → `split-column`, `merge-columns` → `merge-columns`,
+`extract-text` → `extract-text`, `group-rare` → `group-rare`,
+`label-encode` → `encode-categorical` (label), `normalize` → `normalize`,
+`convert-type`→date → `parse-date`, `extract-date-part` →
+`extract-date-part`, `date-difference` → `date-difference`.
 
 Local-only (backend check skips the run and says why instead of comparing
 against different semantics): `drop-duplicates/keep-last` (backend always
 keeps first), `standardize` (new column vs in-place normalize),
-`clean-text`, `convert-type`, `remove-outliers`.
+`convert-type`→number/text (no backend cast op), `clean-text`,
+`remove-outliers`.
 
 ## Cutover status
 

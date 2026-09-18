@@ -316,3 +316,173 @@ describe('replace-values', () => {
     );
   });
 });
+
+describe('split-column', () => {
+  it('splits on a delimiter with auto names', () => {
+    const out = E.OPS['split-column'].run(
+      { columns: ['e'], rows: [['a@x'], ['b'], ['']] },
+      { column: 'e', delimiter: '@', max_splits: '', keep: true },
+    );
+    assert.deepEqual(out.columns, ['e', 'e_1', 'e_2']);
+    assert.deepEqual(out.rows[0].slice(1), ['a', 'x']);
+    assert.deepEqual(out.rows[1].slice(1), ['b', null]);
+    assert.deepEqual(out.rows[2].slice(1), [null, null]);
+  });
+  it('glues the remainder to the last piece', () => {
+    const out = E.OPS['split-column'].run(
+      { columns: ['e'], rows: [['a@x@y']] },
+      { column: 'e', delimiter: '@', max_splits: '1', keep: true },
+    );
+    assert.deepEqual(out.rows[0].slice(1), ['a', 'x@y']);
+  });
+  it('rejects empty delimiters and explosions', () => {
+    const data = { columns: ['e'], rows: [['a b c d e f g h i j k l m n o p q']] };
+    assert.throws(() =>
+      E.OPS['split-column'].run(data, { column: 'e', delimiter: '', max_splits: '', keep: true }),
+    );
+    assert.throws(() =>
+      E.OPS['split-column'].run(data, { column: 'e', delimiter: ' ', max_splits: '', keep: true }),
+    );
+  });
+});
+
+describe('merge-columns', () => {
+  it('joins with canonical numbers, skipping missing', () => {
+    const out = E.OPS['merge-columns'].run(
+      { columns: ['a', 'b'], rows: [['x', 25], [null, 'y'], ['', 'z']] },
+      { columns: ['a', 'b'], separator: ' ', output: 'ab', keep: true },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[2]),
+      ['x 25', 'y', 'z'],
+    );
+  });
+  it('all-missing rows merge to null', () => {
+    const out = E.OPS['merge-columns'].run(
+      { columns: ['a', 'b'], rows: [[null, '']] },
+      { columns: ['a', 'b'], separator: ' ', output: 'ab', keep: true },
+    );
+    assert.deepEqual(out.rows[0][2], null);
+  });
+  it('requires two columns and a fresh output name', () => {
+    const data = { columns: ['a', 'b'], rows: [] };
+    assert.throws(() =>
+      E.OPS['merge-columns'].run(data, { columns: ['a'], separator: ' ', output: 'ab', keep: true }),
+    );
+    assert.throws(() =>
+      E.OPS['merge-columns'].run(data, { columns: ['a', 'b'], separator: ' ', output: 'a', keep: true }),
+    );
+  });
+});
+
+describe('extract-text', () => {
+  const data = { columns: ['e'], rows: [['john@x.com'], ['nope'], ['']] };
+  const run = (params) => E.OPS['extract-text'].run(data, { column: 'e', output: 'o', ...params });
+  it('after/before delimiters', () => {
+    assert.equal(run({ mode: 'after', delim: '@' }).rows[0][1], 'x.com');
+    assert.equal(run({ mode: 'before', delim: '@' }).rows[0][1], 'john');
+    assert.equal(run({ mode: 'after', delim: '@' }).rows[1][1], null);
+    assert.equal(run({ mode: 'after', delim: '@' }).rows[2][1], '');
+  });
+  it('between/prefix/regex', () => {
+    assert.equal(run({ mode: 'between', delim: '<', delim2: '>' }).rows[0][1], null);
+    const tagged = E.OPS['extract-text'].run(
+      { columns: ['e'], rows: [['a<b>c']] },
+      { column: 'e', mode: 'between', delim: '<', delim2: '>', output: 'o' },
+    );
+    assert.equal(tagged.rows[0][1], 'b');
+    assert.equal(run({ mode: 'prefix', length: '4' }).rows[0][1], 'john');
+    assert.equal(run({ mode: 'regex', pattern: '\\w+@\\w+' }).rows[0][1], 'john@x');
+    assert.equal(run({ mode: 'regex', pattern: '\\d+' }).rows[0][1], null);
+  });
+  it('rejects bad config', () => {
+    assert.throws(() => run({ mode: 'after', delim: '' }));
+    assert.throws(() => run({ mode: 'prefix', length: '0' }));
+    assert.throws(() => run({ mode: 'regex', pattern: '([' }));
+    assert.throws(() =>
+      E.OPS['extract-text'].run(data, { column: 'e', mode: 'after', delim: '@', output: 'e' }),
+    );
+  });
+});
+
+describe('group-rare', () => {
+  const data = { columns: ['c'], rows: [['a'], ['a'], ['b'], ['c'], ['']] };
+  it('folds rare values by count', () => {
+    const out = E.OPS['group-rare'].run(data, { column: 'c', min_count: '2', replacement: 'Other' });
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['a', 'a', 'Other', 'Other', ''],
+    );
+  });
+  it('accepts percentages', () => {
+    const out = E.OPS['group-rare'].run(data, { column: 'c', min_count: '40%', replacement: 'Other' });
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['a', 'a', 'Other', 'Other', ''],
+    );
+  });
+});
+
+describe('label-encode', () => {
+  it('labels in sklearn order with missing last', () => {
+    const out = E.OPS['label-encode'].run(
+      { columns: ['c'], rows: [['b'], ['a'], [''], ['a']] },
+      { column: 'c' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      [2, 1, 0, 1],
+    );
+  });
+});
+
+describe('normalize', () => {
+  it('scales 0 to 1 in place', () => {
+    const out = E.OPS['normalize'].run(
+      { columns: ['v'], rows: [['10'], ['20'], ['30']] },
+      { column: 'v', method: 'minmax' },
+    );
+    assert.deepEqual(out.columns, ['v']);
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      [0, 0.5, 1],
+    );
+  });
+  it('z-scores with the backend zero-variance guard', () => {
+    const out = E.OPS['normalize'].run(
+      { columns: ['v'], rows: [['5'], ['5']] },
+      { column: 'v', method: 'z' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      [0, 0],
+    );
+  });
+  it('refuses non-numeric columns like the backend', () => {
+    assert.throws(() =>
+      E.OPS['normalize'].run({ columns: ['v'], rows: [['abc']] }, { column: 'v', method: 'z' }),
+    );
+  });
+});
+
+describe('date ops', () => {
+  it('extracts parts without timezones', () => {
+    const data = { columns: ['d'], rows: [['2026-09-18'], ['bad'], ['']] };
+    const run = (part) => E.OPS['extract-date-part'].run(data, { column: 'd', part, output: 'o' });
+    assert.equal(run('year').rows[0][1], 2026);
+    assert.equal(run('month').rows[0][1], 9);
+    assert.equal(run('weekday').rows[0][1], 'Friday');
+    assert.equal(run('quarter').rows[0][1], 'Q3');
+    assert.equal(run('week').rows[0][1], 38);
+    assert.equal(run('year').rows[1][1], null);
+    assert.equal(run('year').rows[2][1], null);
+  });
+  it('differences dates in the requested unit', () => {
+    const out = E.OPS['date-difference'].run(
+      { columns: ['s', 'e'], rows: [['2026-01-01', '2026-01-10'], ['2026-01-01', '']] },
+      { start: 's', end: 'e', unit: 'days', output: 'gap' },
+    );
+    assert.equal(out.rows[0][2], 9);
+    assert.equal(out.rows[1][2], null);
+  });
+});

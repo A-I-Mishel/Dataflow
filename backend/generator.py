@@ -27,6 +27,13 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "reorder-columns": ("transforms.reorder_columns", "apply_reorder_columns"),
     "drop-empty-columns": ("transforms.drop_empty_columns", "apply_drop_empty_columns"),
     "replace-values": ("transforms.replace_values", "apply_replace_values"),
+    "split-column": ("transforms.split_column", "apply_split_column"),
+    "merge-columns": ("transforms.merge_columns", "apply_merge_columns"),
+    "extract-text": ("transforms.extract_text", "apply_extract_text"),
+    "group-rare": ("transforms.group_rare", "apply_group_rare"),
+    "parse-date": ("transforms.parse_date", "apply_parse_date"),
+    "extract-date-part": ("transforms.extract_date_part", "apply_extract_date_part"),
+    "date-difference": ("transforms.date_difference", "apply_date_difference"),
 }
 
 

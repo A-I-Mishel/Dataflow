@@ -207,3 +207,56 @@ def test_parity_wave1_ops() -> None:
         ]
     )
     assert frames_equal(sieve, backend) == []
+
+
+def test_parity_wave2_ops() -> None:
+    """Wave-2 additions, cell-for-cell on the messy corpus: split, merge,
+    extract, group-rare, label-encode, normalize (min-max, the z-score mean
+    is pairwise-summed in numpy vs sequential in JS — same value up to the
+    last ulp, so min-max carries the parity lock and z-score is covered by
+    unit tests on both sides), parse-date, extract-date-part."""
+    sieve = sieve_run(
+        [
+            {"type": "split-column", "params": {"column": "Email", "delimiter": "@", "max_splits": "", "keep": True}},
+            {"type": "merge-columns", "params": {"columns": ["City", "Active"], "separator": " ", "output": "Locale", "keep": True}},
+            {"type": "extract-text", "params": {"column": "Email", "mode": "after", "delim": "@", "output": "Domain"}},
+            {"type": "group-rare", "params": {"column": "Department", "min_count": "5%", "replacement": "Other"}},
+            {"type": "label-encode", "params": {"column": "City"}},
+            {"type": "normalize", "params": {"column": "PerformanceScore", "method": "minmax"}},
+            {"type": "convert-type", "params": {"column": "HireDate", "to": "date"}},
+            {"type": "extract-date-part", "params": {"column": "HireDate", "part": "year", "output": "HireYear"}},
+        ]
+    )
+    backend = backend_run(
+        [
+            _node("n1", "split-column", columns=["Email"], delimiter="@", keep_original=True),
+            _node(
+                "n2",
+                "merge-columns",
+                columns=["City", "Active"],
+                output="Locale",
+                separator=" ",
+                keep_original=True,
+            ),
+            _node(
+                "n3",
+                "extract-text",
+                columns=["Email"],
+                method="after",
+                delimiter="@",
+                output="Domain",
+            ),
+            _node(
+                "n4",
+                "group-rare",
+                columns=["Department"],
+                threshold="5%",
+                replacement="Other",
+            ),
+            _node("n5", "encode-categorical", method="label", columns=["City"]),
+            _node("n6", "normalize", columns=["PerformanceScore"], method="min-max"),
+            _node("n7", "parse-date", columns=["HireDate"], format="auto"),
+            _node("n8", "extract-date-part", columns=["HireDate"], part="year", output="HireYear"),
+        ]
+    )
+    assert frames_equal(sieve, backend) == []

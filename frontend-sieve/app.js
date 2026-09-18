@@ -1625,7 +1625,7 @@ window.Sieve = { runSelfTests, state, E };  // debug handle
 /* ==================================================================
    CHROME — palette, tabs, header, DnD, keyboard, errors, boot
    ================================================================== */
-const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Numbers'];
+const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Categories','Numbers','Dates'];
 function buildPalette(){
   const host = $('#palList');
   for (const g of GROUPS){

@@ -51,6 +51,27 @@ function EngineFactory(){
     const pos = (sorted.length - 1) * qt, base = Math.floor(pos), rest = pos - base;
     return sorted[base+1] !== undefined ? sorted[base] + rest * (sorted[base+1] - sorted[base]) : sorted[base];
   }
+  // Canonical scalar→string shared by string-building ops (merge, extract):
+  // whole floats take int form so both engines agree without pandas dtype
+  // knowledge. Missing (null/NaN) stays null and is skipped by callers,
+  // never stringified. Known edge: JS booleans stringify lowercase
+  // ('true') vs pandas ('True') — unreachable via CSV parsing, where
+  // booleans arrive as strings.
+  function sieveStr(v){
+    if (v == null || (typeof v === 'number' && Number.isNaN(v))) return null;
+    if (typeof v === 'number' && Number.isInteger(v)) return String(v);
+    return String(v);
+  }
+  // ISO-8601 week number from Y/M/D components (no timezone involved).
+  function isoWeekNum(y, mo, d){
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    const day = (dt.getUTCDay() + 6) % 7;
+    dt.setUTCDate(dt.getUTCDate() - day + 3);
+    const first = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+    const fday = (first.getUTCDay() + 6) % 7;
+    first.setUTCDate(first.getUTCDate() - fday + 3);
+    return 1 + Math.round((dt - first) / 6048e5);
+  }
   function decodeBytes(buf){
     try { return { text: new TextDecoder('utf-8', {fatal:true}).decode(buf), encoding: 'UTF-8' }; }
     catch(e){ return { text: new TextDecoder('windows-1252').decode(buf), encoding: 'Windows-1252' }; }
@@ -550,7 +571,7 @@ function EngineFactory(){
     },
 
     'one-hot': {
-      name:'One-hot Encode', icon:'layers', group:'Structure', rowStable:true,
+      name:'One-hot Encode', icon:'layers', group:'Categories', rowStable:true,
       blurb:'Turn a category into 0/1 flag columns',
       defaults: () => ({ column:'' }),
       schema: [{ k:'column', t:'column', label:'Category column' }],
@@ -749,6 +770,446 @@ function EngineFactory(){
           ];
         }
         return [`df[[${cs}]] = df[[${cs}]].replace(${lit(p.find)}, ${lit(p.replacement)})`];
+      }
+    },
+
+    'split-column': {
+      name:'Split Column', icon:'table', group:'Text & Types', rowStable:true,
+      blurb:'Split one column into several on a delimiter',
+      defaults: () => ({ column:'', delimiter:',', max_splits:'', keep:true }),
+      schema: [
+        { k:'column', t:'column', label:'Source column' },
+        { k:'delimiter', t:'text', label:'Delimiter', ph:'e.g. ,' },
+        { k:'max_splits', t:'text', label:'Max splits', ph:'blank = split all' },
+        { k:'keep', t:'check', label:'Keep original column' }
+      ],
+      summary: p => `${p.column || '—'} split on “${p.delimiter}”`,
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        if (p.delimiter === '' || p.delimiter == null) throw new Error('type a delimiter');
+        const maxS = (p.max_splits === '' || p.max_splits == null) ? null
+          : (/^\d+$/.test(String(p.max_splits).trim()) ? parseInt(p.max_splits, 10) : null);
+        if (p.max_splits !== '' && p.max_splits != null && maxS === null) throw new Error('max splits must be a whole number or blank');
+        // pandas n=maxS keeps the remainder glued to the last piece.
+        const splitN = s => {
+          const parts = s.split(p.delimiter);
+          if (maxS === null || parts.length <= maxS + 1) return parts;
+          return [...parts.slice(0, maxS), parts.slice(maxS).join(p.delimiter)];
+        };
+        const cooked = d.rows.map(r => {
+          const v = r[ci];
+          if (MISS(v)) return null;
+          return splitN(String(v));
+        });
+        let width = 0;
+        for (const parts of cooked) if (parts && parts.length > width) width = parts.length;
+        if (!d.rows.length) return { columns: d.columns, rows: d.rows };
+        // An all-missing column still yields one null part, like pandas
+        // str.split(expand=True) does — otherwise the twins diverge.
+        if (width === 0) width = 1;
+        if (width > 15) throw new Error(`splits into ${width} pieces (max 15) — use a more specific delimiter`);
+        const names = [];
+        for (let i = 0; i < width; i++) names.push(`${p.column}_${i + 1}`);
+        const dup = names.find(c => d.columns.includes(c));
+        if (dup) throw new Error(`output would overwrite column “${dup}”`);
+        const cols = p.keep !== false ? [...d.columns, ...names] : [...d.columns.filter(c => c !== p.column), ...names];
+        return { columns: cols, rows: d.rows.map((r, i) => {
+          const parts = cooked[i];
+          const cells = names.map((_, k) => (parts && k < parts.length ? parts[k] : null));
+          const base = p.keep !== false ? r : r.filter((_, j) => d.columns[j] !== p.column);
+          return base.concat(cells);
+        })};
+      },
+      code: (ctx, p) => {
+        const c = py(p.column);
+        const n = /^\d+$/.test(String(p.max_splits ?? '').trim()) ? `, n=${parseInt(p.max_splits, 10)}` : '';
+        const names = `_parts.columns = [f"${p.column}_{i + 1}" for i in range(_parts.shape[1])]`;
+        const lines = [
+          `_s = df[${c}].mask(df[${c}].isna() | (df[${c}] == ''))`,
+          `_parts = _s.str.split(${py(p.delimiter)}${n}, expand=True)`,
+          names,
+          `df = pd.concat([df, _parts], axis=1)`
+        ];
+        if (p.keep === false) lines.push(`df = df.drop(columns=[${c}])`);
+        return lines;
+      }
+    },
+
+    'merge-columns': {
+      name:'Merge Columns', icon:'plus', group:'Structure', rowStable:true,
+      blurb:'Combine columns into one, joined by text',
+      defaults: () => ({ columns:[], separator:' ', output:'', keep:true }),
+      schema: [
+        { k:'columns', t:'multi', label:'Source columns (tick 2+)' },
+        { k:'separator', t:'text', label:'Separator', ph:'e.g. a space' },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Full Name' },
+        { k:'keep', t:'check', label:'Keep source columns' }
+      ],
+      summary: p => `${(p.columns && p.columns.length) ? p.columns.join(' + ') : '—'} → ${p.output || '…'}`,
+      run(d, p){
+        if (!p.columns || p.columns.length < 2) throw new Error('tick at least two columns');
+        const idx = p.columns.map(c => colIdx(d, c));
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        const sep = p.separator == null ? ' ' : String(p.separator);
+        return {
+          columns: [...d.columns, out],
+          rows: d.rows.map(r => {
+            const bits = [];
+            for (const ci of idx){
+              const t = sieveStr(r[ci]);
+              if (t === null || t === '') continue;
+              bits.push(t);
+            }
+            return r.concat([bits.length ? bits.join(sep) : null]);
+          })
+        };
+      },
+      code: (ctx, p) => {
+        const cs = p.columns.map(py).join(', ');
+        const out = py(String(p.output).trim());
+        const sep = py(p.separator == null ? ' ' : String(p.separator));
+        const lines = [
+          `def _sieve_j(x):`,
+          `    if x is None or (isinstance(x, float) and pd.isna(x)): return None`,
+          `    if isinstance(x, bool): return str(x)`,
+          `    if isinstance(x, float) and x.is_integer(): return str(int(x))`,
+          `    return str(x)`,
+          `df[${out}] = df[[${cs}]].apply(lambda r: ${sep}.join([t for t in (_sieve_j(x) for x in r) if t]) or None, axis=1)`
+        ];
+        if (p.keep === false) lines.push(`df = df.drop(columns=[${cs}])`);
+        return lines;
+      }
+    },
+
+    'extract-text': {
+      name:'Extract Text', icon:'eye', group:'Text & Types', rowStable:true,
+      blurb:'Pull part of a text value into a new column',
+      defaults: () => ({ column:'', mode:'after', length:'', start:'', end:'', delim:'', delim2:'', pattern:'', output:'' }),
+      schema: [
+        { k:'column', t:'column', label:'Source column' },
+        { k:'mode', t:'seg', label:'Extract', opts:[['after','After delimiter'],['before','Before delimiter'],['between','Between delimiters'],['prefix','First N chars'],['suffix','Last N chars'],['substring','Substring'],['regex','Regex match']] },
+        { k:'delim', t:'text', label:'Delimiter', ph:'e.g. @', show:p=>['after','before','between'].includes(p.mode) },
+        { k:'delim2', t:'text', label:'End delimiter', ph:'e.g. .', show:p=>p.mode==='between' },
+        { k:'length', t:'text', label:'Length', ph:'e.g. 3', show:p=>p.mode==='prefix'||p.mode==='suffix' },
+        { k:'start', t:'text', label:'Start (0-based)', ph:'e.g. 0', show:p=>p.mode==='substring' },
+        { k:'end', t:'text', label:'End (blank = rest)', ph:'e.g. 5', show:p=>p.mode==='substring' },
+        { k:'pattern', t:'text', label:'Pattern', ph:'e.g. \\d+', show:p=>p.mode==='regex' },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Domain' }
+      ],
+      summary: p => {
+        const what = {after:`after “${p.delim}”`,before:`before “${p.delim}”`,between:`between delimiters`,prefix:`first ${p.length}`,suffix:`last ${p.length}`,substring:`substring`,regex:`regex`}[p.mode];
+        return `${p.column || '—'} · ${what} → ${p.output || '…'}`;
+      },
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        // '' input flows through to '' output (present-but-empty); only
+        // null/NaN stay missing — exactly the backend mask rule.
+        const ext = s => {
+          switch (p.mode){
+            case 'before': {
+              if (!p.delim) throw new Error('type a delimiter');
+              return s.split(p.delim)[0];
+            }
+            case 'after': {
+              if (!p.delim) throw new Error('type a delimiter');
+              const i = s.indexOf(p.delim);
+              return i < 0 ? null : s.slice(i + String(p.delim).length);
+            }
+            case 'between': {
+              if (!p.delim || !p.delim2) throw new Error('type both delimiters');
+              const i1 = s.indexOf(p.delim);
+              if (i1 < 0) return null;
+              const i2 = s.indexOf(p.delim2, i1 + String(p.delim).length);
+              return i2 < 0 ? null : s.slice(i1 + String(p.delim).length, i2);
+            }
+            case 'prefix':
+            case 'suffix': {
+              if (!/^\d+$/.test(String(p.length ?? '').trim()) || parseInt(p.length, 10) < 1) throw new Error('length must be ≥ 1');
+              const n = parseInt(p.length, 10);
+              return p.mode === 'prefix' ? s.slice(0, n) : s.slice(-n);
+            }
+            case 'substring': {
+              if (!/^\d+$/.test(String(p.start ?? '').trim())) throw new Error('start must be ≥ 0');
+              const st = parseInt(p.start, 10);
+              const en = (p.end === '' || p.end == null) ? s.length
+                : (/^\d+$/.test(String(p.end).trim()) ? parseInt(p.end, 10) : null);
+              if (en === null || en < st) throw new Error('end must be ≥ start');
+              return s.slice(st, en);
+            }
+            case 'regex': {
+              if (!p.pattern) throw new Error('type a pattern');
+              let m;
+              try { m = s.match(new RegExp(p.pattern)); } catch(e){ throw new Error('invalid pattern'); }
+              return m ? m[0] : null;
+            }
+            default: throw new Error(`unknown extract mode "${p.mode}"`);
+          }
+        };
+        return {
+          columns: [...d.columns, out],
+          rows: d.rows.map(r => {
+            const v = r[ci];
+            if (v == null || (typeof v === 'number' && Number.isNaN(v))) return r.concat([null]);
+            if (v === '') return r.concat(['']);
+            return r.concat([ext(sieveStr(v))]);
+          })
+        };
+      },
+      code: (ctx, p) => {
+        const c = py(p.column), out = py(String(p.output).trim());
+        const head = [
+          `def _sieve_t(x):`,
+          `    if x is None or (isinstance(x, float) and pd.isna(x)): return None`,
+          `    if isinstance(x, bool): return str(x)`,
+          `    if isinstance(x, float) and x.is_integer(): return str(int(x))`,
+          `    return str(x)`,
+          `df[${out}] = df[${c}].map(_sieve_t)`
+        ];
+        const blank = `df[${out}] = df[${out}].mask(df[${c}] == '', '')`;
+        const tail = (() => {
+          switch (p.mode){
+            case 'before': return [`df[${out}] = df[${out}].str.split(${py(p.delim)}, n=1).str[0]`];
+            case 'after': return [`df[${out}] = df[${out}].str.split(${py(p.delim)}, n=1).str[1]`];
+            case 'between': return [
+              `def _between_${p.output.replace(/\W+/g, '_')}(s, d1=${py(p.delim)}, d2=${py(p.delim2)}):`,
+              `    if not isinstance(s, str): return None`,
+              `    i1 = s.find(d1)`,
+              `    if i1 < 0: return None`,
+              `    i2 = s.find(d2, i1 + len(d1))`,
+              `    if i2 < 0: return None`,
+              `    return s[i1 + len(d1):i2]`,
+              `df[${out}] = df[${out}].apply(_between_${p.output.replace(/\W+/g, '_')})`
+            ];
+            case 'prefix': return [`df[${out}] = df[${out}].str[:${parseInt(p.length, 10)}]`];
+            case 'suffix': return [`df[${out}] = df[${out}].str[-${parseInt(p.length, 10)}:]`];
+            case 'substring': {
+              const en = (p.end === '' || p.end == null) ? '' : String(parseInt(p.end, 10));
+              return [`df[${out}] = df[${out}].str[${parseInt(p.start, 10)}:${en}]`];
+            }
+            default: return [`df[${out}] = df[${out}].str.extract(${py('(' + p.pattern + ')')}, expand=True)[0]`];
+          }
+        })();
+        return [...head, ...tail, blank];
+      }
+    },
+
+    'group-rare': {
+      name:'Group Rare Values', icon:'layers', group:'Categories', rowStable:true,
+      blurb:'Fold infrequent categories into “Other”',
+      defaults: () => ({ column:'', min_count:'10', replacement:'Other' }),
+      schema: [
+        { k:'column', t:'column', label:'Category column' },
+        { k:'min_count', t:'text', label:'Keep categories with at least', ph:'e.g. 10 or 5%' },
+        { k:'replacement', t:'text', label:'Replacement label', ph:'e.g. Other' }
+      ],
+      summary: p => `${p.column || '—'} · rarer than ${p.min_count || '…'} → “${p.replacement}”`,
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        if (!p.replacement || !String(p.replacement).trim()) throw new Error('type a replacement label');
+        const raw = String(p.min_count ?? '').trim();
+        let thr;
+        if (/%$/.test(raw)){
+          const frac = Number(raw.slice(0, -1)) / 100;
+          if (!Number.isFinite(frac) || frac < 0) throw new Error(`threshold must be a count or a percentage like '5%'`);
+          thr = Math.ceil(frac * d.rows.length);
+        } else if (/^-?\d+$/.test(raw)){
+          thr = parseInt(raw, 10);
+          if (thr < 0) throw new Error(`threshold must be a count or a percentage like '5%'`);
+        } else throw new Error(`threshold must be a count or a percentage like '5%'`);
+        const rep = String(p.replacement).trim();
+        const freq = new Map();
+        for (const r of d.rows){ const v = r[ci]; if (MISS(v)) continue; freq.set(v, (freq.get(v) || 0) + 1); }
+        return { columns: d.columns, rows: d.rows.map(r => {
+          const v = r[ci];
+          if (MISS(v) || (freq.get(v) || 0) >= thr) return r;
+          return replaceCell(r, ci, rep);
+        })};
+      },
+      code: (ctx, p) => {
+        const c = py(p.column), rep = py(String(p.replacement).trim());
+        const raw = String(p.min_count ?? '').trim();
+        const thr = /%$/.test(raw) ? `import math\n_thr = math.ceil(len(df) * ${Number(raw.slice(0, -1)) / 100})` : `_thr = ${parseInt(raw, 10)}`;
+        return [
+          `_vc = df[${c}].replace('', pd.NA).value_counts()`,
+          thr,
+          `_keep = _vc[_vc >= _thr].index`,
+          `_miss = df[${c}].isna() | (df[${c}] == '')`,
+          `df[${c}] = df[${c}].where(_miss | df[${c}].isin(_keep), ${rep})`
+        ];
+      }
+    },
+
+    'label-encode': {
+      name:'Label Encode', icon:'grid', group:'Categories', rowStable:true,
+      blurb:'Integer labels in sklearn order (missing sorts last)',
+      defaults: () => ({ column:'' }),
+      schema: [{ k:'column', t:'column', label:'Category column' }],
+      summary: p => `${p.column || '—'} → 0, 1, 2…`,
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        // Mirrors pandas astype(str) + sklearn LabelEncoder exactly: missing
+        // sorts last, '' sorts first, the rest lexicographically. Known
+        // edges vs raw astype: whole floats ('2.0' there, '2' here — Sieve
+        // cannot see pandas dtypes) and booleans ('True' vs 'true',
+        // unreachable via CSV parsing where booleans arrive as strings).
+        const pkey = v => {
+          if (v == null || (typeof v === 'number' && Number.isNaN(v))) return null;
+          return String(v);
+        };
+        const keys = new Set(d.rows.map(r => pkey(r[ci])));
+        const ordered = [...keys].filter(k => k !== null).sort();
+        if (keys.has(null)) ordered.push(null);
+        const idx = new Map(ordered.map((k, i) => [k, i]));
+        return { columns: d.columns, rows: d.rows.map(r => replaceCell(r, ci, idx.get(pkey(r[ci])))) };
+      },
+      code: (ctx, p) => [
+        `from sklearn.preprocessing import LabelEncoder`,
+        `df[${py(p.column)}] = LabelEncoder().fit_transform(df[${py(p.column)}].astype(str))`
+      ]
+    },
+
+    'normalize': {
+      name:'Normalize', icon:'sigma', group:'Numbers', rowStable:true,
+      blurb:'Scale numbers in place: 0→1 or z-scores',
+      defaults: () => ({ column:'', method:'minmax' }),
+      schema: [
+        { k:'column', t:'column', label:'Numeric column' },
+        { k:'method', t:'seg', label:'Method', opts:[['minmax','0 → 1'],['z','z-score']] }
+      ],
+      summary: p => `${p.column || '—'} → ${{minmax:'0–1 scale',z:'z-score'}[p.method]}`,
+      hint: () => ({ num:true }),
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        const nums = [];
+        for (const r of d.rows){
+          const v = r[ci];
+          if (MISS(v)) continue;
+          if (!isNumV(v)) throw new Error(`"${p.column}" has non-numeric values`);
+          nums.push(numify(v));
+        }
+        if (!nums.length) throw new Error('no numeric values to scale');
+        let f;
+        if (p.method === 'z'){
+          // Sample std (ddof=1) with the backend's zero/NaN guard: sd 0 or
+          // undefined becomes 1, so constant columns scale to zeros.
+          const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+          let sd = nums.length > 1 ? Math.sqrt(nums.reduce((a, b) => a + (b - mean) ** 2, 0) / (nums.length - 1)) : NaN;
+          if (!(sd > 0)) sd = 1;
+          f = v => (numify(v) - mean) / sd;
+        } else {
+          const lo = Math.min(...nums), hi = Math.max(...nums);
+          let den = hi - lo;
+          if (den === 0) den = 1;
+          f = v => (numify(v) - lo) / den;
+        }
+        return { columns: d.columns, rows: d.rows.map(r => {
+          const v = r[ci];
+          return (MISS(v)) ? r : replaceCell(r, ci, f(v));
+        })};
+      },
+      code: (ctx, p) => {
+        const c = py(p.column);
+        if (p.method === 'z') return [`df[${c}] = (df[${c}] - df[${c}].mean()) / df[${c}].std().replace(0, 1).fillna(1)`];
+        return [`df[${c}] = (df[${c}] - df[${c}].min()) / (df[${c}].max() - df[${c}].min()).replace(0, 1)`];
+      }
+    },
+
+    'extract-date-part': {
+      name:'Extract Date Part', icon:'file', group:'Dates', rowStable:true,
+      blurb:'Year, month, weekday… into a new column',
+      defaults: () => ({ column:'', part:'year', output:'' }),
+      schema: [
+        { k:'column', t:'column', label:'Date column' },
+        { k:'part', t:'seg', label:'Part', opts:[['year','Year'],['month','Month'],['day','Day'],['weekday','Weekday'],['quarter','Quarter'],['week','Week #']] },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Year' }
+      ],
+      summary: p => `${p.column || '—'} · ${p.part} → ${p.output || '…'}`,
+      run(d, p){
+        const ci = colIdx(d, p.column);
+        if (!['year','month','day','weekday','quarter','week'].includes(p.part)) throw new Error(`unknown date part "${p.part}"`);
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        const WD = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        return { columns: [...d.columns, out], rows: d.rows.map(r => {
+          const v = r[ci];
+          if (MISS(v)) return r.concat([null]);
+          const iso = parseDate(v);
+          if (!iso) return r.concat([null]);
+          const [Y, M, D] = iso.split('-').map(Number);
+          let val;
+          if (p.part === 'year') val = Y;
+          else if (p.part === 'month') val = M;
+          else if (p.part === 'day') val = D;
+          else if (p.part === 'weekday') val = WD[new Date(Date.UTC(Y, M - 1, D)).getUTCDay()];
+          else if (p.part === 'quarter') val = 'Q' + Math.floor((M + 2) / 3);
+          else val = isoWeekNum(Y, M, D);
+          return r.concat([val]);
+        })};
+      },
+      code: (ctx, p) => {
+        const c = py(p.column), out = py(String(p.output).trim());
+        const acc = {year:`_k.dt.year`,month:`_k.dt.month`,day:`_k.dt.day`,weekday:`_k.dt.strftime('%A')`,
+          quarter:`_k.dt.quarter.map(lambda q: f'Q{int(q)}' if pd.notna(q) else None)`,
+          week:`_k.dt.isocalendar().week.astype('Int64')`}[p.part];
+        return [
+          `try:`,
+          `    _k = pd.to_datetime(df[${c}], format="mixed", errors="coerce")`,
+          `except (TypeError, ValueError):`,
+          `    _k = pd.to_datetime(df[${c}], errors="coerce")`,
+          `df[${out}] = ${acc}`
+        ];
+      }
+    },
+
+    'date-difference': {
+      name:'Date Difference', icon:'arrowr', group:'Dates', rowStable:true,
+      blurb:'Time between two dates, in days / hours…',
+      defaults: () => ({ start:'', end:'', unit:'days', output:'' }),
+      schema: [
+        { k:'start', t:'column', label:'Start date column' },
+        { k:'end', t:'column', label:'End date column' },
+        { k:'unit', t:'seg', label:'Unit', opts:[['days','Days'],['hours','Hours'],['minutes','Minutes'],['seconds','Seconds']] },
+        { k:'output', t:'text', label:'Output column name', ph:'e.g. Days Open' }
+      ],
+      summary: p => `${p.start || '—'} → ${p.end || '—'} in ${p.unit} → ${p.output || '…'}`,
+      run(d, p){
+        const si = colIdx(d, p.start), ei = colIdx(d, p.end);
+        const div = {days:86400000,hours:3600000,minutes:60000,seconds:1000}[p.unit];
+        if (!div) throw new Error(`unknown unit "${p.unit}"`);
+        if (!p.output || !String(p.output).trim()) throw new Error('name the output column');
+        const out = String(p.output).trim();
+        if (d.columns.includes(out)) throw new Error(`column “${out}” already exists`);
+        const ms = v => {
+          if (MISS(v)) return null;
+          const iso = parseDate(v);
+          if (!iso) return null;
+          const [Y, M, D] = iso.split('-').map(Number);
+          return Date.UTC(Y, M - 1, D);
+        };
+        return { columns: [...d.columns, out], rows: d.rows.map(r => {
+          const a = ms(r[si]), b = ms(r[ei]);
+          return r.concat([(a === null || b === null) ? null : (b - a) / div]);
+        })};
+      },
+      code: (ctx, p) => {
+        const div = {days:86400,hours:3600,minutes:60,seconds:1}[p.unit];
+        const s = py(p.start), e = py(p.end), out = py(String(p.output).trim());
+        return [
+          `def _parse(s):`,
+          `    try:`,
+          `        return pd.to_datetime(s, format="mixed", errors="coerce")`,
+          `    except (TypeError, ValueError):`,
+          `        return pd.to_datetime(s, errors="coerce")`,
+          `_s = _parse(df[${s}])`,
+          `_e = _parse(df[${e}])`,
+          `df[${out}] = (_e - _s).dt.total_seconds() / ${div}`
+        ];
       }
     }
   };

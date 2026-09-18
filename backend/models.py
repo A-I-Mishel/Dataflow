@@ -37,6 +37,30 @@ class NodeConfig(BaseModel):
     find: Optional[Any] = None
     replacement: Optional[Any] = None
     case_sensitive: Optional[bool] = True
+    # Wave-2 fields:
+    # split-column delimiter / cap on splits / keep the source column.
+    delimiter: Optional[str] = None
+    max_splits: Optional[int] = None
+    keep_original: Optional[bool] = True
+    # merge-columns separator between parts.
+    separator: Optional[str] = None
+    # extract-text mode (prefix/suffix/substring/before/after/between/regex)
+    # plus its numeric/string parameters.
+    length: Optional[int] = None
+    start: Optional[int] = None
+    end: Optional[int] = None
+    delimiter2: Optional[str] = None
+    pattern: Optional[str] = None
+    # New-column name (merge/extract/extract-date-part/date-difference).
+    output: Optional[str] = None
+    # group-rare threshold ('10' or '5%').
+    threshold: Optional[str] = None
+    # parse-date format (auto/dmy/mdy/ymd).
+    format: Optional[str] = None
+    # extract-date-part component (year/month/day/weekday/quarter/week).
+    part: Optional[str] = None
+    # date-difference unit (days/hours/minutes/seconds).
+    unit: Optional[str] = None
 
 
 class PipelineNode(BaseModel):
@@ -55,6 +79,13 @@ class PipelineNode(BaseModel):
         "reorder-columns",
         "drop-empty-columns",
         "replace-values",
+        "split-column",
+        "merge-columns",
+        "extract-text",
+        "group-rare",
+        "parse-date",
+        "extract-date-part",
+        "date-difference",
     ]
     config: NodeConfig
 

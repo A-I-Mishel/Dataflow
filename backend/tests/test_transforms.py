@@ -11,19 +11,26 @@ from typing import List
 
 from engine import execute_pipeline, execute_pipeline_with_intermediates
 from models import NodeConfig, PipelineNode
+from transforms.date_difference import apply_date_difference
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_empty_columns import apply_drop_empty_columns
 from transforms.drop_na import apply_drop_na
 from transforms.encode_categorical import apply_encode_categorical
+from transforms.extract_date_part import apply_extract_date_part
+from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.group_rare import apply_group_rare
+from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
+from transforms.parse_date import apply_parse_date
 from transforms.rename_column import apply_rename_column
 from transforms.reorder_columns import apply_reorder_columns
 from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
+from transforms.split_column import apply_split_column
 
 
 @pytest.fixture
@@ -501,3 +508,122 @@ def test_replace_values(sample_df: pd.DataFrame) -> None:
     assert nulled["Dept"].isna().sum() == 2
     with pytest.raises(HTTPException):
         apply_replace_values(sample_df, NodeConfig(columns=["Dept"]))
+
+
+def test_split_column() -> None:
+    df: pd.DataFrame = pd.DataFrame({"email": ["a@x.com", "b@y.org", None, ""]})
+    result, code = apply_split_column(df, NodeConfig(columns=["email"], delimiter="@"))
+    _assert_valid_code(code)
+    assert result.columns.tolist() == ["email", "email_1", "email_2"]
+    assert result["email_1"].tolist()[:2] == ["a", "b"]
+    assert result["email_2"].isna().tolist()[2:] == [True, True]
+    with pytest.raises(HTTPException):
+        apply_split_column(df, NodeConfig(columns=["email"], delimiter=""))
+    with pytest.raises(HTTPException):
+        apply_split_column(df, NodeConfig(columns=["email", "email"], delimiter="@"))
+
+
+def test_merge_columns() -> None:
+    df: pd.DataFrame = pd.DataFrame({"a": ["x", None], "b": ["y", "z"]})
+    result, code = apply_merge_columns(
+        df, NodeConfig(columns=["a", "b"], output="ab", separator="-")
+    )
+    _assert_valid_code(code)
+    assert result["ab"].tolist() == ["x-y", "z"]
+    with pytest.raises(HTTPException):
+        apply_merge_columns(df, NodeConfig(columns=["a"], output="ab"))
+    with pytest.raises(HTTPException):
+        apply_merge_columns(df, NodeConfig(columns=["a", "b"], output="a"))
+
+
+def test_extract_text_modes() -> None:
+    df: pd.DataFrame = pd.DataFrame({"e": ["john@x.com", "amy@y.org", None, ""]})
+    after, _ = apply_extract_text(
+        df, NodeConfig(columns=["e"], method="after", delimiter="@", output="dom")
+    )
+    assert after["dom"].tolist()[:2] == ["x.com", "y.org"]
+    assert after["dom"].isna().tolist()[2] is True
+    assert after["dom"].tolist()[3] == ""
+    before, _ = apply_extract_text(
+        df, NodeConfig(columns=["e"], method="before", delimiter="@", output="user")
+    )
+    assert before["user"].tolist()[:2] == ["john", "amy"]
+    pre, pre_code = apply_extract_text(
+        df, NodeConfig(columns=["e"], method="prefix", length=4, output="pre")
+    )
+    _assert_valid_code(pre_code)
+    assert pre["pre"].tolist()[:2] == ["john", "amy@"]
+    rx, _ = apply_extract_text(
+        df, NodeConfig(columns=["e"], method="regex", pattern=r"\w+@\w+", output="m")
+    )
+    assert rx["m"].tolist()[:2] == ["john@x", "amy@y"]
+    with pytest.raises(HTTPException):
+        apply_extract_text(df, NodeConfig(columns=["e"], method="regex", pattern="([", output="m"))
+    with pytest.raises(HTTPException):
+        apply_extract_text(df, NodeConfig(columns=["e"], method="after", delimiter="@", output="e"))
+
+
+def test_group_rare() -> None:
+    df: pd.DataFrame = pd.DataFrame({"c": ["a", "a", "b", "c", None]})
+    result, code = apply_group_rare(
+        df, NodeConfig(columns=["c"], threshold="2", replacement="Other")
+    )
+    _assert_valid_code(code)
+    assert result["c"].tolist()[:4] == ["a", "a", "Other", "Other"]
+    assert result["c"].isna().tolist()[4] is True
+    pct, _ = apply_group_rare(
+        df, NodeConfig(columns=["c"], threshold="40%", replacement="Other")
+    )
+    assert pct["c"].tolist()[:2] == ["a", "a"]
+    with pytest.raises(HTTPException):
+        apply_group_rare(df, NodeConfig(columns=["c"], threshold="soon", replacement="Other"))
+
+
+def test_encode_label_missing_sorts_last() -> None:
+    # Locks the documented twin contract: sklearn sorts NaN last, '' first.
+    df: pd.DataFrame = pd.DataFrame({"c": ["b", "a", None, ""]})
+    result, code = apply_encode_categorical(
+        df, NodeConfig(method="label", columns=["c"])
+    )
+    _assert_valid_code(code)
+    assert result["c"].tolist() == [2, 1, 3, 0]
+
+
+def test_parse_date() -> None:
+    df: pd.DataFrame = pd.DataFrame({"d": ["2026-09-18", "14/03/2021", None, "not-a-date"]})
+    result, code = apply_parse_date(df, NodeConfig(columns=["d"]))
+    _assert_valid_code(code)
+    assert result["d"].tolist()[:2] == ["2026-09-18", "2021-03-14"]
+    assert result["d"].isna().tolist()[2:] == [True, True]
+    with pytest.raises(HTTPException):
+        apply_parse_date(df, NodeConfig(columns=["d"], format="yesterday"))
+
+
+def test_extract_date_part() -> None:
+    df: pd.DataFrame = pd.DataFrame({"d": ["2026-09-18", None]})
+    year, _ = apply_extract_date_part(df, NodeConfig(columns=["d"], part="year", output="y"))
+    assert year["y"].tolist()[0] == 2026
+    assert year["y"].isna().tolist()[1] is True
+    wd, wd_code = apply_extract_date_part(
+        df, NodeConfig(columns=["d"], part="weekday", output="w")
+    )
+    _assert_valid_code(wd_code)
+    assert wd["w"].tolist()[0] == "Friday"
+    q, _ = apply_extract_date_part(df, NodeConfig(columns=["d"], part="quarter", output="q"))
+    assert q["q"].tolist()[0] == "Q3"
+    with pytest.raises(HTTPException):
+        apply_extract_date_part(df, NodeConfig(columns=["d"], part="year", output="d"))
+
+
+def test_date_difference() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"s": ["2026-01-01", None], "e": ["2026-01-10", "2026-01-10"]}
+    )
+    result, code = apply_date_difference(
+        df, NodeConfig(columns=["s", "e"], unit="days", output="gap")
+    )
+    _assert_valid_code(code)
+    assert result["gap"].tolist()[0] == 9.0
+    assert result["gap"].isna().tolist()[1] is True
+    with pytest.raises(HTTPException):
+        apply_date_difference(df, NodeConfig(columns=["s"], unit="days", output="gap"))

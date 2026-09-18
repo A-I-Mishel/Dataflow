@@ -128,6 +128,7 @@ const FILTER_OP = { '=': '==', '≠': '!=', '>': '>', '<': '<', '≥': '>=', '�
 const LOCAL_ONLY = {
   'remove-outliers': 'no backend transform',
   'clean-text': 'no backend transform',
+  // convert-type to number/text: no backend cast op (to=date maps to parse-date above).
   'convert-type': 'no backend transform',
   'standardize': 'backend normalizes in place, Sieve writes a new column',
 };
@@ -207,6 +208,103 @@ export function sieveToBackend(sieveNodes) {
         // against typed frames while Sieve parses CSV text, so '30' ships
         // as 30 exactly when it looks numeric on both sides.
         config: { columns: [...p.columns], find: numIfNumeric(p.find), replacement: p.replacement ?? null, case_sensitive: p.case !== false },
+      });
+    } else if (t === 'split-column') {
+      if (!need(p.column, 'no column selected')) continue;
+      if (!need(p.delimiter, 'empty delimiter')) continue;
+      const cfg = { columns: [p.column], delimiter: String(p.delimiter) };
+      if (p.max_splits !== '' && p.max_splits != null) {
+        if (!/^\d+$/.test(String(p.max_splits).trim())) { skipped.push({ type: t, reason: 'invalid max splits' }); continue; }
+        cfg.max_splits = parseInt(p.max_splits, 10);
+      }
+      cfg.keep_original = p.keep !== false;
+      nodes.push({ id: id(), type: 'split-column', config: cfg });
+    } else if (t === 'merge-columns') {
+      if (!need(p.columns && p.columns.length >= 2, 'fewer than two columns')) continue;
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      nodes.push({
+        id: id(),
+        type: 'merge-columns',
+        config: {
+          columns: [...p.columns],
+          output: String(p.output).trim(),
+          separator: p.separator == null ? ' ' : String(p.separator),
+          keep_original: p.keep !== false,
+        },
+      });
+    } else if (t === 'extract-text') {
+      if (!need(p.column, 'no column selected')) continue;
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      const cfg = { columns: [p.column], method: p.mode, output: String(p.output).trim() };
+      const needInt = (v, what, min) => {
+        if (!/^\d+$/.test(String(v ?? '').trim()) || parseInt(v, 10) < min) {
+          skipped.push({ type: t, reason: `invalid ${what}` });
+          return null;
+        }
+        return parseInt(v, 10);
+      };
+      if (['prefix', 'suffix'].includes(p.mode)) {
+        const n = needInt(p.length, 'length', 1);
+        if (n === null) continue;
+        cfg.length = n;
+      } else if (p.mode === 'substring') {
+        const st = needInt(p.start, 'start', 0);
+        if (st === null) continue;
+        cfg.start = st;
+        if (p.end !== '' && p.end != null) {
+          const en = needInt(p.end, 'end', st);
+          if (en === null) continue;
+          cfg.end = en;
+        }
+      } else if (['before', 'after'].includes(p.mode)) {
+        if (!need(p.delim, 'empty delimiter')) continue;
+        cfg.delimiter = String(p.delim);
+      } else if (p.mode === 'between') {
+        if (!need(p.delim && p.delim2, 'empty delimiter')) continue;
+        cfg.delimiter = String(p.delim);
+        cfg.delimiter2 = String(p.delim2);
+      } else if (p.mode === 'regex') {
+        if (!need(p.pattern, 'empty pattern')) continue;
+        cfg.pattern = String(p.pattern);
+      } else {
+        skipped.push({ type: t, reason: `unknown mode "${p.mode}"` });
+        continue;
+      }
+      nodes.push({ id: id(), type: 'extract-text', config: cfg });
+    } else if (t === 'group-rare') {
+      if (!need(p.column, 'no column selected')) continue;
+      if (!need(p.replacement && String(p.replacement).trim(), 'blank replacement label')) continue;
+      nodes.push({
+        id: id(),
+        type: 'group-rare',
+        config: { columns: [p.column], threshold: String(p.min_count ?? '10'), replacement: String(p.replacement).trim() },
+      });
+    } else if (t === 'label-encode') {
+      if (!need(p.column, 'no column selected')) continue;
+      nodes.push({ id: id(), type: 'encode-categorical', config: { method: 'label', columns: [p.column] } });
+    } else if (t === 'normalize') {
+      if (!need(p.column, 'no column selected')) continue;
+      const method = p.method === 'z' ? 'z-score' : p.method === 'minmax' ? 'min-max' : null;
+      if (!method) { skipped.push({ type: t, reason: `unknown method "${p.method}"` }); continue; }
+      nodes.push({ id: id(), type: 'normalize', config: { columns: [p.column], method } });
+    } else if (t === 'convert-type' && p.to === 'date') {
+      if (!need(p.column, 'no column selected')) continue;
+      nodes.push({ id: id(), type: 'parse-date', config: { columns: [p.column], format: 'auto' } });
+    } else if (t === 'extract-date-part') {
+      if (!need(p.column, 'no column selected')) continue;
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      nodes.push({
+        id: id(),
+        type: 'extract-date-part',
+        config: { columns: [p.column], part: p.part, output: String(p.output).trim() },
+      });
+    } else if (t === 'date-difference') {
+      if (!need(p.start && p.end, 'missing date column')) continue;
+      if (!need(p.output && String(p.output).trim(), 'blank output name')) continue;
+      nodes.push({
+        id: id(),
+        type: 'date-difference',
+        config: { columns: [p.start, p.end], unit: p.unit, output: String(p.output).trim() },
       });
     } else if (LOCAL_ONLY[t]) {
       skipped.push({ type: t, reason: LOCAL_ONLY[t] });

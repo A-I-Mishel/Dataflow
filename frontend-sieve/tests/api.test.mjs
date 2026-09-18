@@ -91,3 +91,56 @@ describe('sieveToBackend wave-1 mappings', () => {
     );
   });
 });
+
+describe('sieveToBackend wave-2 mappings', () => {
+  it('maps split/merge/extract/group/label/normalize', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'split-column', enabled: true, params: { column: 'Email', delimiter: '@', max_splits: '', keep: true } },
+      { type: 'merge-columns', enabled: true, params: { columns: ['City', 'Active'], separator: ' ', output: 'Locale', keep: true } },
+      { type: 'extract-text', enabled: true, params: { column: 'Email', mode: 'after', delim: '@', output: 'Domain' } },
+      { type: 'group-rare', enabled: true, params: { column: 'Dept', min_count: '10', replacement: 'Other' } },
+      { type: 'label-encode', enabled: true, params: { column: 'City' } },
+      { type: 'normalize', enabled: true, params: { column: 'Age', method: 'z' } },
+    ]);
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(
+      nodes.map((n) => n.type),
+      ['split-column', 'merge-columns', 'extract-text', 'group-rare', 'encode-categorical', 'normalize'],
+    );
+    assert.deepEqual(nodes[0].config, {
+      columns: ['Email'], delimiter: '@', keep_original: true,
+    });
+    assert.deepEqual(nodes[4], {
+      id: 'n5', type: 'encode-categorical', config: { method: 'label', columns: ['City'] },
+    });
+    assert.deepEqual(nodes[5], {
+      id: 'n6', type: 'normalize', config: { columns: ['Age'], method: 'z-score' },
+    });
+  });
+
+  it('maps convert-to-date and the date ops', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'convert-type', enabled: true, params: { column: 'HireDate', to: 'date' } },
+      { type: 'extract-date-part', enabled: true, params: { column: 'HireDate', part: 'year', output: 'HireYear' } },
+      { type: 'date-difference', enabled: true, params: { start: 'HireDate', end: 'EndDate', unit: 'days', output: 'Gap' } },
+    ]);
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes[0], {
+      id: 'n1', type: 'parse-date', config: { columns: ['HireDate'], format: 'auto' },
+    });
+    assert.deepEqual(nodes[1], {
+      id: 'n2', type: 'extract-date-part', config: { columns: ['HireDate'], part: 'year', output: 'HireYear' },
+    });
+    assert.deepEqual(nodes[2], {
+      id: 'n3', type: 'date-difference', config: { columns: ['HireDate', 'EndDate'], unit: 'days', output: 'Gap' },
+    });
+  });
+
+  it('keeps convert-to-number/text local-only', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'convert-type', enabled: true, params: { column: 'Age', to: 'number' } },
+    ]);
+    assert.equal(nodes.length, 0);
+    assert.equal(skipped.length, 1);
+  });
+});
