@@ -114,7 +114,7 @@ def _pipeline_created_at(row: SavedPipeline) -> str:
 
 app = FastAPI(title="Data Cleaning Pipeline API")
 
-# Production origin, e.g. FRONTEND_URLS="https://dataflow-sieve.vercel.app".
+# Production origin, FRONTEND_URLS="https://dataflow-cleaner.vercel.app".
 # Must match the Vercel project URL (see render.yaml) or browsers block
 # every API call. Localhost is always allowed for development.
 ALLOW_ORIGINS: List[str] = [
@@ -479,12 +479,36 @@ def download(
     )
 
 
+def _pipelines_read_only() -> bool:
+    """True when the deployment disables shared-template mutations.
+
+    Local default is writable. Production sets PIPELINES_READ_ONLY=true
+    (see render.yaml): listing/reading stays open (no PII in templates),
+    but anonymous save/delete — i.e. vandalism — is refused with 403.
+    Read at request time so tests can toggle it via monkeypatch.
+    """
+    return (os.environ.get("PIPELINES_READ_ONLY") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _require_pipelines_writable() -> None:
+    if _pipelines_read_only():
+        raise HTTPException(
+            status_code=403,
+            detail="Pipeline saving is disabled on this deployment",
+        )
+
+
 @app.post("/pipelines/save", response_model=PipelineSummary)
 def save_pipeline(
     payload: PipelineSaveRequest,
     db: Session = Depends(get_db),
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> PipelineSummary:
+    _require_pipelines_writable()
     evict_old_sessions()
     owner: str = _owner(x_api_key)
     name: str = payload.name.strip()
@@ -556,6 +580,7 @@ def delete_pipeline(
     db: Session = Depends(get_db),
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> DeleteResult:
+    _require_pipelines_writable()
     evict_old_sessions()
     deleted: int = crud.delete_pipeline(db, pipeline_id, _owner(x_api_key))
     if deleted == 0:

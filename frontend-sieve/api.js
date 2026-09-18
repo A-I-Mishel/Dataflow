@@ -83,7 +83,27 @@ async function req(path, base, opts = {}, timeoutMs = 30000) {
   }
 }
 
-export const apiHealth = (base) => req('/health', base, {}, 8000);
+export const apiHealth = (base, timeoutMs = 8000) =>
+  req('/health', base, {}, timeoutMs);
+
+// Wake-tolerant check for free-tier hosting (sleeps after ~15 min idle,
+// first request takes ~50s). Attempts lengthen to ride out a cold start;
+// total worst case ~90s. Resolves true on first success, false otherwise.
+export async function apiHealthRetry(base, onAttempt) {
+  const timeouts = [8000, 20000, 60000];
+  for (let i = 0; i < timeouts.length; i++) {
+    try {
+      if (onAttempt) onAttempt(i + 1, timeouts.length);
+      await apiHealth(base, timeouts[i]);
+      return true;
+    } catch (_) {
+      if (i < timeouts.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  }
+  return false;
+}
 
 export async function apiUpload(base, file) {
   const fd = new FormData();

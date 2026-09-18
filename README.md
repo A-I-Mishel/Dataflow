@@ -66,13 +66,13 @@ Order matters — backend first, then frontend, then point them at each other:
 2. **Bake the backend URL into the frontend.** `frontend-sieve/config.js`
    already points at that Render URL — only touch it if your service URL
    differs. Push.
-3. **Frontend → Vercel.** Import the same repo → name the project
-   `dataflow-sieve` so the URL is `https://dataflow-sieve.vercel.app` →
+3. **Frontend → Vercel.** Import the same repo (project
+   `dataflow-cleaner`, live at `https://dataflow-cleaner.vercel.app`) →
    Root Directory `frontend-sieve`, Framework Preset Other, Build Command
    empty, Output Directory `.`. No environment variables.
-4. **CORS.** `render.yaml` already sets `FRONTEND_URLS` to the Vercel URL;
-   confirm it matches your actual project URL and redeploy/restart the
-   backend if you changed it.
+4. **CORS.** `render.yaml` already sets `FRONTEND_URLS` to
+   `https://dataflow-cleaner.vercel.app`; redeploy/restart the backend if
+   the value ever drifts from the real Vercel URL.
 
 The deployed site boots with the baked URL; the topbar shows
 `Backend ✓` once `/health` answers. Any browser can still override via

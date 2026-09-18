@@ -15,9 +15,14 @@ services:
     healthCheckPath: /health
     envVars:
       - key: FRONTEND_URLS
-        # Production Sieve URL on Vercel (project Root Directory
-        # `frontend-sieve`). Must match exactly or browsers block the API.
-        value: https://dataflow-sieve.vercel.app
+        # Production Sieve URL on Vercel (project `dataflow-cleaner`,
+        # Root Directory `frontend-sieve`). Must match exactly (no trailing
+        # slash) or browsers block the API.
+        value: https://dataflow-cleaner.vercel.app
+      - key: PIPELINES_READ_ONLY
+        # Shared templates are anonymous: listing/reading stays open but
+        # save/delete are refused (403) so strangers cannot vandalize them.
+        value: "true"
       # Uncomment the DATABASE_URL block below together with the database
       # below to keep saved pipelines across sleeps (free Postgres expires
       # after 90 days; without it the app uses SQLite on ephemeral disk).

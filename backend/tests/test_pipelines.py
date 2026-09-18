@@ -6,6 +6,7 @@ from uuid import uuid4
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -147,3 +148,18 @@ def test_execute_returns_step_intermediates() -> None:
     assert body["intermediates"][0]["shape"][0] == 3
     assert [row["A"] for row in body["intermediates"][1]["preview"]] == [2, 3]
     assert body["intermediates"][1]["approximate"] is False
+
+
+def test_read_only_flag_blocks_mutations_but_not_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Production sets PIPELINES_READ_ONLY=true (see render.yaml): anonymous
+    # template vandalism is refused while listing/reading stays open.
+    monkeypatch.setenv("PIPELINES_READ_ONLY", "true")
+    name: str = _unique_name("ro-pipe")
+    saved = client.post(
+        "/pipelines/save", json={"name": name, "nodes": [], "edges": []}
+    )
+    assert saved.status_code == 403
+    assert client.delete("/pipelines/does-not-exist").status_code == 403
+    assert client.get("/pipelines").status_code == 200

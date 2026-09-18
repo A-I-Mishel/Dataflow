@@ -14,7 +14,7 @@ results. CSP allows backend calls (`connect-src http: https:`).
 
 Backend `https://dataflow-cleaner-api.onrender.com` (Render Blueprint,
 `render.yaml` at repo root) → baked into `config.js`
-(`window.SIEVE_API_URL`) → frontend `https://dataflow-sieve.vercel.app`
+(`window.SIEVE_API_URL`) → frontend `https://dataflow-cleaner.vercel.app`
 (Vercel, Root Directory `frontend-sieve`, Preset Other, Build empty,
 Output `.`, no env vars) → `FRONTEND_URLS` on Render matches the Vercel
 URL. Security headers live in `vercel.json`; unit tests are excluded from

@@ -1,5 +1,5 @@
 import { EngineFactory, py } from './engine.js';
-import { getApiBase, setApiBase, apiHealth, apiUpload, apiExecute, getSessionId } from './api.js';
+import { getApiBase, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -158,25 +158,26 @@ async function engineParseText(text){
    local run additionally fires POST /execute in the background. Remote
    mismatches surface as toasts; they never replace local results.
    ================================================================== */
-const backend = { base: '', online: false, sessionName: '', checking: false };
+const backend = { base: '', online: false, waking: false, sessionName: '' };
 function renderBackendBtn(){
   const b = $('#btnBackend');
   if (!b) return;
   if (!backend.base){ b.innerHTML = ic('db',14) + ' Local-only'; b.title = 'No backend configured — everything runs in this browser. Click to add a backend URL.'; }
   else if (backend.online){ b.innerHTML = ic('db',14) + ' Backend ✓'; b.title = `Connected to ${backend.base}. Click to change or disconnect.`; }
+  else if (backend.waking){ b.innerHTML = ic('db',14) + ' Waking…'; b.title = `Waking ${backend.base} — free-tier backends sleep after ~15 min idle and take ~50s to answer. Click to change or disconnect.`; }
   else { b.innerHTML = ic('db',14) + ' Backend…'; b.title = `Backend set to ${backend.base} but unreachable. Click to change or disconnect.`; }
 }
 async function backendCheck(silent){
   if (!backend.base){ backend.online = false; renderBackendBtn(); return false; }
-  try {
-    await apiHealth(backend.base);
-    backend.online = true;
-  } catch (e) {
-    backend.online = false;
-    if (!silent) toast('Backend unreachable: ' + e.message, 'alert');
-  }
-  renderBackendBtn();
-  return backend.online;
+  if (backend.waking) return false;
+  backend.waking = true; backend.online = false; renderBackendBtn();
+  const ok = await apiHealthRetry(backend.base);
+  backend.waking = false; backend.online = ok; renderBackendBtn();
+  // Note: datasets restored from IndexedDB carry no File object, so a
+  // post-wake session cannot be minted for them — re-upload once and both
+  // mirror + verification resume. Never toast at boot; the button says it.
+  if (!silent) toast(ok ? `Backend connected — ${backend.base}` : 'Backend unreachable after ~90s — check the URL or try again', ok ? 'check' : 'alert');
+  return ok;
 }
 function backendConfigure(){
   const cur = backend.base || 'http://localhost:8000';
