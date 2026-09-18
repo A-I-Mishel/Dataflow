@@ -766,6 +766,8 @@ function selectNode(id){
   else if (id === '__out') state.viewStep = 'final';
   else { const i = state.nodes.findIndex(n => n.id === id); if (i >= 0) state.viewStep = i + 1; }
   renderNodes(); renderInspector(); renderPreview();
+  // Mobile: tapping a step opens the inspector drawer so its settings are reachable.
+  if (id && id.startsWith('n') && isMobileView()) setDrawer('insp');
 }
 function deleteNode(id){
   if (!id || !id.startsWith('n')) return;
@@ -805,6 +807,7 @@ function addNode(type){
   requestRun(state.nodes.length - 1);
   renderNodes(); renderInspector(); renderPreview(); renderCode();
   pushHist('added ' + E.OPS[type].name);
+  setDrawer(null); // mobile: reveal the canvas with the new step
 }
 function firstSuitableColumn(type, params, cols){
   // A fresh Fill Missing on a text column instantly errors ("no parseable
@@ -1604,8 +1607,21 @@ function buildSamplesPop(){
     if (!pop.hidden && !e.target.closest('#popSample') && !e.target.closest('#btnSamples')) pop.hidden = true;
   });
 }
+/* ---- responsive drawers (≤900px): palette/inspector become overlays ----
+   No-ops on desktop where the buttons are hidden and the query never matches. */
+function isMobileView(){
+  return !!(window.matchMedia && matchMedia('(max-width: 900px)').matches);
+}
+function setDrawer(which){
+  document.body.classList.toggle('show-pal', which === 'pal');
+  document.body.classList.toggle('show-insp', which === 'insp');
+}
 function initChrome(){
   $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);
+  $('#btnPalette').innerHTML = ic('plus',14) + ' Steps';
+  $('#btnPalette').onclick = () => setDrawer(document.body.classList.contains('show-pal') ? null : 'pal');
+  $('#btnInspector').innerHTML = ic('columns',14) + ' Inspector';
+  $('#btnInspector').onclick = () => setDrawer(document.body.classList.contains('show-insp') ? null : 'insp');
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
   $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
   $('#btnBackend').onclick = backendConfigure;
@@ -1691,7 +1707,10 @@ function initChrome(){
     if (e.key === '+' || e.key === '='){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1.18); return; }
     if (e.key === '-'){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1/1.18); return; }
     if (e.key === '0'){ fitView(); return; }
-    if (e.key === 'Escape' && !$('#popSample').hidden) $('#popSample').hidden = true;
+    if (e.key === 'Escape'){
+      if (document.body.classList.contains('show-pal') || document.body.classList.contains('show-insp')){ setDrawer(null); return; }
+      if (!$('#popSample').hidden) $('#popSample').hidden = true;
+    }
   });
 
   let lastErr = 0;
@@ -1699,6 +1718,9 @@ function initChrome(){
   window.addEventListener('error', e => softErr(e.message));
   window.addEventListener('unhandledrejection', e => softErr((e.reason && e.reason.message) || String(e.reason)));
   window.addEventListener('beforeunload', () => { if (persistTimer) persistNow(); });
+  // Rotating back to desktop with a drawer open would strand an overlay
+  // class on a layout that no longer uses it — clear on the way out.
+  window.addEventListener('resize', debounce(() => { if (!isMobileView()) setDrawer(null); }, 150));
 }
 
 /* ---- boot: restore saved workspace or show welcome ---- */
