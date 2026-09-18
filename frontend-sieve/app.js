@@ -565,7 +565,7 @@ function initCanvasEvents(){
     e.preventDefault();
     const startY = e.clientY, startH = wrap.offsetHeight, maxH = center.clientHeight - 190;
     try { sp.setPointerCapture(e.pointerId); } catch(_){}
-    const mv = ev => wrap.style.height = clamp(startH + (startY - ev.clientY), 160, maxH) + 'px';
+    const mv = ev => wrap.style.height = clamp(startH + (ev.clientY - startY), 160, maxH) + 'px';
     const up = () => sp.removeEventListener('pointermove', mv);
     sp.addEventListener('pointermove', mv);
     sp.addEventListener('pointerup', up, { once:true });
