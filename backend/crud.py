@@ -11,13 +11,18 @@ from models_db import ExecutionLog, SavedPipeline, SessionMeta
 
 
 def create_pipeline(
-    db: Session, name: str, nodes: List[Dict[str, Any]], edges: List[Dict[str, str]]
+    db: Session,
+    name: str,
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, str]],
+    owner: str = "default",
 ) -> SavedPipeline:
     row: SavedPipeline = SavedPipeline(
         id=str(uuid4()),
         name=name,
         nodes_json=json.dumps(nodes),
         edges_json=json.dumps(edges),
+        owner=owner,
     )
     db.add(row)
     db.commit()
@@ -25,24 +30,59 @@ def create_pipeline(
     return row
 
 
-def get_pipeline_by_name(db: Session, name: str) -> Optional[SavedPipeline]:
-    return db.query(SavedPipeline).filter(SavedPipeline.name == name).first()
+def get_pipeline_by_name(
+    db: Session, name: str, owner: str = "default"
+) -> Optional[SavedPipeline]:
+    return (
+        db.query(SavedPipeline)
+        .filter(SavedPipeline.name == name, SavedPipeline.owner == owner)
+        .first()
+    )
 
 
-def get_pipelines(db: Session) -> List[SavedPipeline]:
-    return db.query(SavedPipeline).order_by(SavedPipeline.created_at.desc()).all()
+def get_pipelines(db: Session, owner: str = "default") -> List[SavedPipeline]:
+    return (
+        db.query(SavedPipeline)
+        .filter(SavedPipeline.owner == owner)
+        .order_by(SavedPipeline.created_at.desc())
+        .all()
+    )
 
 
-def get_pipeline(db: Session, pipeline_id: str) -> Optional[SavedPipeline]:
-    return db.query(SavedPipeline).filter(SavedPipeline.id == pipeline_id).first()
+def get_pipeline(db: Session, pipeline_id: str, owner: str = "default") -> Optional[SavedPipeline]:
+    return (
+        db.query(SavedPipeline)
+        .filter(SavedPipeline.id == pipeline_id, SavedPipeline.owner == owner)
+        .first()
+    )
 
 
-def delete_pipeline(db: Session, pipeline_id: str) -> int:
+def delete_pipeline(db: Session, pipeline_id: str, owner: str = "default") -> int:
     deleted: int = (
-        db.query(SavedPipeline).filter(SavedPipeline.id == pipeline_id).delete()
+        db.query(SavedPipeline)
+        .filter(SavedPipeline.id == pipeline_id, SavedPipeline.owner == owner)
+        .delete()
     )
     db.commit()
     return deleted
+
+
+def ensure_owner_column(db: Session) -> None:
+    """Add SavedPipeline.owner to databases created before the column existed.
+
+    Fresh databases get it from create_all; this ALTER covers existing
+    app.db files (including the on-disk dev DB). Backfills 'default'.
+    No-op on Postgres (column exists) and when already applied.
+    """
+    from sqlalchemy import text
+
+    if db.bind is None or db.bind.dialect.name != "sqlite":
+        return
+    cols = [row[1] for row in db.execute(text("PRAGMA table_info(saved_pipelines)"))]
+    if "owner" not in cols:
+        db.execute(text("ALTER TABLE saved_pipelines ADD COLUMN owner VARCHAR DEFAULT 'default'"))
+        db.execute(text("UPDATE saved_pipelines SET owner = 'default' WHERE owner IS NULL"))
+        db.commit()
 
 
 def log_execution(

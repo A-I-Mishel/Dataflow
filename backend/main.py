@@ -11,14 +11,16 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import crud
-from database import Base, engine, get_db
+from database import Base, SessionLocal, engine, get_db
 from engine import (
     execute_pipeline_large_file,
     execute_pipeline_with_intermediates,
 )
+from ratelimit import RateLimitMiddleware
 from generator import generate_script
 from models import (
     MAX_EDGES,
@@ -34,6 +36,7 @@ from models_db import SavedPipeline
 from profiler import profile_dataframe
 from sanitize import dtypes_dict as _dtypes_dict
 from sanitize import missing_dict as _missing_dict
+from sanitize import neutralize_formulas as _neutralize_formulas
 from sanitize import sanitize_records as _sanitize_records
 from session_store import (
     discard_large_session,
@@ -58,6 +61,12 @@ logging.basicConfig(level=logging.INFO)
 # Create SQLite tables on import so they exist under uvicorn, TestClient,
 # and pytest alike (lifespan/startup hooks do not run for bare TestClient).
 Base.metadata.create_all(bind=engine)
+# Upgrade pre-owner databases in place (no-op when already applied).
+with SessionLocal() as _upgrade_db:
+    try:
+        crud.ensure_owner_column(_upgrade_db)
+    except Exception:
+        logger.warning("owner-column upgrade skipped", exc_info=True)
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +123,11 @@ ALLOW_ORIGINS: List[str] = ["http://localhost:5173"] + [
     if url.strip()
 ]
 
+# Registered BEFORE CORS so it runs inside it: rejected requests still
+# carry CORS headers and the frontend can read the 429 body for its toast.
+# Abuse friction for expensive endpoints (uploads, executes). In-memory and
+# single-worker by design — see ratelimit.py.
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOW_ORIGINS,
@@ -130,6 +144,12 @@ app.add_middleware(
 def _storage_key(api_key: Optional[str], session_id: str) -> str:
     namespace: str = api_key.strip() if api_key and api_key.strip() else "default"
     return f"{namespace}:{session_id}"
+
+
+def _owner(api_key: Optional[str]) -> str:
+    """API-key namespace owning saved pipelines. Same rule as _storage_key
+    so data-plane and pipeline-plane isolation agree."""
+    return api_key.strip() if api_key and api_key.strip() else "default"
 
 
 def _unlink_upload_tmp(path: str) -> None:
@@ -444,8 +464,11 @@ def download(
     evict_old_sessions()
     df: pd.DataFrame = get_result(_storage_key(x_api_key, session_id))
     logger.info("Download result for session %s shape %s", session_id, df.shape)
+    # Neutralize spreadsheet-formula cells (=HYPERLINK(...) etc.) so the
+    # downloaded CSV cannot execute code when opened in Excel/Sheets.
+    # Operates on a copy — the stored result frame is never mutated.
     return StreamingResponse(
-        _csv_chunks(df),
+        _csv_chunks(_neutralize_formulas(df)),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=cleaned_data.csv"},
     )
@@ -453,26 +476,41 @@ def download(
 
 @app.post("/pipelines/save", response_model=PipelineSummary)
 def save_pipeline(
-    payload: PipelineSaveRequest, db: Session = Depends(get_db)
+    payload: PipelineSaveRequest,
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> PipelineSummary:
     evict_old_sessions()
+    owner: str = _owner(x_api_key)
     name: str = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Pipeline name must not be empty")
-    if crud.get_pipeline_by_name(db, name) is not None:
+    if crud.get_pipeline_by_name(db, name, owner) is not None:
         raise HTTPException(
             status_code=400, detail=f"A pipeline named '{name}' already exists"
         )
-    row: SavedPipeline = crud.create_pipeline(db, name, payload.nodes, payload.edges)
+    try:
+        row: SavedPipeline = crud.create_pipeline(db, name, payload.nodes, payload.edges, owner)
+    except IntegrityError:
+        # `name` stays globally unique at the DB level (see models_db), so a
+        # second namespace reusing the name trips the constraint even though
+        # the per-owner pre-check passed. Report the same 400, never a 500.
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"A pipeline named '{name}' already exists"
+        ) from None
     return PipelineSummary(
         id=row.id, name=row.name, created_at=_pipeline_created_at(row)
     )
 
 
 @app.get("/pipelines", response_model=List[PipelineSummary])
-def list_pipelines(db: Session = Depends(get_db)) -> List[PipelineSummary]:
+def list_pipelines(
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> List[PipelineSummary]:
     evict_old_sessions()
-    rows: List[SavedPipeline] = crud.get_pipelines(db)
+    rows: List[SavedPipeline] = crud.get_pipelines(db, _owner(x_api_key))
     return [
         PipelineSummary(id=row.id, name=row.name, created_at=_pipeline_created_at(row))
         for row in rows
@@ -480,9 +518,15 @@ def list_pipelines(db: Session = Depends(get_db)) -> List[PipelineSummary]:
 
 
 @app.get("/pipelines/{pipeline_id}", response_model=PipelineDetail)
-def get_pipeline(pipeline_id: str, db: Session = Depends(get_db)) -> PipelineDetail:
+def get_pipeline(
+    pipeline_id: str,
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> PipelineDetail:
     evict_old_sessions()
-    row = crud.get_pipeline(db, pipeline_id)
+    # Scoped by owner: another key's id reads as 404, never 403, so ids
+    # cannot be probed for existence across namespaces.
+    row = crud.get_pipeline(db, pipeline_id, _owner(x_api_key))
     if row is None:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     try:
@@ -502,9 +546,13 @@ def get_pipeline(pipeline_id: str, db: Session = Depends(get_db)) -> PipelineDet
 
 
 @app.delete("/pipelines/{pipeline_id}", response_model=DeleteResult)
-def delete_pipeline(pipeline_id: str, db: Session = Depends(get_db)) -> DeleteResult:
+def delete_pipeline(
+    pipeline_id: str,
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+) -> DeleteResult:
     evict_old_sessions()
-    deleted: int = crud.delete_pipeline(db, pipeline_id)
+    deleted: int = crud.delete_pipeline(db, pipeline_id, _owner(x_api_key))
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     return DeleteResult(message="Deleted")

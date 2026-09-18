@@ -18,6 +18,12 @@ class SavedPipeline(Base):
     nodes_json: Mapped[str] = mapped_column(Text, nullable=False)
     edges_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Owning API-key namespace ("default" when no key is sent). Added after
+    # launch: existing databases gain the column via ensure_owner_column().
+    # NOTE: `name` stays globally unique at the DB level (SQLite cannot drop
+    # the constraint without a rebuild), so per-key scoping is enforced in
+    # crud queries while duplicate names across keys still 400.
+    owner: Mapped[str] = mapped_column(String, nullable=False, default="default")
 
 
 class SessionMeta(Base):

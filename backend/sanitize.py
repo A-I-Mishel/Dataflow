@@ -41,5 +41,40 @@ def dtypes_dict(df: pd.DataFrame) -> Dict[str, str]:
     return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
 
 
+# Cells starting with these characters are evaluated as formulas when the
+# downloaded CSV is opened in Excel/Sheets — a classic exfil vector
+# (=HYPERLINK(...), @SUM(...), ...). Neutralize with a leading apostrophe,
+# which spreadsheets hide while displaying the original text.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def neutralize_formula(value: Any) -> Any:
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def neutralize_formulas(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with formula-risky string cells neutralized.
+
+    Only string-like columns are scanned (numerics cannot be formulas).
+    Kind-based, not name-based: pandas 3 infers `str` dtype where pandas 2
+    used `object`, so an equality check on the dtype name misses columns.
+    Previews and API JSON are untouched — this applies to the downloaded
+    CSV only, at serialization time.
+    """
+    from pandas.api.types import is_object_dtype, is_string_dtype
+
+    safe: pd.DataFrame = df.copy(deep=False)
+    for col in safe.columns:
+        series = safe[col]
+        if not (is_object_dtype(series.dtype) or is_string_dtype(series.dtype)):
+            continue
+        mask = series.map(lambda v: isinstance(v, str) and v.startswith(_FORMULA_PREFIXES))
+        if bool(mask.any()):
+            safe[col] = series.mask(mask, series[mask].map(lambda v: "'" + v))
+    return safe
+
+
 def missing_dict(df: pd.DataFrame) -> Dict[str, int]:
     return {str(col): int(df[col].isna().sum()) for col in df.columns}
