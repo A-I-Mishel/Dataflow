@@ -163,7 +163,7 @@ export default function NodePalette({ onNodeAdded }: { onNodeAdded?: () => void 
                   className={`group flex items-center gap-3 rounded-xl border border-transparent p-2.5 transition-colors ${
                     disabled
                       ? "cursor-not-allowed opacity-50 grayscale"
-                      : "cursor-grab hover:border-line hover:bg-elevated/70 active:cursor-grabbing"
+                      : "palette-node cursor-grab hover:border-line hover:bg-elevated/70 active:cursor-grabbing"
                   }`}
                 >
                   <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-elevated">

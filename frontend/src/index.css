@@ -234,6 +234,19 @@ body,
     var(--cursor-grab) 13 13,
     grab !important;
 }
+/* Palette items live outside the canvas, so the rules above never reach
+   them — without this, hovering/grabbing a node in the side panel shows
+   the native hand. Same black-outline art (dark theme keeps native). */
+.light .palette-node {
+  cursor:
+    var(--cursor-grab) 13 13,
+    grab;
+}
+.light .palette-node:active {
+  cursor:
+    var(--cursor-grabbing) 13 13,
+    grabbing;
+}
 /* While a canvas drag is active the pointer may cross onto the palette,
    header, or output panel — whose own cursor rules would otherwise win.
    This body flag (toggled by PipelineCanvas drag callbacks) forces the
