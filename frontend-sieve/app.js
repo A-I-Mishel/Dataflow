@@ -520,23 +520,38 @@ function bindNode(el){
     const id = el.dataset.id, obj = objOf(id);
     if (!obj) return;
     const sx = e.clientX, sy = e.clientY, ox = obj.x, oy = obj.y;
-    let moved = false;
+    let moved = false, raf = 0, lx = sx, ly = sy;
     try { el.setPointerCapture(e.pointerId); } catch(_){}
-    const mv = ev => {
-      const dx = (ev.clientX - sx) / view.z, dy = (ev.clientY - sy) / view.z;
-      if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 4){ moved = true; el.style.cursor = 'grabbing'; }
+    // One paint per frame: raw pointermove can fire several times per
+    // frame (touch especially), and each paint re-lays-out the wires SVG.
+    const paint = () => {
+      raf = 0;
+      const dx = (lx - sx) / view.z, dy = (ly - sy) / view.z;
+      if (!moved && Math.abs(lx - sx) + Math.abs(ly - sy) > 4){ moved = true; el.style.cursor = 'grabbing'; }
       if (!moved) return;
       obj.x = Math.round(ox + dx); obj.y = Math.round(oy + dy);
       el.style.left = obj.x + 'px'; el.style.top = obj.y + 'px';
       renderWires();
     };
-    const up = () => {
-      el.removeEventListener('pointermove', mv); el.style.cursor = '';
+    const mv = ev => { lx = ev.clientX; ly = ev.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    // pointercancel (scroll takeover, gesture interrupt, alert) must clean
+    // up exactly like pointerup: otherwise the stale handler survives, the
+    // next drag stacks a second one, and both fight from different anchors.
+    const done = cancelled => {
+      if (raf){ cancelAnimationFrame(raf); raf = 0; }
+      el.removeEventListener('pointermove', mv);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', onCancel);
+      el.style.cursor = '';
+      if (cancelled) return;
       if (!moved) selectNode(id);
       else pushHist('moved ' + labelOf(id), 'move:' + id);
     };
+    const onCancel = () => done(true);
+    const up = () => done(false);
     el.addEventListener('pointermove', mv);
-    el.addEventListener('pointerup', up, { once:true });
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', onCancel);
   });
   el.addEventListener('keydown', e => {
     const id = el.dataset.id, obj = objOf(id);
@@ -584,7 +599,12 @@ function renderNodes(){
       let el = nodeEls.get(n.id);
       if (!el){
         el = elDiv('node'); el.dataset.id = n.id; el.tabIndex = 0; bindNode(el); nodeEls.set(n.id, el); layer.append(el);
+        el.dataset.bound = '1';
         el.classList.add('appear'); el.style.animationDelay = Math.min(i * 60, 360) + 'ms';
+      } else if (!el.dataset.bound){
+        // Recovered from a broken render (which creates its element
+        // separately below): attach interaction handlers it never got.
+        bindNode(el); el.dataset.bound = '1';
       }
       el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
       const op = E.OPS[n.type];
@@ -636,15 +656,20 @@ function renderBrokenNode(layer, n, i, err){
   warnRenderSkip(`step ${i + 1} ("${n && n.type}")`, err);
   let el = nodeEls.get(n.id);
   if (!el){
-    el = elDiv('node err'); el.dataset.id = n.id; el.tabIndex = 0;
+    // A broken step must stay interactive (drag/select/remove) like any
+    // other: without bindNode it was inert and only a full Reset could
+    // get rid of it. The inspector already offers "Remove broken step".
+    el = elDiv('node err'); el.dataset.id = n.id; el.tabIndex = 0; bindNode(el);
+    el.dataset.bound = '1';
     nodeEls.set(n.id, el); layer.append(el);
   }
   el.style.left = (typeof n.x === 'number' ? n.x : 0) + 'px';
   el.style.top = (typeof n.y === 'number' ? n.y : 0) + 'px';
   el.className = 'node err';
-  el.innerHTML = `<div class="nh"><span class="nstep">!</span><span class="nname">Broken step</span><span class="ndot"></span></div>
-    <div class="nfoot">Could not display this step (unknown type or bad settings). Remove it and re-add.</div>`;
-  el.setAttribute('aria-label', `Step ${i + 1}: broken step. Remove it and re-add.`);
+  el.innerHTML = `<button class="nx" title="Remove step" aria-label="Remove broken step">${ic('x',11)}</button>
+    <div class="nh"><span class="nstep">!</span><span class="nname">Broken step</span><span class="ndot"></span></div>
+    <div class="nfoot">Could not display this step (unknown type or bad settings). Click it for removal options.</div>`;
+  el.setAttribute('aria-label', `Step ${i + 1}: broken step. Click it for removal options.`);
 }
 
 /* ---- pan / zoom ---- */
@@ -669,10 +694,22 @@ function initCanvasEvents(){
     const sx = e.clientX - view.px, sy = e.clientY - view.py;
     vp.classList.add('panning');
     try { vp.setPointerCapture(e.pointerId); } catch(_){}
-    const mv = ev => { view.px = ev.clientX - sx; view.py = ev.clientY - sy; applyView(); };
-    const up = () => { vp.classList.remove('panning'); vp.removeEventListener('pointermove', mv); persistSoon(); };
+    let raf = 0, lx = e.clientX, ly = e.clientY;
+    const paint = () => { raf = 0; view.px = lx - sx; view.py = ly - sy; applyView(); };
+    const mv = ev => { lx = ev.clientX; ly = ev.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    const done = cancelled => {
+      if (raf){ cancelAnimationFrame(raf); raf = 0; }
+      vp.classList.remove('panning');
+      vp.removeEventListener('pointermove', mv);
+      vp.removeEventListener('pointerup', up);
+      vp.removeEventListener('pointercancel', onCancel);
+      if (!cancelled) persistSoon();
+    };
+    const onCancel = () => done(true);
+    const up = () => done(false);
     vp.addEventListener('pointermove', mv);
-    vp.addEventListener('pointerup', up, { once:true });
+    vp.addEventListener('pointerup', up);
+    vp.addEventListener('pointercancel', onCancel);
   });
   vp.addEventListener('wheel', e => {
     e.preventDefault();
@@ -707,10 +744,20 @@ function initCanvasEvents(){
     e.preventDefault();
     const startY = e.clientY, startH = wrap.offsetHeight, maxH = center.clientHeight - 190;
     try { sp.setPointerCapture(e.pointerId); } catch(_){}
-    const mv = ev => wrap.style.height = clamp(startH + (ev.clientY - startY), 160, maxH) + 'px';
-    const up = () => sp.removeEventListener('pointermove', mv);
+    let raf = 0, ly = startY;
+    const paint = () => { raf = 0; wrap.style.height = clamp(startH + (ly - startY), 160, maxH) + 'px'; };
+    const mv = ev => { ly = ev.clientY; if (!raf) raf = requestAnimationFrame(paint); };
+    const done = () => {
+      if (raf){ cancelAnimationFrame(raf); raf = 0; }
+      sp.removeEventListener('pointermove', mv);
+      sp.removeEventListener('pointerup', up);
+      sp.removeEventListener('pointercancel', onCancel);
+    };
+    const onCancel = () => done();
+    const up = () => done();
     sp.addEventListener('pointermove', mv);
-    sp.addEventListener('pointerup', up, { once:true });
+    sp.addEventListener('pointerup', up);
+    sp.addEventListener('pointercancel', onCancel);
   });
 }
 function arrange(){
@@ -766,6 +813,8 @@ function selectNode(id){
   else if (id === '__out') state.viewStep = 'final';
   else { const i = state.nodes.findIndex(n => n.id === id); if (i >= 0) state.viewStep = i + 1; }
   renderNodes(); renderInspector(); renderPreview();
+  // Mobile: tapping a step opens the inspector drawer so its settings are reachable.
+  if (id && id.startsWith('n') && isMobileView()) setDrawer('insp');
 }
 function deleteNode(id){
   if (!id || !id.startsWith('n')) return;
@@ -805,6 +854,7 @@ function addNode(type){
   requestRun(state.nodes.length - 1);
   renderNodes(); renderInspector(); renderPreview(); renderCode();
   pushHist('added ' + E.OPS[type].name);
+  setDrawer(null); // mobile: reveal the canvas with the new step
 }
 function firstSuitableColumn(type, params, cols){
   // A fresh Fill Missing on a text column instantly errors ("no parseable
@@ -1604,8 +1654,21 @@ function buildSamplesPop(){
     if (!pop.hidden && !e.target.closest('#popSample') && !e.target.closest('#btnSamples')) pop.hidden = true;
   });
 }
+/* ---- responsive drawers (≤900px): palette/inspector become overlays ----
+   No-ops on desktop where the buttons are hidden and the query never matches. */
+function isMobileView(){
+  return !!(window.matchMedia && matchMedia('(max-width: 900px)').matches);
+}
+function setDrawer(which){
+  document.body.classList.toggle('show-pal', which === 'pal');
+  document.body.classList.toggle('show-insp', which === 'insp');
+}
 function initChrome(){
   $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);
+  $('#btnPalette').innerHTML = ic('plus',14) + ' Steps';
+  $('#btnPalette').onclick = () => setDrawer(document.body.classList.contains('show-pal') ? null : 'pal');
+  $('#btnInspector').innerHTML = ic('columns',14) + ' Inspector';
+  $('#btnInspector').onclick = () => setDrawer(document.body.classList.contains('show-insp') ? null : 'insp');
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
   $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
   $('#btnBackend').onclick = backendConfigure;
@@ -1691,7 +1754,10 @@ function initChrome(){
     if (e.key === '+' || e.key === '='){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1.18); return; }
     if (e.key === '-'){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1/1.18); return; }
     if (e.key === '0'){ fitView(); return; }
-    if (e.key === 'Escape' && !$('#popSample').hidden) $('#popSample').hidden = true;
+    if (e.key === 'Escape'){
+      if (document.body.classList.contains('show-pal') || document.body.classList.contains('show-insp')){ setDrawer(null); return; }
+      if (!$('#popSample').hidden) $('#popSample').hidden = true;
+    }
   });
 
   let lastErr = 0;
@@ -1699,6 +1765,9 @@ function initChrome(){
   window.addEventListener('error', e => softErr(e.message));
   window.addEventListener('unhandledrejection', e => softErr((e.reason && e.reason.message) || String(e.reason)));
   window.addEventListener('beforeunload', () => { if (persistTimer) persistNow(); });
+  // Rotating back to desktop with a drawer open would strand an overlay
+  // class on a layout that no longer uses it — clear on the way out.
+  window.addEventListener('resize', debounce(() => { if (!isMobileView()) setDrawer(null); }, 150));
 }
 
 /* ---- boot: restore saved workspace or show welcome ---- */
