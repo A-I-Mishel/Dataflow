@@ -343,8 +343,11 @@ function applyRun(from, res, nodesSlice){
     n._err = r.err; n._delta = r.delta; n._hint = r.hint;
     n._inColumns = r.inColumns; n._inTypes = r.inTypes;
   });
-  if (state.outputs.length === 0) state.outputs.push(res.base);
-  state.outputs.splice(from + 1, state.outputs.length, ...res.outputs);
+  // res.outputs[0] is the run's base (= state.outputs[from]), NOT an extra
+  // entry: splice from `from`, not `from + 1`, or every run appends a phantom
+  // output ("Step 2 · ?" with 1 step), trips the length check below, and
+  // re-runs forever — stuck "computing…", churned renders, starved paints.
+  state.outputs.splice(from, state.outputs.length - from, ...res.outputs);
   if (state.outputs.length !== state.nodes.length + 1) requestRun(0);
   ensureDeep(0); ensureDeep(state.outputs.length - 1);
   renderNodes(); refreshInspectorAfterRun(); renderPreview(); renderCode();
