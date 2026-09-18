@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
+import { useFocusTrap } from "../hooks/useFocusTrap";
+
 interface ConfirmDialogProps {
   title: string;
   message: string;
@@ -21,9 +23,10 @@ export default function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  // Trap owns initial focus (Confirm button) as well as Tab cycling.
+  const trapRef = useFocusTrap<HTMLDivElement>({ initialFocus: confirmRef });
 
   useEffect(() => {
-    confirmRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") onCancel();
     };
@@ -39,6 +42,7 @@ export default function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -62,7 +66,7 @@ export default function ConfirmDialog({
               onClick={onConfirm}
               className={`flex-1 rounded-full px-4 py-2.5 text-sm font-extrabold transition-all ${
                 danger
-                  ? "bg-red-500 text-white shadow-md hover:bg-red-600"
+                  ? "bg-danger text-white shadow-md hover:opacity-90"
                   : "bg-accentbtn hover:bg-accentbtnhover text-white shadow-md"
               }`}
             >

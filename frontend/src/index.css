@@ -47,13 +47,13 @@
   --scrollbar-thumb: 46 56 73;
   --scrollbar-thumb-hover: 100 116 139;
 
-  --xy-controls-button-background-color: rgba(18, 22, 31, 0.92);
-  --xy-controls-button-background-color-hover: rgba(27, 34, 48, 1);
-  --xy-controls-button-color: #9aa6b8;
-  --xy-controls-button-color-hover: #e7ecf3;
-  --xy-controls-button-border-color: rgba(154, 163, 190, 0.16);
-  --xy-minimap-background-color: #12161f;
-  --xy-attribution-background-color: rgba(18, 22, 31, 0.7);
+  --xy-controls-button-background-color: rgb(var(--panel) / 0.92);
+  --xy-controls-button-background-color-hover: rgb(var(--btnhover));
+  --xy-controls-button-color: rgb(var(--ink2));
+  --xy-controls-button-color-hover: rgb(var(--ink));
+  --xy-controls-button-border-color: rgb(var(--line-strong) / 0.5);
+  --xy-minimap-background-color: rgb(var(--canvas));
+  --xy-attribution-background-color: rgb(var(--panel) / 0.7);
 }
 
 .light {
@@ -98,13 +98,13 @@
   --scrollbar-thumb: 205 214 225;
   --scrollbar-thumb-hover: 135 146 166;
 
-  --xy-controls-button-background-color: rgba(255, 255, 255, 0.96);
-  --xy-controls-button-background-color-hover: #f7f9fc;
-  --xy-controls-button-color: #43506a;
-  --xy-controls-button-color-hover: #0d1526;
-  --xy-controls-button-border-color: rgba(13, 21, 38, 0.1);
-  --xy-minimap-background-color: #f7f9fc;
-  --xy-attribution-background-color: rgba(255, 255, 255, 0.7);
+  --xy-controls-button-background-color: rgb(var(--panel) / 0.96);
+  --xy-controls-button-background-color-hover: rgb(var(--elevated));
+  --xy-controls-button-color: rgb(var(--ink2));
+  --xy-controls-button-color-hover: rgb(var(--ink));
+  --xy-controls-button-border-color: rgb(var(--ink) / 0.1);
+  --xy-minimap-background-color: rgb(var(--elevated));
+  --xy-attribution-background-color: rgb(var(--panel) / 0.7);
 }
 /* Support mock's [data-theme] attribute without breaking existing .light toggle */
 [data-theme="dark"] {
@@ -287,7 +287,7 @@ select {
   color-scheme: light;
 }
 ::selection {
-  background: rgba(99, 102, 241, 0.25);
+  background: rgb(var(--accent) / 0.25);
 }
 
 /* Mesh background — mock's single radial glow, no layout change */
@@ -305,11 +305,11 @@ select {
   left: 50%;
   top: -8%;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.07), transparent 60%);
+  background: radial-gradient(ellipse at center, rgb(var(--accent) / 0.07), transparent 60%);
   filter: none;
 }
 .light .canvas-mesh::before {
-  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.05), transparent 60%);
+  background: radial-gradient(ellipse at center, rgb(var(--accent) / 0.05), transparent 60%);
 }
 .canvas-mesh::after {
   display: none;

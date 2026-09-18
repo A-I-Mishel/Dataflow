@@ -58,7 +58,7 @@ export default function DropColumnNode({ id, data, selected }: NodeProps) {
         columns={schemaCols}
         selected={columns}
         onToggle={handleToggleColumn}
-        emptyHint={<p className="mt-1 text-xs text-red-400">Select at least one column</p>}
+        emptyHint={<p className="mt-1 text-xs text-danger">Select at least one column</p>}
       />
     </NodeShell>
   );

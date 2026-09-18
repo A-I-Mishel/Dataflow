@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 
 import { useConfirm } from "../hooks/useConfirm";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { deletePipeline, getPipelines, loadPipeline, savePipeline } from "../lib/api";
 import { validateLoadedPipeline } from "../lib/validatePipeline";
 import { usePipelineStore } from "../stores/pipelineStore";
@@ -39,6 +40,10 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
   const setSavedPipelines = usePipelineStore((state) => state.setSavedPipelines);
   const setCanvas = usePipelineStore((state) => state.setCanvas);
   const { confirm, dialog: confirmDialog, isOpen: isConfirmOpen } = useConfirm();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // Stack-aware: yields Tab to the nested confirm while it is open, and
+  // restores focus to the Save/Load trigger on close.
+  const trapRef = useFocusTrap<HTMLDivElement>({ initialFocus: nameInputRef });
 
   const refresh = useCallback((): void => {
     getPipelines()
@@ -146,6 +151,10 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
       onClick={onClose}
     >
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Save or load pipeline"
         className="flex max-h-[82vh] w-[30rem] flex-col overflow-hidden rounded-[24px] border border-line bg-panel shadow-card"
         onClick={(event) => event.stopPropagation()}
       >
@@ -177,6 +186,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                 Pipeline name
               </p>
               <input
+                ref={nameInputRef}
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -209,7 +219,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
               )}
             </button>
             {nodes.length === 0 && (
-              <p className="text-center text-xs font-medium text-amber-500">
+              <p className="text-center text-xs font-medium text-warn">
                 Add at least one node to save
               </p>
             )}
@@ -246,7 +256,7 @@ export default function SaveLoadModal({ onClose }: SaveLoadModalProps) {
                       <button
                         type="button"
                         onClick={() => handleDelete(item.id, item.name)}
-                        className="rounded-full border border-line bg-elevated px-3 py-1.5 text-xs font-bold text-ink3 hover:border-red-500/30 hover:text-red-500"
+                        className="rounded-full border border-line bg-elevated px-3 py-1.5 text-xs font-bold text-ink3 hover:border-danger/30 hover:text-danger"
                       >
                         Delete
                       </button>

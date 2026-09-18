@@ -33,12 +33,23 @@ const CLEANING_TYPES: NodeType[] = [
 ];
 const TRANSFORM_TYPES: NodeType[] = ["filter-rows", "normalize", "sort"];
 
+// Category colors resolve through the same cat-* tokens as NodeShell —
+// getComputedStyle so minimap dots track theme token changes. Falls back
+// to the dark-theme values when styles aren't ready yet.
+function cssVar(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value === "" ? fallback : `rgb(${value})`;
+}
+
 function minimapNodeColor(node: { type?: string }): string {
   const type = node.type;
-  if (type === "encode-categorical") return "#f97316";
-  if (type !== undefined && (TRANSFORM_TYPES as string[]).includes(type)) return "#a855f7";
-  if (type !== undefined && (CLEANING_TYPES as string[]).includes(type)) return "#3b82f6";
-  return "#64748b";
+  if (type === "encode-categorical") return cssVar("--cat-encode", "#f59e0b");
+  if (type !== undefined && (TRANSFORM_TYPES as string[]).includes(type))
+    return cssVar("--cat-transform", "#8b5cf6");
+  if (type !== undefined && (CLEANING_TYPES as string[]).includes(type))
+    return cssVar("--cat-cleaning", "#0ea5e9");
+  return cssVar("--ink3", "#64748b");
 }
 
 export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?: () => void }) {
@@ -181,7 +192,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
       onDoubleClick={handleDoubleClick}
     >
       {isLargeFile && (
-        <p className="z-10 shrink-0 border-b border-amber-400/30 bg-amber-400/10 px-4 py-2 text-center text-xs font-semibold text-amber-500">
+        <p className="z-10 shrink-0 border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-xs font-semibold text-warn">
           Large-file mode: processed in chunks. Sort / Normalize / Encode are disabled; step
           previews are approximate.
         </p>
@@ -223,7 +234,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
             variant={BackgroundVariant.Dots}
             gap={16}
             size={1.1}
-            color={theme === "light" ? "rgba(150,165,185,0.55)" : "rgba(12, 16, 23, 0.82)"}
+            color="rgb(var(--wire) / 0.55)"
             className="bg-transparent"
           />
           <Controls
@@ -235,7 +246,7 @@ export default function PipelineCanvas({ onRequestPalette }: { onRequestPalette?
           {!isMobile && (
             <MiniMap
               nodeColor={minimapNodeColor}
-              maskColor={theme === "light" ? "rgba(235, 239, 244, 0.9)" : "rgba(12, 16, 23, 0.82)"}
+              maskColor="rgb(var(--canvas) / 0.85)"
               className="overflow-hidden rounded-2xl border border-line opacity-90 shadow-card backdrop-blur-md"
             />
           )}

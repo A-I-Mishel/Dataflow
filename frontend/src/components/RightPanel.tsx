@@ -52,12 +52,13 @@ function profileFromUpload(
       dtype: dtypes[column] ?? "unknown",
       null_count: nullCount,
       null_pct: rowCount > 0 ? Math.round((nullCount / rowCount) * 10000) / 100 : 0,
-      unique_count: 0,
+      // No unique_count: cardinality is unknown until the first run.
     };
   }
   return {
     shape: [rowCount, columns.length],
-    memory_usage_mb: 0,
+    // Null, not 0: memory is only measured server-side at run time.
+    memory_usage_mb: null,
     total_missing: totalMissing,
     columns: profileColumns,
   };
@@ -98,7 +99,7 @@ export default function RightPanel() {
 
   const staleBanner =
     isStale && resultData ? (
-      <p className="mb-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-500">
+      <p className="mb-2 rounded-xl border border-warn/30 bg-warn-soft px-3 py-2 text-xs font-semibold text-warn">
         Result is stale — re-run to refresh
       </p>
     ) : null;
@@ -154,7 +155,7 @@ export default function RightPanel() {
                       Viewing: {viewingLabel} (output)
                     </p>
                     {viewingStep.approximate === true && (
-                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                      <span className="rounded-full border border-warn/30 bg-warn-soft px-2 py-0.5 text-[10px] font-bold text-warn">
                         APPROXIMATE
                       </span>
                     )}

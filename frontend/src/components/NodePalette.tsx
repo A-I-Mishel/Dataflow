@@ -90,9 +90,9 @@ export const ITEMS: PaletteItem[] = [
 ];
 
 const GROUP_META = {
-  clean: { title: "Cleaning", dot: "bg-sky-500", icon: "text-sky-500" },
-  transform: { title: "Transform", dot: "bg-violet-500", icon: "text-violet-500" },
-  encode: { title: "Encode", dot: "bg-orange-500", icon: "text-orange-500" },
+  clean: { title: "Cleaning", dot: "bg-cat-cleaning", icon: "text-cat-cleaning" },
+  transform: { title: "Transform", dot: "bg-cat-transform", icon: "text-cat-transform" },
+  encode: { title: "Encode", dot: "bg-cat-encode", icon: "text-cat-encode" },
 } as const;
 
 function handleDragStart(

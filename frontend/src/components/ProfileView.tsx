@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { usePipelineStore } from "../stores/pipelineStore";
-import type { Theme } from "../stores/pipelineStore";
 import type { ColumnProfile, ProfileData } from "../types";
 import { dtypeBadgeClass } from "../lib/dtype";
 
@@ -10,15 +9,16 @@ interface ProfileViewProps {
   profile: ProfileData;
 }
 
-function tooltipStyle(theme: Theme): Record<string, string> {
-  return theme === "light"
-    ? { backgroundColor: "#ffffff", border: "1px solid #E4E9F0", borderRadius: "12px" }
-    : { backgroundColor: "#171C27", border: "1px solid #2E3849", borderRadius: "12px" };
-}
-
-function tooltipLabelColor(theme: Theme): string {
-  return theme === "light" ? "#0D1526" : "#E7ECF3";
-}
+// Token-sourced so charts follow theme changes with no duplicated literals:
+// recharts passes these strings straight to SVG/inline styles, where
+// rgb(var(--*)) resolves against the current .light/.dark palette.
+const TOOLTIP_STYLE: Record<string, string> = {
+  backgroundColor: "rgb(var(--panel))",
+  border: "1px solid rgb(var(--line))",
+  borderRadius: "12px",
+};
+const TOOLTIP_LABEL_STYLE: Record<string, string> = { color: "rgb(var(--ink))" };
+const AXIS_TICK = { fill: "rgb(var(--ink2))", fontSize: 11 };
 
 function isNumericColumn(column: ColumnProfile): boolean {
   return column.histogram !== undefined && column.histogram !== null;
@@ -81,11 +81,8 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
             <BarChart data={column.histogram}>
               <XAxis dataKey="bin_start" hide={true} />
               <YAxis hide={true} />
-              <Tooltip
-                contentStyle={tooltipStyle(theme)}
-                labelStyle={{ color: tooltipLabelColor(theme) }}
-              />
-              <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
+              <Bar dataKey="count" fill="rgb(var(--accent))" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -102,17 +99,9 @@ function ColumnCard({ name, column }: { name: string; column: ColumnProfile }) {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart layout="vertical" data={column.top_values}>
               <XAxis type="number" hide={true} />
-              <YAxis
-                type="category"
-                dataKey="value"
-                width={80}
-                tick={{ fill: theme === "light" ? "#43506A" : "#9AA6B8", fontSize: 11 }}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle(theme)}
-                labelStyle={{ color: tooltipLabelColor(theme) }}
-              />
-              <Bar dataKey="count" fill="#10b981" radius={[0, 3, 3, 0]} />
+              <YAxis type="category" dataKey="value" width={80} tick={AXIS_TICK} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
+              <Bar dataKey="count" fill="rgb(var(--ok))" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -178,7 +167,7 @@ export default function ProfileView({ profile }: ProfileViewProps) {
             Missing Values
           </p>
           <p
-            className={`mt-1 text-2xl font-extrabold tracking-tight ${profile.total_missing > 0 ? "text-amber-500" : "text-emerald-500"}`}
+            className={`mt-1 text-2xl font-extrabold tracking-tight ${profile.total_missing > 0 ? "text-warn" : "text-ok"}`}
           >
             {profile.total_missing}
           </p>
@@ -186,7 +175,13 @@ export default function ProfileView({ profile }: ProfileViewProps) {
         <div className="rounded-2xl border border-line bg-card/70 p-4 backdrop-blur-xl">
           <p className="text-[11px] font-extrabold uppercase tracking-widest text-ink3">Memory</p>
           <p className="mt-1 text-2xl font-extrabold tracking-tight text-ink">
-            {profile.memory_usage_mb} <span className="text-sm font-bold text-ink3">MB</span>
+            {profile.memory_usage_mb === null ? (
+              <span title="Not scanned before the first run">—</span>
+            ) : (
+              <>
+                {profile.memory_usage_mb} <span className="text-sm font-bold text-ink3">MB</span>
+              </>
+            )}
           </p>
         </div>
       </div>

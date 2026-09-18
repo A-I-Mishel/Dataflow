@@ -62,7 +62,7 @@ export default function SortNode({ id, data, selected }: NodeProps) {
         columns={schemaCols}
         selected={by}
         onToggle={handleToggleColumn}
-        emptyHint={<p className="mt-1 text-xs text-red-400">Select at least one column</p>}
+        emptyHint={<p className="mt-1 text-xs text-danger">Select at least one column</p>}
       />
       <label className="flex items-center gap-2 text-xs font-medium text-ink2">
         <input type="checkbox" checked={ascending} onChange={handleAscendingChange} />

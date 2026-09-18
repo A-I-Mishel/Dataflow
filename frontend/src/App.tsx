@@ -170,7 +170,7 @@ export default function App() {
               Output
             </h2>
             <span
-              className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"
+              className="h-2 w-2 animate-pulse rounded-full bg-ok shadow-[0_0_8px_rgb(var(--ok)/0.6)]"
               title="live"
             />
           </div>

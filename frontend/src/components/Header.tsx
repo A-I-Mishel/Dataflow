@@ -209,7 +209,7 @@ export default function Header() {
             DataFlow
           </span>
           <span className="ml-2 hidden items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 lg:inline-flex">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ok" />
             <span className="text-accenttext text-[11px] font-semibold tracking-wide">
               PIPELINE
             </span>
@@ -242,7 +242,7 @@ export default function Header() {
             {isStale && !isLoading && (
               <span
                 title="Result is stale"
-                className="absolute -right-1 -top-1 h-3 w-3 animate-pulse rounded-full bg-amber-400 ring-2 ring-panel"
+                className="absolute -right-1 -top-1 h-3 w-3 animate-pulse rounded-full bg-warn ring-2 ring-panel"
               />
             )}
           </button>
@@ -362,7 +362,7 @@ export default function Header() {
                 onClick={handleUnload}
                 title="Remove dataset"
                 aria-label="Remove dataset"
-                className="shrink-0 rounded-full p-0.5 text-ink3 transition-colors hover:text-red-500"
+                className="shrink-0 rounded-full p-0.5 text-ink3 transition-colors hover:text-danger"
               >
                 <X size={14} />
               </button>

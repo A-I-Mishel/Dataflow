@@ -69,7 +69,9 @@ export interface ColumnProfile {
   dtype: string;
   null_count: number;
   null_pct: number;
-  unique_count: number;
+  // Optional: unknown before the first run (upload-time fallback never
+  // scans cardinality). Absent means "not yet scanned" — never zero.
+  unique_count?: number;
   min?: number;
   max?: number;
   mean?: number;
@@ -84,7 +86,8 @@ export interface ColumnProfile {
 
 export interface ProfileData {
   shape: [number, number];
-  memory_usage_mb: number;
+  // Null before the first run: memory is only measured server-side.
+  memory_usage_mb: number | null;
   total_missing: number;
   columns: Record<string, ColumnProfile>;
 }
