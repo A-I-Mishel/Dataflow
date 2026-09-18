@@ -603,3 +603,22 @@ describe('find-invalid', () => {
     );
   });
 });
+
+describe('operation registry', () => {
+  // Mirror of the GROUPS list in app.js: an op whose group is missing here
+  // silently vanishes from the palette.
+  const GROUPS = ['Missing Data', 'Rows', 'Values', 'Text & Types', 'Structure', 'Categories', 'Numbers', 'Dates', 'Data Quality'];
+  it('every op is complete, grouped, and constructible', () => {
+    const types = Object.keys(E.OPS);
+    assert.ok(types.length >= 28, `expected the full library, found ${types.length}`);
+    for (const [type, op] of Object.entries(E.OPS)) {
+      for (const k of ['name', 'icon', 'group', 'blurb', 'defaults', 'schema', 'summary', 'run', 'code']) {
+        assert.ok(op[k] !== undefined, `${type}: missing ${k}`);
+      }
+      assert.ok(GROUPS.includes(op.group), `${type}: unknown group "${op.group}"`);
+      assert.ok(Array.isArray(op.schema), `${type}: schema must be an array`);
+      const params = op.defaults();
+      assert.equal(typeof op.summary(params), 'string', `${type}: summary must return a string`);
+    }
+  });
+});

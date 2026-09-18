@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { sieveToBackend } from '../api.js';
+import { EngineFactory } from '../engine.js';
 
 const one = (type, params) => [{ type, enabled: true, params }];
 
@@ -225,5 +226,24 @@ describe('sieveToBackend wave-3 mappings', () => {
     assert.equal(nodes.length, 1);
     assert.equal(nodes[0].type, 'find-invalid');
     assert.equal(skipped.length, 1);
+  });
+});
+
+describe('translator coverage', () => {
+  it('accounts for every registered op: mapped or explicitly local-only', () => {
+    const E = EngineFactory();
+    const types = Object.keys(E.OPS);
+    assert.ok(types.length >= 28, `expected the full library, found ${types.length}`);
+    for (const type of types) {
+      const r = sieveToBackend([{ type, enabled: true, params: E.OPS[type].defaults() }]);
+      const accounted = r.nodes.length === 1 || r.skipped.length > 0;
+      assert.ok(accounted, `${type}: silently dropped by the translator`);
+      if (r.skipped.length) {
+        assert.ok(
+          r.skipped[0].reason && r.skipped[0].reason.length > 3,
+          `${type}: skip reason must explain why`,
+        );
+      }
+    }
   });
 });
