@@ -77,6 +77,40 @@ describe('wirePath', () => {
   it('builds a valid cubic between ports', () => {
     assert.equal(E.wirePath(0, 100, 300, 100, 236, 18), 'M 236 118 C 272 118, 264 118, 300 118');
   });
+  it('clamps control offset on long-distance wires', () => {
+    // Regression: wires spanning thousands of units must keep the same
+    // port anchoring with dx pinned at 170 — the path itself was always
+    // correct; visibility is the SVG viewport's job (see #wires CSS).
+    assert.equal(
+      E.wirePath(40, 120, 5000, 2000, 236, 18),
+      'M 276 138 C 446 138, 4830 2018, 5000 2018',
+    );
+  });
+  it('anchors correctly with negative coordinates', () => {
+    // Nodes dragged into negative space: endpoints must stay exact and
+    // finite so the wire reaches its ports once the viewport allows it.
+    assert.equal(
+      E.wirePath(-800, -400, 300, 100, 236, 18),
+      'M -564 -382 C -394 -382, 130 118, 300 118',
+    );
+  });
+  it('loops back with minimum offset when target is left of source', () => {
+    assert.equal(
+      E.wirePath(900, 200, 100, 200, 236, 18),
+      'M 1136 218 C 1172 218, 64 218, 100 218',
+    );
+  });
+  it('stays finite for extreme coordinates', () => {
+    for (const [ax, ay, bx, by] of [
+      [0, 0, 1e6, 1e6],
+      [-1e6, -1e6, 1e6, 1e6],
+      [40, 120, 41, 121],
+    ]) {
+      const d = E.wirePath(ax, ay, bx, by, 236, 18);
+      assert.match(d, /^M -?[\d.]+ -?[\d.]+ C /);
+      assert.doesNotMatch(d, /NaN|undefined|Infinity/);
+    }
+  });
   it('never emits NaN for hostile coordinates', () => {
     for (const bad of [undefined, null, NaN, 'abc', {}, []]) {
       const d = E.wirePath(bad, bad, 300, 100, 236, 18);
