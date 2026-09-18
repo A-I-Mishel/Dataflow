@@ -1,4 +1,5 @@
 import { EngineFactory, py } from './engine.js';
+import { getApiBase, setApiBase, apiHealth, apiUpload, apiExecute, getSessionId } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -148,6 +149,89 @@ async function engineParseFile(file){
 async function engineParseText(text){
   if (workerOK) return (await callWorker({ type:'parseText', text })).res;
   return E.parseCSVText(text);
+}
+
+/* ==================================================================
+   BACKEND (hybrid mode) — local engine stays source of truth.
+   When a backend URL is configured (topbar button, ?api= param, or
+   window.SIEVE_API_URL), uploads are mirrored to POST /upload and each
+   local run additionally fires POST /execute in the background. Remote
+   mismatches surface as toasts; they never replace local results.
+   ================================================================== */
+const backend = { base: '', online: false, sessionName: '', checking: false };
+function renderBackendBtn(){
+  const b = $('#btnBackend');
+  if (!b) return;
+  if (!backend.base){ b.innerHTML = ic('db',14) + ' Local-only'; b.title = 'No backend configured — everything runs in this browser. Click to add a backend URL.'; }
+  else if (backend.online){ b.innerHTML = ic('db',14) + ' Backend ✓'; b.title = `Connected to ${backend.base}. Click to change or disconnect.`; }
+  else { b.innerHTML = ic('db',14) + ' Backend…'; b.title = `Backend set to ${backend.base} but unreachable. Click to change or disconnect.`; }
+}
+async function backendCheck(silent){
+  if (!backend.base){ backend.online = false; renderBackendBtn(); return false; }
+  try {
+    await apiHealth(backend.base);
+    backend.online = true;
+  } catch (e) {
+    backend.online = false;
+    if (!silent) toast('Backend unreachable: ' + e.message, 'alert');
+  }
+  renderBackendBtn();
+  return backend.online;
+}
+function backendConfigure(){
+  const cur = backend.base || 'http://localhost:8000';
+  const v = prompt('Backend API base URL (empty = local-only mode):', cur);
+  if (v === null) return;
+  if (v.trim() !== '' && !/^https?:\/\//i.test(v.trim())){ toast('URL must start with http:// or https://', 'alert'); return; }
+  backend.base = setApiBase(v);
+  backend.online = false; backend.sessionName = '';
+  renderBackendBtn();
+  if (backend.base){
+    toast('Backend set — checking connection…', 'db');
+    backendCheck(false).then(ok => { if (ok && state.data && state.data.file) backendMirrorUpload(state.data.file); });
+  } else toast('Local-only mode — backend disconnected', 'check');
+}
+// Mirror the raw File to the backend so /execute has a session. Silent:
+// local parsing already succeeded; a backend failure must not disturb it.
+async function backendMirrorUpload(file){
+  if (!backend.base || !file) return;
+  try {
+    const up = await apiUpload(backend.base, file);
+    backend.sessionName = file.name || '';
+    if (state.data) state.data.file = file;
+  } catch (e) {
+    backend.online = false; renderBackendBtn();
+    toast('Backend upload failed: ' + e.message, 'alert');
+  }
+}
+// After every LOCAL run, verify the backend agrees (background only).
+let backendSeq = 0;
+async function backendVerifyRun(){
+  if (!backend.base || !state.data || !state.nodes.length) return;
+  if (!backend.online) return;
+  if (!state.data.file) return; // demo/restored datasets were never mirrored — local stands alone
+  const sid = getSessionId();
+  if (!sid) return; // no session yet (e.g. demo dataset) — local stands alone
+  const my = ++backendSeq;
+  try {
+    const r = await apiExecute(backend.base, sid, state.nodes);
+    if (my !== backendSeq) return;
+    if (!r.ran){
+      const names = r.skipped.map(s => `${s.type} (${s.reason})`).join('; ');
+      toast(`Backend check skipped — local-only steps: ${names}`, 'info');
+      return;
+    }
+    const b = r.backend;
+    const local = state.outputs[state.outputs.length - 1];
+    const sameShape = local && b.shape && local.rows.length === b.shape[0] && local.columns.length === b.shape[1];
+    const sameCols = local && b.columns && JSON.stringify(local.columns) === JSON.stringify(b.columns);
+    if (sameShape && sameCols) toast(`Backend agrees — ${b.shape[0].toLocaleString('en-US')} rows × ${b.shape[1]} cols`, 'check');
+    else toast(`Backend differs — local ${local ? local.rows.length + '×' + local.columns.length : '?'} vs backend ${b.shape} (see console)`, 'alert');
+  } catch (e) {
+    if (my !== backendSeq) return;
+    backend.online = false; renderBackendBtn();
+    toast('Backend run failed: ' + e.message, 'alert');
+  }
 }
 
 /* ==================================================================
@@ -352,6 +436,7 @@ function applyRun(from, res, nodesSlice){
   ensureDeep(0); ensureDeep(state.outputs.length - 1);
   renderNodes(); refreshInspectorAfterRun(); renderPreview(); renderCode();
   persistSoon();
+  backendVerifyRun();
 }
 function refreshInspectorAfterRun(){
   const n = selectedNode();
@@ -1317,8 +1402,8 @@ function updateChip(){
     ? `${ic('file',14)}<b>${esc(state.data.name)}</b><span>${fmt(state.data.rows.length)} rows × ${state.data.columns.length} cols</span>`
     : `${ic('file',14)}<b>no dataset</b>`;
 }
-function applyDataset(name, parsed, encoding, bytes){
-  state.data = { name, columns: parsed.columns, rows: parsed.rows, warnings: parsed.warnings || [], encoding, delim: parsed.delim, bytes };
+function applyDataset(name, parsed, encoding, bytes, file){
+  state.data = { name, columns: parsed.columns, rows: parsed.rows, warnings: parsed.warnings || [], encoding, delim: parsed.delim, bytes, file: file || null };
   state.selected = null; state.viewStep = 'final'; state.page = 0;
   state.outputs = [];
   histReset(); pushHist('loaded data');
@@ -1337,7 +1422,8 @@ async function readFile(file){
   setBusy(true, file.name);
   try {
     const r = await engineParseFile(file);
-    applyDataset(file.name, r.res, r.encoding || 'UTF-8', file.size);
+    applyDataset(file.name, r.res, r.encoding || 'UTF-8', file.size, file);
+    backendMirrorUpload(file);
   } catch(err){ toast('Could not parse “' + file.name + '”: ' + err.message, 'alert'); }
   finally { setBusy(false); }
 }
@@ -1415,6 +1501,7 @@ function applyPipelinePreset(key){
 async function resetWorkspace(){
   try { await idbDel('dataset'); } catch(e){}
   try { localStorage.removeItem(LS_KEY); } catch(e){}
+  try { localStorage.removeItem('sieve.sessionId'); } catch(e){}
   location.reload();
 }
 
@@ -1519,6 +1606,8 @@ function buildSamplesPop(){
 function initChrome(){
   $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
+  $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
+  $('#btnBackend').onclick = backendConfigure;
   $('#btnReset').innerHTML   = ic('trash',14) + ' Reset';
   $('#btnKeys').innerHTML    = ic('question',15);
   $('#btnExportCsv').innerHTML  = ic('download',14) + ' Clean CSV';
@@ -1616,6 +1705,9 @@ async function boot(){
   buildPalette();
   buildSamplesPop();
   initChrome();
+  backend.base = getApiBase();
+  renderBackendBtn();
+  if (backend.base) backendCheck(true);
   initCanvasEvents();
   updateChip();
   updateSaveChip('');

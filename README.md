@@ -1,18 +1,35 @@
-# DataFlow Cleaner
+# Sieve — No-Code Data Cleaning Studio
 
-A full-stack data cleaning pipeline tool: drag-and-drop transform nodes on a
-React Flow canvas, run them against a FastAPI + pandas backend, preview
-results with charts, export a reproducible Python script + cleaned CSV bundle,
-and save/load pipelines to SQLite.
+Visual data-cleaning pipelines in your browser: build steps on a canvas,
+preview every step, export a clean CSV + the pandas script that reproduces
+it. Local-first engine with an optional FastAPI backend check — when a
+backend URL is configured, each run is additionally verified against the
+pandas engine and mismatches surface as toasts (local results always win).
 
 ## Project layout
 
-- `backend/` — FastAPI API (upload, execute, profile, generate, download,
-  pipeline templates), pandas transforms, SQLAlchemy + SQLite persistence.
-- `frontend/` — React 18 + Vite + Tailwind + Zustand + React Flow UI.
-- `test-materials/` — a big messy CSV + XLSX for trying the app.
+- `frontend-sieve/` — the app (static site, no build step).
+  - `index.html` — shell + markup
+  - `styles.css` — full theme
+  - `engine.js` — pure local engine (`EngineFactory`, `py`)
+  - `api.js` — FastAPI bridge (health/upload/execute, sieve→backend
+    node translation)
+  - `app.js` — state, canvas, inspector, preview, exports, boot
+  - `tests/` — unit tests + backend parity runner (excluded from deploys
+    via `.vercelignore`)
+- `backend/` — FastAPI + pandas API (upload, execute, profile, generate,
+  download, saved pipelines). Deployed on Render; also the parity
+  reference for the local engine.
+- `test-materials/` — a big messy CSV for trying the app.
 
 ## Run locally
+
+Frontend — static server (ES modules require http(s), not `file://`):
+
+```bash
+cd frontend-sieve
+npx serve .
+```
 
 Backend (http://127.0.0.1:8000):
 
@@ -22,47 +39,39 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Frontend (http://localhost:5173):
+Connect them: open the frontend, click the `Local-only` button in the
+topbar, and enter `http://localhost:8000` (persisted in localStorage;
+`?api=<url>` works too, e.g. your Render URL). Empty = local-only mode.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Tests
 
-Tests: `cd backend && pytest tests/` (42 tests).
+- Sieve unit tests: `node --test tests/engine.test.mjs`
+  from `frontend-sieve/`.
+- Backend: `pytest tests/` from `backend/` (includes
+  `test_sieve_parity.py`, cell-for-cell local-vs-pandas checks).
 
-## Environment variables
+Free-tier notes: Render sleeps after ~15 min idle (~50s wake-up); sessions
+live in process memory (single worker on purpose) and `app.db` sits on
+ephemeral disk, so uploads reset on sleep/redeploy.
 
-| Variable       | Where    | Purpose                                              |
-| -------------- | -------- | ---------------------------------------------------- |
-| `VITE_API_URL` | frontend | Backend base URL (default `http://localhost:8000`).  |
-| `FRONTEND_URLS`| backend  | Comma-separated extra CORS origins for production.   |
+## Deploy (production: Vercel frontend + Render backend)
 
-## Deploy
+Order matters — backend first, then frontend, then point them at each other:
 
-**Backend → Render** (long-lived server; Vercel can't host it — sessions
-and SQLite need a persistent process):
+1. **Backend → Render.** Push this repo to GitHub → Render → New →
+   Blueprint → select the repo (`render.yaml` included). Note the service
+   URL, e.g. `https://dataflow-cleaner-api.onrender.com`.
+2. **Bake the backend URL into the frontend.** Put that exact Render URL
+   in `frontend-sieve/config.js` (`window.SIEVE_API_URL`, no trailing
+   slash) and push.
+3. **Frontend → Vercel.** Import the same repo → Root Directory
+   `frontend-sieve`, Framework Preset Other, Build Command empty, Output
+   Directory `.`. No environment variables. Note the Vercel URL, e.g.
+   `https://dataflow-sieve.vercel.app`.
+4. **CORS.** Set `FRONTEND_URLS` on the Render service to the Vercel URL
+   (or do it in `render.yaml` before step 1) and redeploy/restart the
+   backend.
 
-1. Push this repo to GitHub.
-2. Render → New → Blueprint → select the repo (`render.yaml` is included).
-3. Set `FRONTEND_URLS` to your Vercel URL, e.g.
-   `https://dataflow-cleaner.vercel.app`, then deploy.
-4. Note the backend URL, e.g. `https://dataflow-cleaner-api.onrender.com`.
-
-Render free-tier notes: the service sleeps after ~15 min idle (first
-request takes ~50s to wake it), and `app.db` lives on ephemeral disk, so
-uploads and saved pipelines reset on sleep/redeploy. For durable template
-storage, uncomment the `dataflow-db` block in `render.yaml` to attach free
-Postgres — the API picks up `DATABASE_URL` automatically, no code changes.
-
-**Frontend → Vercel:**
-
-1. Import the same GitHub repo.
-2. Set **Root Directory** to `frontend` (Framework Preset: Vite).
-3. Add env var `VITE_API_URL` = your Render backend URL.
-4. Deploy. No client-side routes to configure; CORS is handled via
-   `FRONTEND_URLS` on the backend.
-
-Demo caveat: sessions live in memory and `app.db` sits on ephemeral disk,
-so uploads/templates reset when the free-tier backend sleeps or restarts.
+The deployed site boots with the baked URL; the topbar shows
+`Backend ✓` once `/health` answers. Any browser can still override via
+the topbar button or `?api=<url>`, or go local-only by clearing it.

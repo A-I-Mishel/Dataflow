@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
 dist/
-frontend/dist/
 
 # Python
 __pycache__/

@@ -20,7 +20,7 @@ EXEMPT_PREFIXES: Tuple[str, ...] = ("/health", "/docs", "/openapi.json", "/redoc
 
 class FixedWindow:
     """Thread-unsafe counter map; safe here because uvicorn runs one worker
-    (see render.yaml) and endpoints are sync (threadpool calls are short
+    and endpoints are sync (threadpool calls are short
     dict ops under the GIL). Migrate to Redis with --workers > 1."""
 
     def __init__(self) -> None:

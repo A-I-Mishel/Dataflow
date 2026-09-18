@@ -116,8 +116,14 @@ def _pipeline_created_at(row: SavedPipeline) -> str:
 app = FastAPI(title="Data Cleaning Pipeline API")
 
 # Comma-separated extra origins, e.g. FRONTEND_URLS="https://my-app.vercel.app".
-# Localhost is always allowed for development.
-ALLOW_ORIGINS: List[str] = ["http://localhost:5173"] + [
+# Localhost is always allowed for development (Vite default 5173 + static
+# servers like `npx serve .` on 3000 for the Sieve frontend).
+ALLOW_ORIGINS: List[str] = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+] + [
     url.strip()
     for url in (os.environ.get("FRONTEND_URLS") or "").split(",")
     if url.strip()
