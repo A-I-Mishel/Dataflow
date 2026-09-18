@@ -1279,6 +1279,27 @@ const PRESETS = {
     ['drop-duplicates', { keep:'first' }]
   ]
 };
+/* ---- task-based pipeline presets (applied to the current dataset) ---- */
+const PIPELINE_PRESETS = [
+  { key:'quick', name:'Quick Clean', icon:'sparkle',
+    desc:'Tidy text, fill gaps, drop duplicates.',
+    steps:[['clean-text', {}], ['fill-missing', {}], ['drop-duplicates', {}]] },
+  { key:'fill-gaps', name:'Fill Missing Values', icon:'droplet',
+    desc:'Fill empty cells with median (numeric) or mode.',
+    steps:[['fill-missing', {}]] },
+  { key:'drop-empty', name:'Drop Empty Rows', icon:'ban',
+    desc:'Remove rows that contain empty cells.',
+    steps:[['drop-missing', { column:'__all__' }]] },
+  { key:'dedupe', name:'Remove Duplicates', icon:'copy',
+    desc:'Remove repeated rows, keep first.',
+    steps:[['drop-duplicates', { keep:'first' }]] },
+  { key:'sort', name:'Sort Rows', icon:'sort',
+    desc:'Order rows by the first column, A → Z.',
+    steps:[['sort-rows', { dir:'asc' }]] },
+  { key:'tidy-text', name:'Clean Text', icon:'type',
+    desc:'Trim spaces, single-space, lowercase.',
+    steps:[['clean-text', { trim:true, collapse:true, case:'lower', punct:false }]] }
+];
 
 /* ==================================================================
    DATASET LOADING
@@ -1337,6 +1358,59 @@ async function loadSample(key){
     if (!(RM && RM.matches)) setTimeout(playRun, 350);
   } catch(err){ toast('Could not load demo: ' + err.message, 'alert'); }
   finally { setBusy(false); }
+}
+function applyPipelinePreset(key){
+  const p = PIPELINE_PRESETS.find(x => x.key === key);
+  if (!p) return;
+  if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
+  const cols = state.outputs.length
+    ? state.outputs[state.outputs.length - 1].columns
+    : state.data.columns;
+  if (!cols || !cols.length){ toast('No columns in the current dataset', 'alert'); return; }
+  const from = state.nodes.length;
+  const anchor = from ? state.nodes[from - 1] : null;
+  let px = anchor ? anchor.x : state.srcPos.x;
+  let py = anchor ? anchor.y : state.srcPos.y;
+  const newNodes = [];
+  for (const [type, override] of p.steps){
+    if (!E.OPS[type]) continue;
+    const n = makeNode(type);
+    Object.assign(n.params, override || {});
+    try {
+      const schema = E.OPS[type].schema || [];
+      const colField = schema.find(f => f.t === 'column');
+      if (colField && (!n.params[colField.k] || !cols.includes(n.params[colField.k]))){
+        let pick = '';
+        try { pick = firstSuitableColumn(type, n.params, cols); } catch(e){ pick = ''; }
+        if (type === 'fill-missing' && !pick){
+          n.params.method = 'mode';
+          pick = cols[0] || '';
+        }
+        n.params[colField.k] = pick || cols[0] || '';
+      }
+      if (type === 'sort-rows' && !n.params.column) n.params.column = cols[0] || '';
+    } catch(e){ /* keep defaults; engine will surface a per-node error */ }
+    if (!newNodes.length) {
+      if (!from) { n.x = state.srcPos.x + 300; n.y = state.srcPos.y; }
+      else { n.x = px + 300; n.y = py; if (n.x > 2300){ n.x = 60; n.y = py + 180; } }
+    } else {
+      const prev = newNodes[newNodes.length - 1];
+      n.x = prev.x + 300; n.y = prev.y;
+      if (n.x > 2300){ n.x = 60; n.y = prev.y + 180; }
+    }
+    newNodes.push(n);
+  }
+  if (!newNodes.length) return;
+  state.nodes.push(...newNodes);
+  const lastNew = newNodes[newNodes.length - 1];
+  state.outPos = { x: lastNew.x + 300, y: lastNew.y };
+  state.selected = newNodes[0].id;
+  state.viewStep = state.nodes.indexOf(newNodes[0]) + 1;
+  requestRun(from);
+  renderNodes(); renderInspector(); renderPreview(); renderCode();
+  pushHist('applied preset ' + p.name);
+  const pop = $('#popSample'); if (pop) pop.hidden = true;
+  toast(p.name + ' applied — ' + newNodes.length + ' step(s)', 'check');
 }
 async function resetWorkspace(){
   try { await idbDel('dataset'); } catch(e){}
@@ -1431,19 +1505,19 @@ function setTab(tab){
 }
 function buildSamplesPop(){
   const pop = $('#popSample');
-  pop.innerHTML = `<div class="ps-h">Demo datasets — deliberately messy, processed by the real engine</div>` + SAMPLES.map(s =>
-    `<button class="samp" data-k="${s.key}">
-      <span class="spic">${ic('table',16)}</span>
-      <span style="min-width:0"><b>${esc(s.file)}</b><i>${esc(s.desc)}</i><u>${s.rows} rows · ${s.cols} cols</u></span>
+  pop.innerHTML = `<div class="ps-h">Presets — one-click pipelines for common tasks</div>` + PIPELINE_PRESETS.map(p =>
+    `<button class="samp" data-k="${p.key}">
+      <span class="spic">${ic(p.icon || 'layers',16)}</span>
+      <span style="min-width:0"><b>${esc(p.name)}</b><i>${esc(p.desc)}</i><u>${p.steps.length} step${p.steps.length === 1 ? '' : 's'} · applies to current data</u></span>
     </button>`).join('');
-  pop.querySelectorAll('.samp').forEach(b => b.onclick = () => { pop.hidden = true; loadSample(b.dataset.k); });
+  pop.querySelectorAll('.samp').forEach(b => b.onclick = () => { pop.hidden = true; applyPipelinePreset(b.dataset.k); });
   $('#btnSamples').onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; };
   document.addEventListener('pointerdown', e => {
     if (!pop.hidden && !e.target.closest('#popSample') && !e.target.closest('#btnSamples')) pop.hidden = true;
   });
 }
 function initChrome(){
-  $('#btnSamples').innerHTML = ic('table',14) + ' Demos ' + ic('chevdown',12);
+  $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
   $('#btnReset').innerHTML   = ic('trash',14) + ' Reset';
   $('#btnKeys').innerHTML    = ic('question',15);
