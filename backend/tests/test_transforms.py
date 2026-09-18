@@ -12,6 +12,7 @@ from typing import List
 
 from engine import execute_pipeline, execute_pipeline_with_intermediates
 from models import NodeConfig, PipelineNode
+from transforms.clip_values import apply_clip_values
 from transforms.conditional_column import apply_conditional_column
 from transforms.create_column import apply_create_column
 from transforms.date_difference import apply_date_difference
@@ -25,16 +26,20 @@ from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
 from transforms.find_invalid import apply_find_invalid
+from transforms.find_replace_pattern import apply_find_replace_pattern
 from transforms.group_rare import apply_group_rare
+from transforms.log_transform import apply_log_transform
 from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
 from transforms.parse_date import apply_parse_date
 from transforms.rename_column import apply_rename_column
+from transforms.remove_special_chars import apply_remove_special_chars
 from transforms.reorder_columns import apply_reorder_columns
 from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 from transforms.split_column import apply_split_column
+from transforms.standardize_categories import apply_standardize_categories
 from transforms.validate_column import apply_validate_column
 
 
@@ -715,3 +720,71 @@ def test_find_invalid_passthrough() -> None:
     _assert_valid_code(code)
     pd.testing.assert_frame_equal(result, before)
     assert "_bad" in code
+
+
+def test_clip_values() -> None:
+    df: pd.DataFrame = pd.DataFrame({"v": [-5.0, 25.0, 150.0, None]})
+    result, code = apply_clip_values(df, NodeConfig(columns=["v"], min_value=0, max_value=100))
+    _assert_valid_code(code)
+    assert result["v"].tolist()[:3] == [0.0, 25.0, 100.0]
+    assert result["v"].isna().tolist()[3] is True
+    with pytest.raises(HTTPException):
+        apply_clip_values(df, NodeConfig(columns=["v"]))
+    with pytest.raises(HTTPException):
+        apply_clip_values(df, NodeConfig(columns=["v"], min_value=10, max_value=5))
+
+
+def test_find_replace_pattern() -> None:
+    df: pd.DataFrame = pd.DataFrame({"t": ["J@hn!!", "017-123", None, ""]})
+    result, code = apply_find_replace_pattern(
+        df, NodeConfig(columns=["t"], pattern="[^0-9]", replacement="", use_regex=True)
+    )
+    _assert_valid_code(code)
+    assert result["t"].tolist()[:2] == ["", "017123"]
+    assert result["t"].isna().tolist()[2] is True
+    assert result["t"].tolist()[3] == ""
+    literal, _ = apply_find_replace_pattern(
+        df, NodeConfig(columns=["t"], pattern="@", replacement=" at ", use_regex=False)
+    )
+    # Literal mode rewrites occurrences inside cells (unlike replace-values).
+    assert literal["t"].tolist()[0] == "J at hn!!"
+    with pytest.raises(HTTPException):
+        apply_find_replace_pattern(df, NodeConfig(columns=["t"], pattern="([", replacement=""))
+
+
+def test_remove_special_chars() -> None:
+    df: pd.DataFrame = pd.DataFrame({"t": ["J@hn!!", "a b-c", None]})
+    result, code = apply_remove_special_chars(
+        df, NodeConfig(columns=["t"], letters=True, numbers=True, spaces=False)
+    )
+    _assert_valid_code(code)
+    assert result["t"].tolist()[:2] == ["Jhn", "abc"]
+    assert result["t"].isna().tolist()[2] is True
+    with pytest.raises(HTTPException):
+        apply_remove_special_chars(
+            df, NodeConfig(columns=["t"], letters=False, numbers=False, spaces=False)
+        )
+
+
+def test_standardize_categories() -> None:
+    df: pd.DataFrame = pd.DataFrame({"c": [" Sales ", "SALES", "Sale", None]})
+    result, code = apply_standardize_categories(
+        df, NodeConfig(columns=["c"], method="lower", mapping={"sale": "Sales"})
+    )
+    _assert_valid_code(code)
+    assert result["c"].tolist()[:3] == ["sales", "sales", "Sales"]
+    assert result["c"].isna().tolist()[3] is True
+    with pytest.raises(HTTPException):
+        apply_standardize_categories(df, NodeConfig(columns=["c"], method="sideways"))
+
+
+def test_log_transform() -> None:
+    df: pd.DataFrame = pd.DataFrame({"v": [1.0, 10.0, 0.0, -5.0, None]})
+    result, code = apply_log_transform(
+        df, NodeConfig(columns=["v"], method="ln", on_invalid="null")
+    )
+    _assert_valid_code(code)
+    assert result["v"].tolist()[1] == pytest.approx(2.302585092994046)
+    assert result["v"].isna().tolist()[2:] == [True, True, True]
+    with pytest.raises(HTTPException):
+        apply_log_transform(df, NodeConfig(columns=["v"], method="ln", on_invalid="error"))

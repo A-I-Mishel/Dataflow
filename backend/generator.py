@@ -39,6 +39,11 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "conditional-column": ("transforms.conditional_column", "apply_conditional_column"),
     "validate-column": ("transforms.validate_column", "apply_validate_column"),
     "find-invalid": ("transforms.find_invalid", "apply_find_invalid"),
+    "clip-values": ("transforms.clip_values", "apply_clip_values"),
+    "find-replace-pattern": ("transforms.find_replace_pattern", "apply_find_replace_pattern"),
+    "remove-special-chars": ("transforms.remove_special_chars", "apply_remove_special_chars"),
+    "standardize-categories": ("transforms.standardize_categories", "apply_standardize_categories"),
+    "log-transform": ("transforms.log_transform", "apply_log_transform"),
 }
 
 

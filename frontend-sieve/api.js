@@ -366,6 +366,74 @@ export function sieveToBackend(sieveNodes) {
       if (p.min !== '' && p.min != null) cfg.min_value = p.min;
       if (p.max !== '' && p.max != null) cfg.max_value = p.max;
       nodes.push({ id: id(), type: 'find-invalid', config: cfg });
+    } else if (t === 'clip-values') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      const cfg = { columns: [...p.columns] };
+      if (p.min !== '' && p.min != null) cfg.min_value = p.min;
+      if (p.max !== '' && p.max != null) cfg.max_value = p.max;
+      if (cfg.min_value === undefined && cfg.max_value === undefined) {
+        skipped.push({ type: t, reason: 'no bounds set' });
+        continue;
+      }
+      nodes.push({ id: id(), type: 'clip-values', config: cfg });
+    } else if (t === 'find-replace-pattern') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      if (!need(p.pattern, 'empty pattern')) continue;
+      if (String(p.pattern).length > 200) { skipped.push({ type: t, reason: 'pattern too long' }); continue; }
+      nodes.push({
+        id: id(),
+        type: 'find-replace-pattern',
+        config: {
+          columns: [...p.columns],
+          pattern: String(p.pattern),
+          replacement: p.replacement == null ? '' : String(p.replacement),
+          use_regex: p.regex !== false,
+          case_sensitive: p.case !== false,
+        },
+      });
+    } else if (t === 'remove-special-chars') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      if (!p.letters && !p.numbers && !p.spaces && !p.custom) {
+        skipped.push({ type: t, reason: 'nothing kept' });
+        continue;
+      }
+      nodes.push({
+        id: id(),
+        type: 'remove-special-chars',
+        config: {
+          columns: [...p.columns],
+          letters: p.letters !== false,
+          numbers: p.numbers !== false,
+          spaces: p.spaces !== false,
+          custom_chars: p.custom == null ? '' : String(p.custom),
+        },
+      });
+    } else if (t === 'standardize-categories') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      if (!['keep', 'lower', 'upper', 'title'].includes(p.method)) {
+        skipped.push({ type: t, reason: `unknown case "${p.method}"` });
+        continue;
+      }
+      const mapping = {};
+      for (const [o, n] of Object.entries(p.map || {})) {
+        if (n !== '' && n != null) mapping[o] = String(n).trim();
+      }
+      nodes.push({
+        id: id(),
+        type: 'standardize-categories',
+        config: { columns: [...p.columns], method: p.method, mapping },
+      });
+    } else if (t === 'log-transform') {
+      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
+      if (!['ln', 'log10', 'log2'].includes(p.base)) {
+        skipped.push({ type: t, reason: `unknown base "${p.base}"` });
+        continue;
+      }
+      nodes.push({
+        id: id(),
+        type: 'log-transform',
+        config: { columns: [...p.columns], method: p.base, on_invalid: p.invalid === 'error' ? 'error' : 'null' },
+      });
     } else if (LOCAL_ONLY[t]) {
       skipped.push({ type: t, reason: LOCAL_ONLY[t] });
     } else {

@@ -79,6 +79,15 @@ class NodeConfig(BaseModel):
     # find-invalid numeric bounds.
     min_value: Optional[Any] = None
     max_value: Optional[Any] = None
+    # find-replace-pattern literal-vs-regex toggle (default regex).
+    use_regex: Optional[bool] = True
+    # remove-special-chars keep sets.
+    letters: Optional[bool] = True
+    numbers: Optional[bool] = True
+    spaces: Optional[bool] = True
+    custom_chars: Optional[str] = None
+    # log-transform invalid-input handling ('null' or 'error').
+    on_invalid: Optional[str] = None
 
 
 class PipelineNode(BaseModel):
@@ -108,6 +117,11 @@ class PipelineNode(BaseModel):
         "conditional-column",
         "validate-column",
         "find-invalid",
+        "clip-values",
+        "find-replace-pattern",
+        "remove-special-chars",
+        "standardize-categories",
+        "log-transform",
     ]
     config: NodeConfig
 

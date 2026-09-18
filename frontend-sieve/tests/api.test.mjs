@@ -229,6 +229,41 @@ describe('sieveToBackend wave-3 mappings', () => {
   });
 });
 
+describe('sieveToBackend wave-4 mappings', () => {
+  it('maps clip/find-replace/remove-special/standardize/log', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'clip-values', enabled: true, params: { columns: ['Score'], min: '1', max: '5' } },
+      { type: 'find-replace-pattern', enabled: true, params: { columns: ['Email'], pattern: '\\d+', replacement: '#', regex: true, case: true } },
+      { type: 'remove-special-chars', enabled: true, params: { columns: ['City'], letters: true, numbers: true, spaces: true, custom: '' } },
+      { type: 'standardize-categories', enabled: true, params: { columns: ['Dept'], method: 'lower', map: {} } },
+      { type: 'log-transform', enabled: true, params: { columns: ['Score'], base: 'ln', invalid: 'null' } },
+    ]);
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes[0], {
+      id: 'n1', type: 'clip-values', config: { columns: ['Score'], min_value: '1', max_value: '5' },
+    });
+    assert.deepEqual(nodes[1].config.use_regex, true);
+    assert.deepEqual(nodes[1].type, 'find-replace-pattern');
+    assert.deepEqual(nodes[2], {
+      id: 'n3', type: 'remove-special-chars',
+      config: { columns: ['City'], letters: true, numbers: true, spaces: true, custom_chars: '' },
+    });
+    assert.deepEqual(nodes[3].config, { columns: ['Dept'], method: 'lower', mapping: {} });
+    assert.deepEqual(nodes[4], {
+      id: 'n5', type: 'log-transform', config: { columns: ['Score'], method: 'ln', on_invalid: 'null' },
+    });
+  });
+
+  it('skips invalid wave-4 configs with reasons', () => {
+    const { nodes, skipped } = sieveToBackend([
+      { type: 'clip-values', enabled: true, params: { columns: ['Score'], min: '', max: '' } },
+      { type: 'log-transform', enabled: true, params: { columns: ['Score'], base: 'log7', invalid: 'null' } },
+    ]);
+    assert.equal(nodes.length, 0);
+    assert.equal(skipped.length, 2);
+  });
+});
+
 describe('translator coverage', () => {
   it('accounts for every registered op: mapped or explicitly local-only', () => {
     const E = EngineFactory();

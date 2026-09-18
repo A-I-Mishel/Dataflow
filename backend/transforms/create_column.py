@@ -20,6 +20,7 @@ import pandas as pd
 from fastapi import HTTPException
 
 from models import NodeConfig
+from transforms.text_compat import coerce_numeric
 
 AST = Union[Tuple[str, float], Tuple[str, str], Tuple[str, str, object, object], Tuple[str, object]]
 
@@ -190,22 +191,6 @@ def to_source(tree: AST) -> str:
     return f"({to_source(left)} {op} {to_source(right)})"  # type: ignore[arg-type]
 
 
-def coerce_numeric(df: pd.DataFrame, column: str) -> pd.Series:
-    """Strict numerics for arithmetic: '' stays missing, anything else that
-    does not parse (currency strings included) is a loud 400 — mirroring the
-    Sieve twin's strict Number(), so both engines refuse the same inputs."""
-    series = df[column]
-    coerced = pd.to_numeric(series, errors="coerce")
-    bad = coerced.isna() & series.notna() & (series.astype(object) != "")
-    if bool(bad.any()):
-        sample = series[bad].iloc[0]
-        raise HTTPException(
-            status_code=400,
-            detail=f'create-column: column "{column}" has non-numeric values (e.g. {sample!r})',
-        )
-    return coerced
-
-
 def apply_create_column(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFrame, str]:
     output: Optional[str] = config.output
     if not output or not str(output).strip():
@@ -222,7 +207,7 @@ def apply_create_column(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFr
     missing: List[str] = [c for c in refs if c not in df.columns]
     if missing:
         raise HTTPException(status_code=400, detail=f"create-column: unknown columns {missing}")
-    frame: Dict[str, pd.Series] = {c: coerce_numeric(df, c) for c in refs}
+    frame: Dict[str, pd.Series] = {c: coerce_numeric(df, c, "create-column") for c in refs}
     values = eval_frame(tree, frame)
     result: pd.DataFrame = df.copy(deep=True)
     result[output] = pd.Series(values, index=df.index).replace([np.inf, -np.inf], np.nan)

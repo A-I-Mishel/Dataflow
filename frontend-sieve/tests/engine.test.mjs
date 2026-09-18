@@ -610,6 +610,118 @@ describe('find-invalid', () => {
   });
 });
 
+describe('clip-values', () => {
+  it('clamps both bounds, keeping missing', () => {
+    const out = E.OPS['clip-values'].run(
+      { columns: ['v'], rows: [[-5], [25], [150], ['']] },
+      { columns: ['v'], min: '0', max: '100' },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      [0, 25, 100, ''],
+    );
+  });
+  it('refuses garbage bounds and empty bounds', () => {
+    const data = { columns: ['v'], rows: [[1]] };
+    assert.throws(() => E.OPS['clip-values'].run(data, { columns: ['v'], min: 'low', max: '' }));
+    assert.throws(() => E.OPS['clip-values'].run(data, { columns: ['v'], min: '', max: '' }));
+    assert.throws(() => E.OPS['clip-values'].run(data, { columns: ['v'], min: '5', max: '1' }));
+  });
+});
+
+describe('find-replace-pattern', () => {
+  const data = { columns: ['t'], rows: [['J@hn!!'], ['017-123'], ['']] };
+  it('rewrites regex matches globally', () => {
+    const out = E.OPS['find-replace-pattern'].run(data, {
+      columns: ['t'], pattern: '[^0-9]', replacement: '', regex: true, case: true,
+    });
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['', '017123', ''],
+    );
+  });
+  it('treats $ literally in replacements', () => {
+    const out = E.OPS['find-replace-pattern'].run(
+      { columns: ['t'], rows: [['abc']] },
+      { columns: ['t'], pattern: 'b', replacement: 'X$&Y', regex: true, case: true },
+    );
+    assert.equal(out.rows[0][0], 'aX$&Yc');
+  });
+  it('literal mode rewrites occurrences without regex', () => {
+    const out = E.OPS['find-replace-pattern'].run(
+      { columns: ['t'], rows: [['a,b,a']] },
+      { columns: ['t'], pattern: ',', replacement: ';', regex: false, case: true },
+    );
+    assert.equal(out.rows[0][0], 'a;b;a');
+  });
+});
+
+describe('remove-special-chars', () => {
+  it('keeps only the chosen groups', () => {
+    const out = E.OPS['remove-special-chars'].run(
+      { columns: ['t'], rows: [['J@hn D.oe! 12'], ['']] },
+      { columns: ['t'], letters: true, numbers: true, spaces: true, custom: '' },
+    );
+    assert.equal(out.rows[0][0], 'Jhn Doe 12');
+    assert.equal(out.rows[1][0], '');
+  });
+  it('honours custom characters and requires a keep set', () => {
+    const out = E.OPS['remove-special-chars'].run(
+      { columns: ['t'], rows: [['a-b_c']] },
+      { columns: ['t'], letters: true, numbers: false, spaces: false, custom: '-_' },
+    );
+    assert.equal(out.rows[0][0], 'a-b_c');
+    assert.throws(() =>
+      E.OPS['remove-special-chars'].run(
+        { columns: ['t'], rows: [['a']] },
+        { columns: ['t'], letters: false, numbers: false, spaces: false, custom: '' },
+      ),
+    );
+  });
+});
+
+describe('standardize-categories', () => {
+  it('trims, recases, then maps', () => {
+    const out = E.OPS['standardize-categories'].run(
+      { columns: ['c'], rows: [[' Sales '], ['SALES'], ['HR']] },
+      { columns: ['c'], method: 'lower', map: { sale: 'Sales' } },
+    );
+    assert.deepEqual(
+      out.rows.map((r) => r[0]),
+      ['sales', 'sales', 'hr'],
+    );
+  });
+  it('title-cases like the backend twin', () => {
+    const out = E.OPS['standardize-categories'].run(
+      { columns: ['c'], rows: [["o'brien"]] },
+      { columns: ['c'], method: 'title', map: {} },
+    );
+    assert.equal(out.rows[0][0], "O'brien");
+  });
+});
+
+describe('log-transform', () => {
+  it('compresses positives, nulls the rest', () => {
+    const out = E.OPS['log-transform'].run(
+      { columns: ['v'], rows: [[1], [10], [0], [-5], ['']] },
+      { columns: ['v'], base: 'ln', invalid: 'null' },
+    );
+    assert.equal(out.rows[0][0], 0);
+    assert.equal(out.rows[1][0], Math.log(10));
+    assert.equal(out.rows[2][0], null);
+    assert.equal(out.rows[3][0], null);
+    assert.equal(out.rows[4][0], '');
+  });
+  it('fails loudly in error mode', () => {
+    assert.throws(() =>
+      E.OPS['log-transform'].run(
+        { columns: ['v'], rows: [[-1]] },
+        { columns: ['v'], base: 'ln', invalid: 'error' },
+      ),
+    );
+  });
+});
+
 describe('operation registry', () => {
   // Mirror of the GROUPS list in app.js: an op whose group is missing here
   // silently vanishes from the palette.

@@ -62,6 +62,17 @@ function EngineFactory(){
     if (typeof v === 'number' && Number.isInteger(v)) return String(v);
     return String(v);
   }
+  // Regex character-class body for the remove-special-chars keep set.
+  // Mirrors backend build_allowed() exactly: same groups in the same order,
+  // same escaping (regex + class metacharacters).
+  function specialClassBody(letters, numbers, spaces, custom){
+    let body = '';
+    if (letters !== false) body += 'A-Za-z';
+    if (numbers !== false) body += '0-9';
+    if (spaces !== false) body += '\\s';
+    if (custom) body += String(custom).replace(/[\\\]^$.*+?()[\]{}|-]/g, '\\$&');
+    return body;
+  }
   // ISO-8601 week number from Y/M/D components (no timezone involved).
   function isoWeekNum(y, mo, d){
     const dt = new Date(Date.UTC(y, mo - 1, d));
@@ -1601,6 +1612,276 @@ function EngineFactory(){
           `_ok = pd.to_datetime(df[${c}], format="mixed", errors="coerce").notna()`,
           `_bad = df[${c}].notna() & (df[${c}].astype(object) != '') & ~_ok`];
         return [...head, `_bad = pd.Series(False, index=df.index)`];
+      }
+    },
+
+    'clip-values': {
+      name:'Clip Values', icon:'scissors', group:'Numbers', rowStable:true,
+      blurb:'Clamp numbers into a range',
+      defaults: () => ({ columns:[], min:'', max:'' }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'min', t:'text', label:'Minimum (blank = none)', ph:'e.g. 0' },
+        { k:'max', t:'text', label:'Maximum (blank = none)', ph:'e.g. 100' }
+      ],
+      summary: p => {
+        const lo = (p.min === '' || p.min == null) ? '−∞' : p.min;
+        const hi = (p.max === '' || p.max == null) ? '+∞' : p.max;
+        return `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · ${lo} to ${hi}`;
+      },
+      hint: () => ({ num:true }),
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        const idx = p.columns.map(c => colIdx(d, c));
+        const bound = (raw, which) => {
+          if (raw === '' || raw == null) return null;
+          const n = Number(raw);
+          if (!Number.isFinite(n)) throw new Error(`${which} bound must be numeric`);
+          return n;
+        };
+        const lo = bound(p.min, 'minimum'), hi = bound(p.max, 'maximum');
+        if (lo === null && hi === null) throw new Error('set a minimum, a maximum, or both');
+        if (lo !== null && hi !== null && lo > hi) throw new Error('minimum exceeds maximum');
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (let k = 0; k < idx.length; k++){
+            const ci = idx[k], v = row[ci];
+            if (MISS(v)) continue;
+            const n = strictNum(v, p.columns[k]);
+            let nv = n;
+            if (lo !== null && nv < lo) nv = lo;
+            if (hi !== null && nv > hi) nv = hi;
+            if (nv !== v) row = replaceCell(row, ci, nv);
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const cs = p.columns.map(py).join(', ');
+        const args = [];
+        if (p.min !== '' && p.min != null) args.push(`lower=${Number(p.min)}`);
+        if (p.max !== '' && p.max != null) args.push(`upper=${Number(p.max)}`);
+        return [`df[[${cs}]] = df[[${cs}]].clip(${args.join(', ')})`];
+      }
+    },
+
+    'find-replace-pattern': {
+      name:'Find & Replace Pattern', icon:'eye', group:'Values', rowStable:true,
+      blurb:'Rewrite text matching a pattern',
+      defaults: () => ({ columns:[], pattern:'', replacement:'', regex:true, case:true }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'pattern', t:'text', label:'Pattern', ph:'e.g. [^0-9]' },
+        { k:'replacement', t:'text', label:'Replacement', ph:'blank deletes matches' },
+        { k:'regex', t:'check', label:'Regular expression' },
+        { k:'case', t:'check', label:'Match case' }
+      ],
+      summary: p => `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · “${p.pattern}” → “${p.replacement}”`,
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        if (!p.pattern) throw new Error('type a pattern');
+        if (p.pattern.length > 200) throw new Error('pattern accepts at most 200 characters');
+        const idx = p.columns.map(c => colIdx(d, c));
+        const rep = p.replacement == null ? '' : String(p.replacement);
+        // Literal replacements are plain split/join (no $ semantics);
+        // every RegExp path pins $ to literal so JS agrees with Python.
+        const repLit = rep.split('$').join('$$');
+        let re = null;
+        if (p.regex !== false || p.case === false){
+          const src = p.regex === false
+            ? p.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            : p.pattern;
+          try { re = new RegExp(src, 'g' + (p.case === false ? 'i' : '')); }
+          catch (e){ throw new Error('invalid pattern'); }
+        }
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (const ci of idx){
+            const v = row[ci];
+            if (MISS(v)) continue;
+            const s = sieveStr(v);
+            const nv = re ? s.replace(re, repLit) : s.split(p.pattern).join(rep);
+            if (nv !== v) row = replaceCell(row, ci, nv);
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const css = p.columns.map(py).join(', ');
+        const rep = py(p.replacement == null ? '' : String(p.replacement));
+        const head = [
+          `def _sieve_t(x):`,
+          `    if x is None or (isinstance(x, float) and pd.isna(x)): return None`,
+          `    if isinstance(x, bool): return str(x)`,
+          `    if isinstance(x, float) and x.is_integer(): return str(int(x))`,
+          `    return str(x)`
+        ];
+        const tail = (p.regex === false)
+          ? (p.case === false
+            ? [`import re`, `df[[${css}]] = df[[${css}]].map(_sieve_t).str.replace(re.escape(${py(p.pattern)}), ${rep}, regex=True, flags=re.IGNORECASE)`]
+            : [`df[[${css}]] = df[[${css}]].map(_sieve_t).str.split(${py(p.pattern)}).str.join(${rep})`])
+          : [`df[[${css}]] = df[[${css}]].map(_sieve_t).str.replace(${py(p.pattern)}, ${rep}, regex=True${p.case === false ? ', flags=re.IGNORECASE' : ''})`];
+        return [...head, ...tail];
+      }
+    },
+
+    'remove-special-chars': {
+      name:'Remove Special Characters', icon:'sparkle', group:'Text & Types', rowStable:true,
+      blurb:'Keep only chosen character groups',
+      defaults: () => ({ columns:[], letters:true, numbers:true, spaces:true, custom:'' }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'letters', t:'check', label:'Keep letters (A–Z)' },
+        { k:'numbers', t:'check', label:'Keep numbers (0–9)' },
+        { k:'spaces', t:'check', label:'Keep spaces' },
+        { k:'custom', t:'text', label:'Also keep these characters', ph:'e.g. -_.' }
+      ],
+      summary: p => {
+        const keep = [];
+        if (p.letters !== false) keep.push('letters');
+        if (p.numbers !== false) keep.push('numbers');
+        if (p.spaces !== false) keep.push('spaces');
+        if (p.custom) keep.push(`“${p.custom}”`);
+        return `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · keep ${keep.join(' + ') || 'nothing'}`;
+      },
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        const body = specialClassBody(p.letters, p.numbers, p.spaces, p.custom);
+        if (!body) throw new Error('keep at least one character group');
+        const re = new RegExp(`[^${body}]`, 'g');
+        const idx = p.columns.map(c => colIdx(d, c));
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (const ci of idx){
+            const v = row[ci];
+            if (MISS(v)) continue;
+            const nv = sieveStr(v).replace(re, '');
+            if (nv !== v) row = replaceCell(row, ci, nv);
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const pats = specialClassBody(p.letters, p.numbers, p.spaces, p.custom);
+        const head = [
+          `def _sieve_t(x):`,
+          `    if x is None or (isinstance(x, float) and pd.isna(x)): return None`,
+          `    if isinstance(x, bool): return str(x)`,
+          `    if isinstance(x, float) and x.is_integer(): return str(int(x))`,
+          `    return str(x)`
+        ];
+        return [...head, ...p.columns.map(c =>
+          `df[${py(c)}] = df[${py(c)}].map(_sieve_t).str.replace(${py(`[^${pats}]`)}, '', regex=True)`)];
+      }
+    },
+
+    'standardize-categories': {
+      name:'Standardize Categories', icon:'check', group:'Categories', rowStable:true,
+      blurb:'Unify spellings, then apply mappings',
+      defaults: () => ({ columns:[], method:'lower', map:{} }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'method', t:'seg', label:'Letter case', opts:[['keep','Keep'],['lower','lower'],['upper','UPPER'],['title','Title']] },
+        { k:'map', t:'rename', label:'Custom mappings — blank keeps the value' }
+      ],
+      summary: p => {
+        const e = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null).length;
+        return `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · ${p.method}${e ? ` + ${e} mapping${e === 1 ? '' : 's'}` : ''}`;
+      },
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        if (!['keep','lower','upper','title'].includes(p.method)) throw new Error(`unknown case "${p.method}"`);
+        const idx = p.columns.map(c => colIdx(d, c));
+        const entries = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null);
+        // Trim → case → mapping: the same order as the backend twin.
+        const applyCase = s => {
+          if (p.method === 'lower') return s.toLowerCase();
+          if (p.method === 'upper') return s.toUpperCase();
+          if (p.method === 'title') return s.replace(/\S+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+          return s;
+        };
+        const lookup = new Map(entries);
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (const ci of idx){
+            const v = row[ci];
+            if (MISS(v) || typeof v !== 'string') continue;
+            let nv = applyCase(v.trim());
+            if (lookup.has(nv)) nv = lookup.get(nv);
+            if (nv !== v) row = replaceCell(row, ci, nv);
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const cs = p.columns.map(py).join(', ');
+        // A cols list (never df["a", "b"] tuple indexing, which breaks past
+        // one column) — mirrors the backend twin line for line.
+        const caseLine = {
+          keep:`# unchanged case`,
+          lower:`df[cols] = df[cols].str.lower()`,
+          upper:`df[cols] = df[cols].str.upper()`,
+          title:`df[cols] = df[cols].str.replace(r"\\S+", lambda m: m.group(0)[:1].upper() + m.group(0)[1:].lower(), regex=True)`
+        }[p.method];
+        const lines = [
+          `cols = [${cs}]`,
+          `# trim + case first, custom mappings second (missing untouched)`,
+          `df[cols] = df[cols].apply(lambda s: s.str.strip() if s.dtype == object else s)`,
+          caseLine
+        ];
+        const entries = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null);
+        if (entries.length) lines.push(`df[cols] = df[cols].replace({${entries.map(([o, n]) => `${py(o)}: ${py(String(n).trim())}`).join(', ')}})`);
+        return lines;
+      }
+    },
+
+    'log-transform': {
+      name:'Log Transform', icon:'sigma', group:'Numbers', rowStable:true,
+      blurb:'Compress skewed numbers with logs',
+      defaults: () => ({ columns:[], base:'ln', invalid:'null' }),
+      schema: [
+        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
+        { k:'base', t:'seg', label:'Base', opts:[['ln','Natural (e)'],['log10','Base 10'],['log2','Base 2']] },
+        { k:'invalid', t:'seg', label:'Zero / negative', opts:[['null','Write empty'],['error','Fail step']] }
+      ],
+      summary: p => `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · ${p.base}`,
+      hint: () => ({ num:true }),
+      run(d, p){
+        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
+        if (!['ln','log10','log2'].includes(p.base)) throw new Error(`unknown base "${p.base}"`);
+        if (!['null','error'].includes(p.invalid)) throw new Error(`unknown handling "${p.invalid}"`);
+        const idx = p.columns.map(c => colIdx(d, c));
+        const fn = p.base === 'ln' ? Math.log : p.base === 'log10' ? Math.log10 : Math.log2;
+        return { columns: d.columns, rows: d.rows.map(r => {
+          let row = r;
+          for (let k = 0; k < idx.length; k++){
+            const ci = idx[k], v = row[ci];
+            if (MISS(v)) continue;
+            const n = strictNum(v, p.columns[k]);
+            if (!(n > 0)){
+              if (p.invalid === 'error') throw new Error(`log of non-positive value (${String(v)})`);
+              // Always write: the cell holds a real value, null always differs.
+              row = replaceCell(row, ci, null);
+              continue;
+            }
+            row = replaceCell(row, ci, fn(n));
+          }
+          return row;
+        })};
+      },
+      code: (ctx, p) => {
+        const cs = p.columns.map(py).join(', ');
+        const fn = { ln:'np.log', log10:'np.log10', log2:'np.log2' }[p.base];
+        const lines = [];
+        if (p.invalid === 'error'){
+          lines.push(`_bad = [c for c in [${cs}] if ((pd.to_numeric(df[c], errors="coerce").notna()) & (pd.to_numeric(df[c], errors="coerce") <= 0)).any()]`);
+          lines.push(`assert not _bad, f"log-transform: non-positive values in {_bad}"`);
+        }
+        lines.push(`_v = df[[${cs}]].apply(pd.to_numeric, errors="coerce")`);
+        lines.push(`with np.errstate(divide="ignore", invalid="ignore"):`);
+        lines.push(`    _v = ${fn}(_v)`);
+        lines.push(`df[[${cs}]] = _v.mask(~np.isfinite(_v), np.nan)`);
+        return lines;
       }
     }
   };

@@ -19,6 +19,7 @@ import math
 from typing import Any, Optional
 
 import pandas as pd
+from fastapi import HTTPException
 
 
 def canonical_text(value: Any) -> Optional[str]:
@@ -38,3 +39,20 @@ def canonical_text(value: Any) -> Optional[str]:
 def canonical_text_series(series: pd.Series) -> pd.Series:
     """Map a column through canonical_text, preserving missing as None."""
     return series.apply(canonical_text)
+
+
+def coerce_numeric(df: pd.DataFrame, column: str, op: str) -> pd.Series:
+    """Strict numerics for math ops: '' stays missing, anything else that
+    does not parse (currency strings included) is a loud 400 — mirroring
+    the Sieve twin's strict Number(), so both engines refuse the same
+    inputs. Shared by create-column, clip-values and log-transform."""
+    series = df[column]
+    coerced = pd.to_numeric(series, errors="coerce")
+    bad = coerced.isna() & series.notna() & (series.astype(object) != "")
+    if bool(bad.any()):
+        sample = series[bad].iloc[0]
+        raise HTTPException(
+            status_code=400,
+            detail=f'{op}: column "{column}" has non-numeric values (e.g. {sample!r})',
+        )
+    return coerced

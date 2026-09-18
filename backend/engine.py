@@ -14,22 +14,27 @@ from transforms.drop_na import apply_drop_na
 from transforms.date_difference import apply_date_difference
 from transforms.conditional_column import apply_conditional_column
 from transforms.create_column import apply_create_column
+from transforms.clip_values import apply_clip_values
 from transforms.encode_categorical import apply_encode_categorical
 from transforms.extract_date_part import apply_extract_date_part
 from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
 from transforms.find_invalid import apply_find_invalid
+from transforms.find_replace_pattern import apply_find_replace_pattern
 from transforms.group_rare import apply_group_rare
+from transforms.log_transform import apply_log_transform
 from transforms.merge_columns import apply_merge_columns
 from transforms.normalize import apply_normalize
 from transforms.parse_date import apply_parse_date
 from transforms.rename_column import apply_rename_column
 from transforms.reorder_columns import apply_reorder_columns
+from transforms.remove_special_chars import apply_remove_special_chars
 from transforms.replace_values import apply_replace_values
 from transforms.round_values import apply_round_values
 from transforms.sort import apply_sort
 from transforms.split_column import apply_split_column
+from transforms.standardize_categories import apply_standardize_categories
 from transforms.validate_column import apply_validate_column
 
 logger = logging.getLogger(__name__)
@@ -61,6 +66,11 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "conditional-column": apply_conditional_column,
     "validate-column": apply_validate_column,
     "find-invalid": apply_find_invalid,
+    "clip-values": apply_clip_values,
+    "find-replace-pattern": apply_find_replace_pattern,
+    "remove-special-chars": apply_remove_special_chars,
+    "standardize-categories": apply_standardize_categories,
+    "log-transform": apply_log_transform,
 }
 
 
