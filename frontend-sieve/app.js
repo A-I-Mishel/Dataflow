@@ -1688,19 +1688,53 @@ window.Sieve = { runSelfTests, state, E };  // debug handle
    CHROME — palette, tabs, header, DnD, keyboard, errors, boot
    ================================================================== */
 const GROUPS = ['Missing Data','Rows','Values','Text & Types','Structure','Categories','Numbers','Dates','Data Quality'];
+// Accordion collapse state: all groups open unless explicitly shut.
+// Persisted per browser; corrupt storage falls back to all-open.
+const PAL_KEY = 'sieve.palette.v1';
+function palOpenMap(){
+  try { return JSON.parse(localStorage.getItem(PAL_KEY) || 'null') || {}; }
+  catch(e){ return {}; }
+}
+function setGroupOpen(g, open){
+  try {
+    const m = palOpenMap();
+    m[g] = !!open;
+    localStorage.setItem(PAL_KEY, JSON.stringify(m));
+  } catch(e){}
+}
 function buildPalette(){
   const host = $('#palList');
+  host.innerHTML = '';
+  const open = palOpenMap();
   for (const g of GROUPS){
-    host.append(elDiv('pgroup', g));
-    for (const [type, op] of Object.entries(E.OPS)){
-      if (op.group !== g) continue;
+    const ops = Object.entries(E.OPS).filter(([, op]) => op.group === g);
+    if (!ops.length) continue;
+    const shut = open[g] === false;
+    const sec = elDiv('psec' + (shut ? ' shut' : ''));
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'pgroup';
+    head.setAttribute('aria-expanded', shut ? 'false' : 'true');
+    head.setAttribute('aria-label', `${g} operations, ${shut ? 'collapsed' : 'expanded'}`);
+    head.innerHTML = `<span class="pchev">${ic('chevdown',12)}</span><span>${esc(g)}</span><span class="pcount">${ops.length}</span>`;
+    head.onclick = () => {
+      const nowShut = sec.classList.toggle('shut');
+      head.setAttribute('aria-expanded', nowShut ? 'false' : 'true');
+      head.setAttribute('aria-label', `${g} operations, ${nowShut ? 'collapsed' : 'expanded'}`);
+      setGroupOpen(g, !nowShut);
+    };
+    sec.append(head);
+    const body = elDiv('pbody');
+    for (const [type, op] of ops){
       const b = document.createElement('button');
       b.className = 'pg';
       b.setAttribute('aria-label', `${op.name} — ${op.blurb}`);
       b.innerHTML = `<span class="pic">${ic(op.icon,15)}</span><span><b>${esc(op.name)}</b><i>${esc(op.blurb)}</i></span>`;
       b.onclick = () => addNode(type);
-      host.append(b);
+      body.append(b);
     }
+    sec.append(body);
+    host.append(sec);
   }
 }
 function setTab(tab){

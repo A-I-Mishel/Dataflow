@@ -322,3 +322,14 @@ kbd{font-family:var(--mono);font-size:10px;font-weight:600;background:var(--card
   #topbar .top-actions>*{flex:none}
   #popSample{left:12px;right:12px;width:auto}
 }
+
+/* ============ palette accordion ============ */
+/* .pgroup is now a toggle button (was a static div): reset button chrome
+   but keep its type treatment. Sections collapse via display:none — instant
+   and layout-clean; the reduced-motion rule already stills the chevron. */
+button.pgroup{width:100%;background:none;border:none;padding:2px 4px;font:inherit;color:inherit;cursor:pointer;text-align:left}
+button.pgroup:hover .pchev{color:var(--acc)}
+.pchev{display:inline-flex;flex:none;transition:transform .15s ease-out}
+.psec.shut .pchev{transform:rotate(-90deg)}
+.pcount{flex:none;font-size:9px;font-weight:600;color:var(--ink3);border:1px solid var(--line2);border-radius:99px;padding:1px 7px;letter-spacing:.08em}
+.psec.shut .pbody{display:none}
