@@ -1,3 +1,8 @@
+"""FILE: backend/profiler.py
+PURPOSE: Column stats for profile panel: shape, memory, per-column top5/hist.
+HOW IT FITS: main.py /profile -> profile_dataframe(df) -> {shape,memory,columns}.
+WHERE TO EDIT: To add stat: add one key in column dict. Branches: numeric/datetime/bool/object.
+"""
 import logging
 from typing import Any, Dict, List
 

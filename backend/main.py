@@ -1,3 +1,8 @@
+"""FILE: backend/main.py
+PURPOSE: FastAPI app — all HTTP routes.
+HOW IT FITS: Browser -> main.py routes -> engine.py -> transforms/*.py. Upload mints session, execute runs pipeline, generate returns pandas code.
+WHERE TO EDIT: To add endpoint: copy one @app.post block + add Pydantic model in models.py. Route groups: upload/execute/generate/profile/pipelines.
+"""
 import codecs
 import json
 import logging

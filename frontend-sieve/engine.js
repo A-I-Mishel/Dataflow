@@ -1,6 +1,20 @@
 /* ==================================================================
-   ENGINE — pure and self-contained. Stringified into a Web Worker,
-   so it must not reference anything outside this function.
+   FILE: frontend-sieve/engine.js (2156 lines — pure logic, no DOM)
+   PURPOSE: All data operations (filter, fill, sort... 30+ ops) + pandas code export.
+   HOW IT FITS: app.js sends rows+pipeline -> EngineFactory().run() -> result + py code.
+   MUST STAY PURE: stringified into Web Worker — NO window/document/fetch/imports
+     inside EngineFactory(). Only pure JS allowed or worker breaks.
+
+   ★ EXAM MAP — teacher says "change X" -> go HERE:
+   - ADD NEW OPERATION: copy any OP block (search OP:). Each op = { run(), code(), hint }.
+     run() = what it does now. code() = pandas string exported. hint() = helper text.
+   - CHANGE NUMBER PARSING: numify() below (currency/thousands, EU vs US decimals).
+   - CHANGE DATE PARSING: parseDate() + mkDate() (YYYY-MM-DD canonical).
+   - CHANGE MISSING DEFINITION: MISS() below (null/'' = missing).
+   - CHANGE THRESHOLDS: search MAGIC: (.85 zoom, 1.5 IQR, 15 top-values).
+   - BACKEND PARITY: sieveStr(), STRICT_NUM_RE must match backend Python or
+     preview differs from server. Change both sides together.
+   SAFE: hint strings, thresholds. DANGER: run() logic affects all pipelines.
    ================================================================== */
 function EngineFactory(){
   const MISS = v => v == null || v === '';

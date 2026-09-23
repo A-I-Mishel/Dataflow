@@ -1,3 +1,8 @@
+"""FILE: backend/models_db.py
+PURPOSE: DB tables: SavedPipeline, SessionMeta, ExecutionLog.
+HOW IT FITS: SQLAlchemy models created via Base.metadata in database.py.
+WHERE TO EDIT: Rarely edit. name is globally unique (add owner later if multi-user).
+"""
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, String, Text

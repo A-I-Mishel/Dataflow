@@ -1,3 +1,10 @@
+"""FILE: backend/transforms/text_compat.py
+PURPOSE: 'text-compat' step — one pandas op + pandas code string.
+HOW IT FITS: engine.py _TRANSFORMS["text-compat"] -> apply_text_compat(df, config) -> (new_df, code_line).
+CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
+EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
+"""
 """Canonical scalar→string rule shared by string-building transforms.
 
 Sieve parses CSV into strings/numbers while pandas infers dtypes, so the

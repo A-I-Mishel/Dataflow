@@ -3,17 +3,23 @@ import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExe
 
 'use strict';
 /* ==================================================================
-   Sieve 2.0 — production build.
-   Architecture:
-   · EngineFactory() — pure, self-contained engine (parser, ops, runner,
-     stats). Instantiated on the main thread AND inside a Web Worker
-     built from the same source, so heavy data never blocks the UI.
-   · Rows are arrays (index-aligned to `columns`) — immune to prototype
-     pollution, cheaper to clone, faster to scan.
-   · Pipeline runs are memoised: editing step k recomputes only from k.
-   · Undo/redo history, localStorage pipeline autosave, IndexedDB
-     dataset autosave, CSV formula-injection guard, a11y pass,
-     self-test suite (Sieve.runSelfTests()).
+   FILE: frontend-sieve/app.js (2339 lines — biggest file, DON'T PANIC)
+   PURPOSE: All UI + interaction. Engine does math, this does what you SEE.
+   HOW IT FITS: index.html boxes -> this file binds/fills them -> engine.js runs ops.
+
+   ★ EXAM MAP — Ctrl+F these tags (teacher task -> tag -> function):
+   - TEXT: change any button/label/toast/hint -> toast(), BIND: below, renderBackendBtn()
+     Example: "change Run button text" -> search BIND: -> btnRun line -> edit string only.
+   - BIND: every button wiring lives together -> search BIND: (init function).
+     To ADD button: 1) add <button> in index.html 2) add 1 line here. Both needed.
+   - CANVAS: move/zoom/draw nodes/wires -> renderNodes(), renderWires(), initCanvasEvents(), zoomAt()
+   - RUN: pipeline execution -> requestRun(), applyRun() (memoised from edited step only).
+   - INSPECTOR: right panel fields -> renderInspector(), buildField(), onParam()
+     To ADD setting to a step: add 1 entry in buildField().
+   - PREVIEW/CODE: bottom tabs -> renderPreview(), renderCode()
+   - SAVE: autosave -> persistNow(), persistSoon() (localStorage + IndexedDB).
+   - UNDO: history -> pushHist(), undo(), redo()
+   SAFE: text strings, colors via styles.css. DO NOT TOUCH: worker blob, state shape.
    ================================================================== */
 
 /* ---------- tiny helpers ---------- */
@@ -73,6 +79,7 @@ const IC = {
 function ic(n, s=15){ return `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${IC[n]||''}</svg>`; }
 
 /* ---------- toasts ---------- */
+/* TEXT: ★ EXAM — to change popup message text/time, edit below only. 2600 = how long it shows (ms). */
 function toast(msg, icon='check'){
   const t = elDiv('toast', ic(icon,14) + `<span>${esc(msg)}</span>`);
   $('#toasts').append(t);
@@ -518,6 +525,7 @@ async function persistDataset(){
    ================================================================== */
 let runJob = 0, dirtyFrom = Infinity, running = false, latestJob = 0, healAttempts = 0;
 const scheduleRun = debounce(() => doRun(), 140);
+/* RUN: ★ EXAM — pipeline re-run entry. 'from' = step index edited. Memoised: only recomputes from there. DO NOT change logic, only toast text. */
 function requestRun(from){
   dirtyFrom = Math.min(dirtyFrom, clamp(from, 0, Math.max(0, state.nodes.length)));
   scheduleRun();
@@ -625,6 +633,7 @@ const WIRE_DEFS = `<defs>
   <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57503F"/></marker>
   <marker id="arrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#D9481F"/></marker>
 </defs>`;
+/* CANVAS: draws connecting wires. ★ EXAM — change wire color -> styles.css #wires path, not here. */
 function renderWires(){
   if (!state.data){ $('#wires').innerHTML = ''; return; }
   const ch = chainNodes(); let html = WIRE_DEFS;
@@ -716,6 +725,7 @@ function bindNode(el){
     if (e.target.closest('.nx') && id.startsWith('n')){ e.stopPropagation(); deleteNode(id); }
   });
 }
+/* CANVAS: draws step boxes. ★ EXAM — change box text/layout -> edit innerHTML template below, or .node in styles.css for size/color. */
 function renderNodes(){
   const layer = $('#nodesLayer');
   $('#startHint').hidden = !(state.data && state.nodes.length === 0);
@@ -977,6 +987,7 @@ function moveNode(n, dir){
   requestRun(Math.min(i, j)); renderNodes(); renderPreview(); renderCode();
   pushHist('reordered steps');
 }
+/* ADD-BUTTON: ★ EXAM — "add new step type" ends here. n.x+300 = spacing, auto-picks first column. To change default position, edit numbers below. */
 function addNode(type){
   if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
   const n = makeNode(type);
@@ -1133,6 +1144,7 @@ function onParam(node, rebuildForm){
   clearTimeout(paramDeb);
   paramDeb = setTimeout(() => { if (rebuildForm) renderInspector(); }, 60);
 }
+/* INSPECTOR: ★ EXAM — "add/change a setting field" -> edit HERE. f.t types: column/select/text/number/check. Copy one if-block to add new input type. */
 function buildField(f, node){
   const wrap = elDiv('f');
   const P = node.params;
@@ -1252,6 +1264,7 @@ function buildField(f, node){
   }
   return wrap;
 }
+/* INSPECTOR: ★ EXAM — right panel. Change empty message / section titles here. Field inputs come from buildField() above. */
 function renderInspector(){
   const H = $('#inspHead'), B = $('#inspBody');
   if (!state.data){

@@ -1,3 +1,8 @@
+"""FILE: backend/engine.py
+PURPOSE: Runs pipeline steps now (vs generator.py which writes code).
+HOW IT FITS: main.py -> execute_pipeline_*() -> _TRANSFORMS dict -> transforms/*.py. Handles sort_nodes + chunked large-file path.
+WHERE TO EDIT: To add op: 1) import apply_* 2) add 2 entries (_TRANSFORMS + generator map). Keep in sync with generator.py + frontend engine.js.
+"""
 import logging
 from typing import Callable, Dict, List, Optional, Tuple
 

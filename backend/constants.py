@@ -1,3 +1,8 @@
+"""FILE: backend/constants.py
+PURPOSE: Shared constants, breaks circular imports.
+HOW IT FITS: Imported by models + session_store.
+WHERE TO EDIT: Already documented — skip.
+"""
 """Shared backend constants.
 
 Lives in its own module so both API models and transform implementations

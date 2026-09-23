@@ -1,3 +1,8 @@
+"""FILE: backend/sanitize.py
+PURPOSE: Preview-safe output: sanitize() for API JSON, neutralize() for CSV download.
+HOW IT FITS: Prevents Excel formula injection (=cmd...). Limit 5 rows in preview.
+WHERE TO EDIT: Rarely edit. limit=5 keeps previews small.
+"""
 from typing import Any, Dict, List
 
 import numpy as np

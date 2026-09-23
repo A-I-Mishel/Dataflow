@@ -1,3 +1,8 @@
+"""FILE: backend/generator.py
+PURPOSE: Writes runnable pandas script for later (does NOT run).
+HOW IT FITS: main.py /generate -> generate_script(nodes) -> string of df=... lines. Must mirror engine.py semantics.
+WHERE TO EDIT: To add op: copy one _NODE_TO_IMPORT + codegen branch. Use repr() for safe string escaping.
+"""
 import importlib
 import logging
 import re

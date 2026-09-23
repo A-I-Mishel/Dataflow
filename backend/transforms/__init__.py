@@ -1,3 +1,7 @@
+"""FILE: backend/transforms/__init__.py
+PURPOSE: Re-exports all apply_* so engine.py imports from one place.
+WHERE TO EDIT: To add op: add 1 import + 1 __all__ entry here AND engine.py registry.
+"""
 from transforms.drop_column import apply_drop_column
 from transforms.drop_duplicates import apply_drop_duplicates
 from transforms.drop_na import apply_drop_na

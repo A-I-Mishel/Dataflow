@@ -1,3 +1,8 @@
+"""FILE: backend/toposort.py
+PURPOSE: Orders pipeline steps (Kahn) + finds cycles (DFS white/gray/black).
+HOW IT FITS: engine.py -> validate_linear_chain -> topological_sort before running.
+WHERE TO EDIT: Rarely edit. Cycle path format 'a -> b -> a' shown in 400 error.
+"""
 import logging
 from collections import deque
 from typing import Deque, Dict, List, Optional, Tuple

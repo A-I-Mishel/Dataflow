@@ -1,4 +1,25 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  FILE: frontend-sieve/index.html
+  PURPOSE: Static shell — only HTML structure, no logic. All text here is
+    filled by app.js, all colors/layout by styles.css.
+  HOW IT FITS: config.js (backend URL) -> app.js (logic) -> engine.js (ops).
+    This file just creates empty boxes with id="..." that app.js grabs.
+
+  ★ EXAM MAP — teacher says "change X" -> go HERE (Ctrl+F the id):
+  - Top bar buttons ......... id="topbar" below (btnUpload, btnExportCsv...)
+  - Left operations list .... id="palList" (list itself built by app.js)
+  - Pipeline canvas ......... id="viewport" / id="world" / id="nodesLayer"
+  - Bottom preview/code ..... id="pvTableWrap" / id="codePre"
+  - Right settings panel .... id="inspector" (inspHead / inspBody)
+  - Popups .................. id="dlgTemplates", id="dlgKeys"
+  - To add NEW button: 1) copy a <button> line here 2) bind it in app.js
+    (search BIND: in app.js). Both steps needed or button does nothing.
+  - To change TITLE/text: edit directly here, safe, nothing breaks.
+  - DO NOT change <script src="config.js"> order — config.js MUST load first.
+  ============================================================================
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">

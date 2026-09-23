@@ -1,3 +1,10 @@
+"""FILE: backend/transforms/create_column.py
+PURPOSE: 'create-column' step — one pandas op + pandas code string.
+HOW IT FITS: engine.py _TRANSFORMS["create-column"] -> apply_create_column(df, config) -> (new_df, code_line).
+CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
+EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
+"""
 """Safe arithmetic formulas for create-column, e.g. "[price] * [quantity]".
 
 Grammar (shared with the Sieve twin, which parses the identical language):

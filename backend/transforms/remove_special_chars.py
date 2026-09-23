@@ -1,3 +1,10 @@
+"""FILE: backend/transforms/remove_special_chars.py
+PURPOSE: 'remove-special-chars' step — one pandas op + pandas code string.
+HOW IT FITS: engine.py _TRANSFORMS["remove-special-chars"] -> apply_remove_special_chars(df, config) -> (new_df, code_line).
+CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
+EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
+"""
 import re
 from typing import List, Optional, Tuple
 

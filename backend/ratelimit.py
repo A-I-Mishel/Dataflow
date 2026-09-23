@@ -1,3 +1,8 @@
+"""FILE: backend/ratelimit.py
+PURPOSE: Fixed-window rate limit (single-worker only).
+HOW IT FITS: main.py middleware -> 429 + Retry-After. Frontend api.js retries once.
+WHERE TO EDIT: If workers>1 on Render: replace with Redis or limits split per worker.
+"""
 import time
 from typing import Callable, Dict, List, Optional, Tuple
 

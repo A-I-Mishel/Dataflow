@@ -1,3 +1,8 @@
+"""FILE: backend/crud.py
+PURPOSE: DB reads/writes for saved pipelines + logs.
+HOW IT FITS: main.py -> crud.create/get/list/log. Stores nodes_json/edges_json blobs, owner-scoped.
+WHERE TO EDIT: To add query: copy one func, keep owner filter or users see each other data.
+"""
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional

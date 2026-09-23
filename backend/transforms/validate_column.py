@@ -1,3 +1,10 @@
+"""FILE: backend/transforms/validate_column.py
+PURPOSE: 'validate-column' step — one pandas op + pandas code string.
+HOW IT FITS: engine.py _TRANSFORMS["validate-column"] -> apply_validate_column(df, config) -> (new_df, code_line).
+CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
+EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
+"""
 """Quality nodes: inspect and report, never modify.
 
 validate-column and find-invalid return the frame UNCHANGED (plus a warning

@@ -1,3 +1,8 @@
+"""FILE: backend/session_store.py
+PURPOSE: In-memory sessions/results (RAM) + large_files on disk + TTL 2h.
+HOW IT FITS: main.py upload->store_session, execute->get_session/get_result. Large files use LargeFileEntry preview.
+WHERE TO EDIT: To change memory: edit MAX_* caps. TTL cleanup via evict_old_sessions().
+"""
 import logging
 import os
 from dataclasses import dataclass, field

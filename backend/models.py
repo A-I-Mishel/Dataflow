@@ -1,3 +1,8 @@
+"""FILE: backend/models.py
+PURPOSE: Request/response shapes + NodeConfig (30+ optional fields) + MAX_* guards.
+HOW IT FITS: Validates every /upload /execute /generate call before engine runs.
+WHERE TO EDIT: To add op param: add Optional field to NodeConfig with Wave comment. Keep Wave1/2/3 grouping.
+"""
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field

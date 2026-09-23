@@ -1,3 +1,17 @@
+// FILE: frontend-sieve/api.js
+// PURPOSE: Bridge between browser (local engine) and FastAPI backend.
+//   Local engine is ALWAYS the display truth; backend is background verify only.
+// HOW IT FITS: app.js calls getApiBase() -> apiUpload/apiExecute -> toast if mismatch.
+//   Never blocks local results (backend returns only 5-row previews).
+//
+// ★ EXAM MAP — teacher says "change X" -> go HERE:
+// - Change backend URL / local-only ... getApiBase(), setApiBase() below
+//   (precedence: ?api= param > localStorage button > window.SIEVE_API_URL > '').
+// - Change timeout / retry .......... req(), reqOnce() (30s default, 1 retry on 429).
+// - Add new operation mapping ....... sieveToBackend() (~30-branch translator).
+// - Change session handling ......... getSessionId()/setSessionId() (scoped per base).
+// SAFE TO EDIT: base URL strings, timeout numbers. DO NOT change fetch shape
+//   without updating backend/main.py route too.
 // Sieve ↔ FastAPI bridge (hybrid mode).
 //
 // Local engine stays the source of truth for display: uploads parse locally
@@ -139,6 +153,8 @@ export async function apiHealthRetry(base, onAttempt) {
 }
 
 export async function apiUpload(base, file) {
+  // WHAT: Sends CSV to backend POST /upload to mint session_id (background only).
+  // ★ EXAM: timeout 120000ms below = 2 min for big files. Change number only.
   const fd = new FormData();
   fd.append('file', file, file.name || 'upload.csv');
   const body = await req('/upload', base, { method: 'POST', body: fd }, 120000);
@@ -236,6 +252,9 @@ export function linearEdges(nodes) {
 }
 
 /* ---------- sieve → backend node translation ---------- */
+// ★ EXAM: ADD/CHANGE OPERATION MAPPING HERE — if teacher says "support new op
+//   on backend", copy one if-block inside sieveToBackend() below. Pattern:
+//   if (t === 'my-op') { nodes.push({ id: id(), type: 'backend-name', config: {...} }); continue; }
 
 const FILTER_OP = { '=': '==', '≠': '!=', '>': '>', '<': '<', '≥': '>=', '≤': '<=', contains: 'contains' };
 

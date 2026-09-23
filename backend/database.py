@@ -1,3 +1,8 @@
+"""FILE: backend/database.py
+PURPOSE: DB connection — sqlite local, postgres on Render.
+HOW IT FITS: DATABASE_URL env -> engine/SessionLocal/get_db used by main.py via Depends.
+WHERE TO EDIT: To change DB: set DATABASE_URL env. sqlite needs check_same_thread=False only.
+"""
 import os
 from collections.abc import Iterator
 from typing import Any, Dict
