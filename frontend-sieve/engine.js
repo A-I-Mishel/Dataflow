@@ -371,8 +371,14 @@ function EngineFactory(){
   }
   const sanitizeCol = s => String(s).replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '') || 'col';
 
-  /* ---- operation library: pure (data, params) → new data ---- */
+  /* ---- operation library: pure (data, params) → new data ----
+     ★ EXAM — ADD NEW OPERATION: copy one 'key': {...} block below.
+     Each op MUST have: run(d,p)=does it, code(ctx,p,hint)=pandas string, hint()=helper.
+     defaults()=initial settings, schema[]=inspector fields, summary()=node subtitle.
+     MAGIC .85 below = column counts as numeric if ≥85% parse as numbers. */
   const OPS = {
+
+    // GROUP: Missing Data ★ EXAM — gap-filling ops. Safe to change blurb/defaults strings.
 
     'fill-missing': {
       name:'Fill Missing', icon:'droplet', group:'Missing Data', rowStable:true,
@@ -474,6 +480,7 @@ function EngineFactory(){
       }
     },
 
+    // GROUP: Rows ★ EXAM — row ops (filter/sort/dedupe). rowStable:false = row count may change. Pattern: run()=filter rows, code()=pandas line.
     'drop-duplicates': {
       name:'Drop Duplicates', icon:'copy', group:'Rows', rowStable:false,
       blurb:'Remove repeated rows, keep first or last',
@@ -711,6 +718,7 @@ function EngineFactory(){
       }
     },
 
+    // GROUP: Structure ★ EXAM — column add/drop/rename. rowStable:true = same row count. To change error text, edit throw new Error() strings in run().
     'drop-columns': {
       name:'Drop Columns', icon:'columns', group:'Structure', rowStable:true,
       blurb:'Remove columns you don’t need',

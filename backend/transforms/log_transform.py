@@ -1,7 +1,7 @@
 """FILE: backend/transforms/log_transform.py
 PURPOSE: 'log-transform' step — one pandas op + pandas code string.
 HOW IT FITS: engine.py _TRANSFORMS["log-transform"] -> apply_log_transform(df, config) -> (new_df, code_line).
-CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+CONFIG: config.columns, config.method, config.on_invalid. Pandas: df.copy(...). Missing column -> 400 error.
 WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
 EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
 """

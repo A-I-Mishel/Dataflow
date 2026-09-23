@@ -37,6 +37,7 @@
 <body>
 
 <header id="topbar">
+  <!-- EXAM: TOP BAR — ★ change button text/order here. Each id= is bound in app.js (Ctrl+F BIND:) and painted in styles.css #topbar. Safe to reorder. -->
   <div class="brand">
     <span class="mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.3l-4 2.5v-8.8Z"/></svg></span>
     <h1>Sieve</h1>
@@ -62,6 +63,7 @@
 
 <div id="main">
   <aside id="palette" aria-label="Operation palette">
+    <!-- EXAM: LEFT LIST — container only; buttons built by app.js palette render. To change title text below, edit directly. -->
     <div class="ptitle">Operations</div>
     <div class="psub">Click one to append a step to your pipeline.</div>
     <div id="palList"></div>
@@ -69,6 +71,7 @@
   </aside>
 
   <section id="center">
+    <!-- EXAM: CANVAS+PREVIEW — #viewport/#world/#nodesLayer drawn by renderNodes()/renderWires() in app.js; #pvTableWrap by renderPreview(); #codePre by renderCode(). IDs must match app.js $() calls. -->
     <div id="canvasWrap">
       <div id="viewport" role="region" aria-label="Pipeline canvas — drag to pan, scroll to zoom">
         <div id="world">
@@ -133,6 +136,7 @@
   </section>
 
   <aside id="inspector" aria-label="Inspector">
+    <!-- EXAM: RIGHT PANEL — filled by renderInspector()/buildField() in app.js. #inspHead=title, #inspBody=fields. Safe text edits only here. -->
     <div id="inspHead"></div>
     <div id="inspBody"></div>
   </aside>

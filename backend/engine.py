@@ -46,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 TransformFn = Callable[[pd.DataFrame, NodeConfig], Tuple[pd.DataFrame, str]]
 
+# REGISTRY: ★ TO ADD NEW OP: 1) import apply_* at top 2) add "my-op": apply_my_op below
+# 3) mirror in generator.py _NODE_TO_IMPORT + frontend engine.js OPS + api.js sieveToBackend.
 _TRANSFORMS: Dict[str, TransformFn] = {
     "drop-na": apply_drop_na,
     "fill-na": apply_fill_na,

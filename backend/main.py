@@ -397,6 +397,8 @@ def _handle_large_upload(
     )
 
 
+# ROUTE GROUP: data in/out — ★ CHANGE HERE for upload limits/errors.
+# upload: CSV -> session (RAM or disk if > threshold). 413 if >200MB. Returns session_id + 5-row preview.
 @app.post("/upload", response_model=UploadResponse)
 async def upload_csv(
     request: Request,
@@ -461,6 +463,7 @@ async def upload_csv(
     return _handle_large_upload(tmp_path, key, session_id, file.filename, db)
 
 
+# ROUTE: /execute — ★ runs pipeline nodes in order via engine.py. Returns 5-row previews per step (never full frame).
 @app.post("/execute", response_model=ExecuteResponse)
 def execute(
     request: ExecuteRequest,
@@ -515,6 +518,7 @@ def execute(
     )
 
 
+# ROUTE: /profile — ★ column stats via profiler.py. Large files: profiles preview only (OOM guard), true row count reported.
 @app.post("/profile", response_model=ProfileResponse)
 def profile(
     request: ProfileRequest,
@@ -534,6 +538,7 @@ def profile(
     return ProfileResponse(**profile_dict)
 
 
+# ROUTE: /generate — ★ sessionless by design (works after session expiry). Replays node configs on dummy frame via generator.py.
 @app.post("/generate", response_model=GenerateResponse)
 def generate(request: ExecuteRequest) -> GenerateResponse:
     # Sessionless by design: code generation only replays node configs

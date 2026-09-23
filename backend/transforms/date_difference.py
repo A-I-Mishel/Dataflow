@@ -1,7 +1,7 @@
 """FILE: backend/transforms/date_difference.py
 PURPOSE: 'date-difference' step — one pandas op + pandas code string.
 HOW IT FITS: engine.py _TRANSFORMS["date-difference"] -> apply_date_difference(df, config) -> (new_df, code_line).
-CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+CONFIG: config.columns, config.output, config.unit. Pandas: df.copy(...). Missing column -> 400 error.
 WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
 EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
 """

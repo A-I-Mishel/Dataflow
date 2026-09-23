@@ -219,6 +219,7 @@ async function engineParseText(text){
    mismatches surface as toasts; they never replace local results.
    ================================================================== */
 const backend = { base: '', online: false, waking: false, sessionName: '' };
+/* TEXT: ★ EXAM — top-bar backend button labels. Change ONLY the quoted strings ('Local-only', 'Backend ✓'...). Logic stays. */
 function renderBackendBtn(){
   const b = $('#btnBackend');
   if (!b) return;
@@ -243,6 +244,7 @@ async function backendCheck(silent){
   if (!silent) toast(ok ? `Backend connected — ${backend.base}` : 'Backend unreachable after ~90s — check the URL or try again', ok ? 'check' : 'alert');
   return ok;
 }
+/* TEXT: ★ EXAM — backend URL prompt. Change default 'http://localhost:8000' or prompt text below only. */
 function backendConfigure(){
   const cur = backend.base || 'http://localhost:8000';
   const v = prompt('Backend API base URL (empty = local-only mode):', cur);
@@ -336,16 +338,16 @@ const state = {
 const view = { z:.85, px:60, py:40 };
 const NW = 236, PORTY = 18, PAGE = 100;
 
+/* ADD-BUTTON: ★ EXAM — creates one step object. id='n'+seq, params=op.defaults(). To change new-node defaults, edit op.defaults() in engine.js, not here. */
 function makeNode(type){
   const op = E.OPS[type];
   if (!op) throw new Error(`unknown operation "${type}"`);
   return { id:'n' + (state.seq++), type, enabled:true, x:0, y:0,
            params: op.defaults(), _err:null, _delta:null, _hint:null, _inColumns:[], _inTypes:{} };
 }
-// Restored/applied params are untrusted (localStorage, server templates):
-// a wrong shape (rules:string, map:null, columns:string) crashes buildField
-// (forEach/includes on non-arrays). Merge onto defaults key-by-key, keeping
-// only type-compatible values; corrupt entries fall back to the default.
+// EXAM: Safety filter for loaded params (localStorage/templates may be corrupt).
+// WHAT: Merges raw onto defaults key-by-key, keeps only type-compatible values.
+// CHANGE: rarely needed. To allow a new param type, add one else-if branch below.
 function sanitizeParams(type, raw){
   const op = E.OPS[type];
   const defs = (op && typeof op.defaults === 'function') ? op.defaults() : {};
@@ -436,6 +438,7 @@ function restoreSnap(s){
   state.viewStep = (s.viewStep === 'final' || (Number.isInteger(s.viewStep) && s.viewStep >= 0 && s.viewStep <= state.nodes.length)) ? s.viewStep : 'final';
   requestRun(0); renderNodes(); renderInspector(); updateUndoBtns(); persistSoon();
 }
+/* UNDO: ★ EXAM — history stack. pushHist(label) saves, undo()/redo() restore. To change history size, find hist.stack limit near pushHist. */
 function undo(){ if (!state.data || hist.idx <= 0) return; hist.idx--; restoreSnap(hist.stack[hist.idx]); toast('Undo — ' + hist.stack[hist.idx + 1].label, 'undo'); }
 function redo(){ if (!state.data || hist.idx >= hist.stack.length - 1) return; hist.idx++; restoreSnap(hist.stack[hist.idx]); toast('Redo — ' + hist.stack[hist.idx].label, 'redo'); }
 function updateUndoBtns(){
@@ -464,6 +467,7 @@ function persistSoon(){
   clearTimeout(saveChipTimer);
   saveChipTimer = setTimeout(() => updateSaveChip('pending'), 800);
 }
+/* SAVE: ★ EXAM — writes pipeline+dataset to browser (localStorage + IndexedDB). Change key names 'sieve.*' only if you update load code too. */
 function persistNow(){
   clearTimeout(saveChipTimer);
   if (!state.data) return;
@@ -618,6 +622,7 @@ function ensureDeep(i){
    CANVAS — nodes, wires, pan / zoom, drag, keyboard
    ================================================================== */
 const nodeEls = new Map();
+/* CANVAS: ★ EXAM — linear order src -> enabled nodes -> out. Bypassed (enabled=false) steps are skipped here AND in wires. */
 function chainNodes(){
   const ch = [{ id:'__src', x:state.srcPos.x, y:state.srcPos.y }];
   for (const n of state.nodes) if (n.enabled) ch.push(n);
@@ -643,6 +648,7 @@ function renderWires(){
   }
   $('#wires').innerHTML = html;
 }
+/* CANVAS: ★ EXAM — small status line under each node ('5,000 → 4,800 rows'). Change text template below only. */
 function footText(n){
   if (n._err) return n._err;
   const d = n._delta; if (!d) return 'waiting to run';
@@ -661,6 +667,7 @@ function nodeAria(id, inner){
   if (id.startsWith('n')) extra = ' Press Enter to configure, Delete to remove, arrow keys to move.';
   return inner.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() + '.' + extra;
 }
+/* CANVAS: ★ EXAM — drag/zoom handler. Change PAN/ZOOM speed here (zoomAt factor, clamp range .35–1.8). Don't rename #viewport/#world ids. */
 function bindNode(el){
   el.addEventListener('pointerdown', e => {
     if (e.button !== 0 || e.target.closest('.nx')) return;
@@ -822,6 +829,7 @@ function renderBrokenNode(layer, n, i, err){
 }
 
 /* ---- pan / zoom ---- */
+/* CANVAS: ★ EXAM — applies pan/zoom transform. 26px dot grid stays fixed. Change zoom range in zoomAt (.35–1.8) below. */
 function applyView(){
   $('#world').style.transform = `translate(${view.px}px,${view.py}px) scale(${view.z})`;
   // Infinite dot grid: dots live on #viewport (fixed 26px, full coverage),
@@ -830,12 +838,14 @@ function applyView(){
   if (vp) vp.style.backgroundPosition = `${view.px}px ${view.py}px`;
 }
 function zoomLab(){ $('#zoomLab').textContent = Math.round(view.z * 100) + '%'; }
+/* CANVAS: ★ EXAM — zoom math. k>1 zooms in, k<1 out. clamp(.35,1.8) = min/max zoom. Change numbers only. */
 function zoomAt(cx, cy, k){
   const nz = clamp(view.z * k, .35, 1.8);
   view.px = cx - (cx - view.px) * (nz / view.z);
   view.py = cy - (cy - view.py) * (nz / view.z);
   view.z = nz; applyView(); zoomLab(); persistSoon();
 }
+/* CANVAS: ★ EXAM — mouse drag-pan + scroll-zoom wiring on #viewport. Rarely edit. BIND: search here for pointer/wheel listeners. */
 function initCanvasEvents(){
   const vp = $('#viewport');
   vp.addEventListener('pointerdown', e => {
@@ -958,8 +968,10 @@ function flashNode(id){
 }
 
 /* ==================================================================
-   SELECTION & STRUCTURAL EDITS
+   SELECTION & STRUCTURAL EDITS — ★ EXAM: click/select/delete/reorder steps live here.
+   Teacher "change what happens on click/delete" -> selectNode()/deleteNode() below.
    ================================================================== */
+/* SELECT: ★ EXAM — clicking a node sets state.selected + viewStep, then re-renders 3 panels. */
 function selectNode(id){
   if (!state.data) return;
   state.selected = id;
@@ -970,6 +982,7 @@ function selectNode(id){
   // Mobile: tapping a step opens the inspector drawer so its settings are reachable.
   if (id && id.startsWith('n') && isMobileView()) setDrawer('insp');
 }
+/* DELETE: ★ EXAM — removes step, re-runs from index i. Change toast text only. */
 function deleteNode(id){
   if (!id || !id.startsWith('n')) return;
   const i = state.nodes.findIndex(n => n.id === id);
@@ -1028,6 +1041,7 @@ function firstSuitableColumn(type, params, cols){
     return cols[0] || '';
   } catch(e){ return cols[0] || ''; }
 }
+/* DUPLICATE: ★ EXAM — copies step with offset +40/+60 px. Change offset numbers only. */
 function duplicateNode(n){
   const i = state.nodes.indexOf(n);
   const c = makeNode(n.type);
@@ -1041,7 +1055,8 @@ function duplicateNode(n){
 }
 
 /* ==================================================================
-   INSPECTOR — schema-driven forms + dataset profiling
+   INSPECTOR — schema-driven forms + dataset profiling. ★ EXAM: change right-panel
+   fields -> buildField() per-input, renderInspector() layout. Profile -> profileHTML().
    ================================================================== */
 function tile(v, l){ return `<div class="tile"><b>${esc(String(v))}</b><i>${esc(l)}</i></div>`; }
 const TYGLYPH = { num:'123', date:'DATE', text:'ABC' };
@@ -1049,6 +1064,8 @@ const TYGLYPH = { num:'123', date:'DATE', text:'ABC' };
 // run, so this recomputes exactly once per run and never leaks: dead
 // outputs drop out of the WeakMap with their rows).
 const scoreCache = new WeakMap();
+// EXAM: Cached quality/diff (WeakMap = auto-cleaned, one compute per run).
+// WHAT: qualityOf() 0-100 score, diffOf() before/after rows. CHANGE: edit display in profileHTML(), not here.
 function qualityOf(columns, rows){
   let s = scoreCache.get(rows);
   if (!s){ s = E.qualityScore(columns, rows); scoreCache.set(rows, s); }
@@ -1056,12 +1073,14 @@ function qualityOf(columns, rows){
 }
 // Before/after diff, memoized per output frame like quality scores: page
 // turns re-render constantly, the scan runs once per run.
+// EXAM: do not delete the WeakMap below — diffOf() needs it.
 const diffCache = new WeakMap();
 function diffOf(prev, out){
   let d = diffCache.get(out);
   if (!d){ d = E.diffRows(prev, out); diffCache.set(out, d); }
   return d;
 }
+/* PROFILE: ★ EXAM — dataset column cards (type glyph, missing %, unique count). Change HTML template below only. Types: TYGLYPH above (num/date/text). */
 function profileHTML(meta, columns, rowCount, sel){
   return columns.map(c => {
     const ty = meta.types[c] || 'text';
@@ -1120,12 +1139,14 @@ function profileDetailHTML(d, col){
   }
   return html + `</div>`;
 }
+/* DROPDOWN: ★ EXAM — column picker options. '(missing upstream)' = column vanished after earlier step. Change label text only. */
 function colOpts(node, val){
   const cols = nodeCols(node);
   const o = cols.map(c => [c, c]);
   if (val && !cols.includes(val)) o.unshift([val, val + '  (missing upstream)']);
   return o;
 }
+/* DROPDOWN: ★ EXAM — builds <select> element. To change dropdown style, edit styles.css select rules, not here. */
 function mkSelect(opts, val){
   const s = document.createElement('select');
   for (const [v, l] of opts){
@@ -1136,6 +1157,7 @@ function mkSelect(opts, val){
   return s;
 }
 let paramDeb;
+/* PARAM: ★ EXAM — runs on EVERY setting change. requestRun(i) re-runs from this step, 60ms debounce rebuilds form. Change debounce time only. */
 function onParam(node, rebuildForm){
   const i = state.nodes.indexOf(node);
   if (i >= 0) requestRun(i);
@@ -1398,12 +1420,15 @@ function renderInspector(){
 }
 
 /* ==================================================================
-   PREVIEW — paginated table, step navigation, honest diffing
+   PREVIEW — paginated table, step navigation, honest diffing. ★ EXAM: change bottom
+   table -> renderPreview(). Change step index logic -> viewIdx() ('final' = last output).
    ================================================================== */
+/* PREVIEW-INDEX: 'final' means last step. ★ EXAM — rarely edit, just know it. */
 function viewIdx(){
   if (state.viewStep === 'final') return Math.max(0, state.outputs.length - 1);
   return clamp(state.viewStep, 0, Math.max(0, state.outputs.length - 1));
 }
+/* PREVIEW: ★ EXAM — bottom data table. Change empty text / 'computing…' chip / page size here. Reads state.outputs[viewIdx()]. */
 function renderPreview(){
   const meta = $('#pvMeta'), tools = $('#pvTools'), wrap = $('#pvTableWrap');
   const noteL = $('#pvNoteL'), noteR = $('#pvNoteR');
@@ -1585,6 +1610,7 @@ function highlightPy(src){
     return `<div class="cl"><span class="ln">${i+1}</span><span class="lc">${body || ' '}</span></div>`;
   }).join('');
 }
+/* CODE: ★ EXAM — bottom 'Code' tab. Change filename pattern (*_clean.py) or highlight colors here. Code itself comes from genCode() -> engine op.code(). */
 function renderCode(){
   if (!state.data){ $('#codePre').innerHTML = '<div class="empty" style="color:#84795C">Load a dataset to generate code.</div>'; return; }
   state.code = genCode();

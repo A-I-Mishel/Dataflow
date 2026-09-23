@@ -1,7 +1,7 @@
 """FILE: backend/transforms/encode_categorical.py
 PURPOSE: 'encode-categorical' step — one pandas op + pandas code string.
 HOW IT FITS: engine.py _TRANSFORMS["encode-categorical"] -> apply_encode_categorical(df, config) -> (new_df, code_line).
-CONFIG: uses NodeConfig.columns + op-specific fields (see models.py). Missing column -> 400 error.
+CONFIG: config.columns, config.method. Pandas: df.select_dtypes(...). Missing column -> 400 error.
 WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-string code line together or preview differs from exported code.
 EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
 """

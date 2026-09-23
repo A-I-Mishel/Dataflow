@@ -130,12 +130,12 @@ async function req(path, base, opts = {}, timeoutMs = 30000) {
   return body;
 }
 
+// WHAT: GET /health once. INPUT: base URL, timeoutMs. OUTPUT: {status}. ★ EXAM: change 8000 timeout only.
 export const apiHealth = (base, timeoutMs = 8000) =>
   req('/health', base, {}, timeoutMs);
 
-// Wake-tolerant check for free-tier hosting (sleeps after ~15 min idle,
-// first request takes ~50s). Attempts lengthen to ride out a cold start;
-// total worst case ~90s. Resolves true on first success, false otherwise.
+// WHAT: Retry health for sleeping free-tier backend (8s→20s→60s, ~90s total).
+// ★ EXAM: change timeouts array above to retry faster/slower. Returns true/false, never throws.
 export async function apiHealthRetry(base, onAttempt) {
   const timeouts = [8000, 20000, 60000];
   for (let i = 0; i < timeouts.length; i++) {
@@ -176,6 +176,8 @@ function readSessionMap() {
   } catch (_) { return {}; }
 }
 
+// WHAT: Read session id for THIS backend base only (never cross-send).
+// ★ EXAM: rarely edit. Returns '' when local-only.
 export function getSessionId(base) {
   try {
     if (!base) {
@@ -197,6 +199,7 @@ export function setSessionId(base, sid) {
   try { localStorage.setItem(LS_SES, JSON.stringify(map)); } catch (_) {}
 }
 
+// WHAT: Forget session for this base (e.g. on disconnect). ★ EXAM: rarely edit.
 export function clearSessionId(base) {
   if (!base) return;
   try {
@@ -206,9 +209,8 @@ export function clearSessionId(base) {
   } catch (_) {}
 }
 
-// Server-side column profile (histograms, server-computed stats) for the
-// profile detail panel. Source-data only, fetched lazily — the local
-// distOf() panel works without it.
+// WHAT: POST /profile for server histograms/stats (lazy; local panel works without it).
+// ★ EXAM: change 60000 timeout only. Needs session_id from apiUpload().
 export function apiProfile(base, sessionId) {
   return req('/profile', base, {
     method: 'POST',
@@ -218,10 +220,10 @@ export function apiProfile(base, sessionId) {
 }
 
 /* ---------- shared pipeline templates (server) ---------- */
-// The backend stores step templates (nodes + linear edges); datasets are
-// never uploaded with them. All four are inert without a configured
-// backend — callers check getApiBase() first and explain local-only mode.
+// WHAT: Saved step templates (nodes+edges, never datasets). All need backend; local-only callers skip.
+// ★ EXAM: change 15000/30000 timeouts only. To save extra field, add to JSON.stringify below AND backend models.
 
+/* WHAT: List saved templates. ★ EXAM: rarely edit. */
 export const apiListPipelines = (base) => req('/pipelines', base, {}, 15000);
 
 export function apiSavePipeline(base, name, nodes) {
@@ -242,10 +244,8 @@ export function apiDeletePipeline(base, id) {
   return req(`/pipelines/${encodeURIComponent(id)}`, base, { method: 'DELETE' }, 15000);
 }
 
-// Sieve pipelines always run as a linear chain; edges are derived from
-// node order so saved templates stay minimal and unambiguous.
-// Nodes saved from the app omit `id` (steps only) — synthesize stable
-// n1.. ids so /pipelines/save never receives [{}] edges.
+// WHAT: Linear chain edges n1->n2->... derived from node order (templates stay minimal).
+// ★ EXAM: rarely edit. Saved nodes omit id so we synthesize stable n1.. ids.
 export function linearEdges(nodes) {
   const ids = (nodes || []).map((n, i) => (n && n.id) || `n${i + 1}`);
   return ids.slice(1).map((id, k) => ({ source: ids[k], target: id }));
