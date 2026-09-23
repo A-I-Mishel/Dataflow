@@ -1975,14 +1975,59 @@ function buildSamplesPop(){
     if (!pop.hidden && !e.target.closest('#popSample') && !e.target.closest('#btnSamples')) pop.hidden = true;
   });
 }
-/* ---- responsive drawers (≤900px): palette/inspector become overlays ----
-   No-ops on desktop where the buttons are hidden and the query never matches. */
+/* ---- responsive drawers (≤900px): palette/inspector become overlays.
+   Above 900px the same buttons collapse the sidebars in place (hide-pal /
+   hide-insp), persisted per browser like the palette accordion. */
 function isMobileView(){
   return !!(window.matchMedia && matchMedia('(max-width: 900px)').matches);
 }
 function setDrawer(which){
   document.body.classList.toggle('show-pal', which === 'pal');
   document.body.classList.toggle('show-insp', which === 'insp');
+  syncPanelButtons();
+}
+const PANEL_KEY = 'sieve.panels.v1';
+function panelPrefs(){
+  try { return JSON.parse(localStorage.getItem(PANEL_KEY) || 'null') || {}; }
+  catch (e){ return {}; }
+}
+function applyPanelPrefs(){
+  let p = {};
+  try { p = panelPrefs(); } catch (e){}
+  document.body.classList.toggle('hide-pal', p.hidePal === true);
+  document.body.classList.toggle('hide-insp', p.hideInsp === true);
+  syncPanelButtons();
+}
+function setPanelPref(k, v){
+  try {
+    const p = panelPrefs();
+    p[k] = !!v;
+    localStorage.setItem(PANEL_KEY, JSON.stringify(p));
+  } catch (e){}
+}
+function syncPanelButtons(){
+  const bp = $('#btnPalette'), bi = $('#btnInspector');
+  if (isMobileView()){
+    if (bp) bp.setAttribute('aria-expanded', document.body.classList.contains('show-pal') ? 'true' : 'false');
+    if (bi) bi.setAttribute('aria-expanded', document.body.classList.contains('show-insp') ? 'true' : 'false');
+  } else {
+    if (bp) bp.setAttribute('aria-expanded', document.body.classList.contains('hide-pal') ? 'false' : 'true');
+    if (bi) bi.setAttribute('aria-expanded', document.body.classList.contains('hide-insp') ? 'false' : 'true');
+  }
+}
+function togglePanel(which){
+  // Mobile: overlay drawer. Desktop: in-place collapse (persisted).
+  if (isMobileView()){ setDrawer(which); return; }
+  if (which === 'pal'){
+    const hide = !document.body.classList.contains('hide-pal');
+    document.body.classList.toggle('hide-pal', hide);
+    setPanelPref('hidePal', hide);
+  } else if (which === 'insp'){
+    const hide = !document.body.classList.contains('hide-insp');
+    document.body.classList.toggle('hide-insp', hide);
+    setPanelPref('hideInsp', hide);
+  }
+  syncPanelButtons();
 }
 /* ==================================================================
    SERVER TEMPLATES — saved pipelines live on the backend (never the
@@ -2089,9 +2134,16 @@ async function applyTemplate(id, name){
 }
 function initChrome(){
   $('#btnSamples').innerHTML = ic('layers',14) + ' Presets ' + ic('chevdown',12);  $('#btnPalette').innerHTML = ic('plus',14) + ' Steps';
-  $('#btnPalette').onclick = () => setDrawer(document.body.classList.contains('show-pal') ? null : 'pal');
+  $('#btnPalette').onclick = () => {
+    if (isMobileView()) setDrawer(document.body.classList.contains('show-pal') ? null : 'pal');
+    else togglePanel('pal');
+  };
   $('#btnInspector').innerHTML = ic('columns',14) + ' Inspector';
-  $('#btnInspector').onclick = () => setDrawer(document.body.classList.contains('show-insp') ? null : 'insp');
+  $('#btnInspector').onclick = () => {
+    if (isMobileView()) setDrawer(document.body.classList.contains('show-insp') ? null : 'insp');
+    else togglePanel('insp');
+  };
+  applyPanelPrefs();
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
   $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
   $('#btnBackend').onclick = backendConfigure;

@@ -305,8 +305,15 @@ kbd{font-family:var(--mono);font-size:10px;font-weight:600;background:var(--card
 .dlg-f{display:flex;gap:9px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line)}
 
 /* ============ responsive ============ */
-/* Drawer toggles live in the topbar but only appear in mobile mode. */
-#btnPalette,#btnInspector{display:none}
+/* Panel toggles: drawers on mobile (see below), collapsers on desktop. */
+#btnPalette,#btnInspector{display:inline-flex}
+#btnPalette[aria-expanded="false"],#btnInspector[aria-expanded="false"]{opacity:.55}
+/* Desktop collapse: hiding a sidebar frees its flex space for the canvas.
+   Scoped above 900px so the mobile drawer transforms below stay untouched. */
+@media (min-width: 901px){
+  body.hide-pal #palette{display:none}
+  body.hide-insp #inspector{display:none}
+}
 
 /* Small laptops: unlock the fixed 1150px floor, slim the sidebars. */
 @media (max-width: 1150px){
