@@ -722,6 +722,53 @@ describe('log-transform', () => {
   });
 });
 
+describe('qualityScore', () => {
+  it('scores a perfect frame 100', () => {
+    assert.deepEqual(E.qualityScore(['a', 'b'], [[1, 'x'], [2, 'y']]), {
+      score: 100,
+      parts: { completeness: 100, uniqueness: 100, validity: 100, consistency: 100, type_correctness: 100 },
+      counts: { rows: 2, columns: 2, missing: 0, duplicate_rows: 0 },
+    });
+  });
+  it('scores empty frames 100 (vacuous truth)', () => {
+    assert.equal(E.qualityScore([], []).score, 100);
+    assert.equal(E.qualityScore(['a'], []).score, 100);
+  });
+  it('matches the hand-computed dirty frame (locked with backend twin)', () => {
+    const out = E.qualityScore(['n', 't'], [[1, 'a'], [1, 'a'], [2, '  '], [null, 'b'], ['x', 3]]);
+    assert.deepEqual(out, {
+      score: 70,
+      parts: { completeness: 90, uniqueness: 80, validity: 89, consistency: 56, type_correctness: 0 },
+      counts: { rows: 5, columns: 2, missing: 1, duplicate_rows: 1 },
+    });
+  });
+});
+
+describe('distOf', () => {
+  const cols = ['c', 'n'];
+  const rows = [['a', '1'], ['b', '2'], ['a', '3'], ['', 'x']];
+  it('counts top values and missing', () => {
+    const d = E.distOf(cols, rows, 'c');
+    assert.equal(d.total, 4);
+    assert.equal(d.missing, 1);
+    assert.equal(d.unique, 2);
+    assert.deepEqual(d.top[0], { v: 'a', c: 2 });
+    assert.equal(d.sampled, false);
+  });
+  it('computes numeric stats and histogram', () => {
+    const d = E.distOf(cols, [['1'], ['2'], ['3'], ['4']].map(([v]) => [v, v]), 'n');
+    assert.deepEqual([d.numeric.min, d.numeric.max, d.numeric.mean], [1, 4, 2.5]);
+    assert.equal(d.hist.reduce((a, h) => a + h.c, 0), 4);
+  });
+  it('flags sampling on huge frames and rejects unknown columns', () => {
+    const big = new Array(60000).fill(['a']);
+    const d = E.distOf(['c'], big, 'c');
+    assert.equal(d.sampled, true);
+    assert.equal(d.scanned, 50000);
+    assert.throws(() => E.distOf(['c'], big, 'nope'));
+  });
+});
+
 describe('text decoding and delimiters', () => {
   it('sniffs tab delimiters like the backend rule', () => {
     const parsed = E.parseCSVText('A\tB\n1\tx\n2\ty\n');
@@ -756,5 +803,25 @@ describe('operation registry', () => {
       const params = op.defaults();
       assert.equal(typeof op.summary(params), 'string', `${type}: summary must return a string`);
     }
+  });
+});
+
+describe('diffRows', () => {
+  it('counts affected rows and changed cells like the painted marks', () => {
+    const prev = { columns: ['a', 'b'], rows: [[1, 'x'], [2, 'y'], [3, 'z']] };
+    const out = { columns: ['a', 'b'], rows: [[1, 'X'], [2, 'y'], [null, 'z']] };
+    // Row 0: 'x'→'X' (1 cell). Row 1: identical. Row 2: 1→null (missing flip).
+    assert.deepEqual(E.diffRows(prev, out), { affected: 2, changed: 2 });
+  });
+  it('follows renames across column positions', () => {
+    const prev = { columns: ['a'], rows: [[1]] };
+    const out = { columns: ['b'], rows: [[1]] };
+    assert.deepEqual(E.diffRows(prev, out), { affected: 0, changed: 0 });
+  });
+  it('declines misaligned frames instead of guessing', () => {
+    const prev = { columns: ['a'], rows: [[1], [2]] };
+    const out = { columns: ['a'], rows: [[1]] };
+    assert.deepEqual(E.diffRows(prev, out), { affected: null, changed: null });
+    assert.deepEqual(E.diffRows(null, out), { affected: null, changed: null });
   });
 });

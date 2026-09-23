@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { sieveToBackend } from '../api.js';
 import { EngineFactory } from '../engine.js';
 import { getApiBase, getApiSource } from '../api.js';
-import { linearEdges } from '../api.js';
+import { linearEdges, apiProfile } from '../api.js';
 
 const one = (type, params) => [{ type, enabled: true, params }];
 
@@ -302,5 +302,25 @@ describe('template payloads', () => {
       { source: 'a', target: 'b' },
       { source: 'b', target: 'c' },
     ]);
+  });
+});
+
+describe('apiProfile', () => {
+  it('posts the session and returns the profile', async () => {
+    const seen = {};
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      seen.url = url;
+      seen.opts = opts;
+      return { ok: true, status: 200, json: async () => ({ shape: [3, 1], columns: {} }) };
+    };
+    try {
+      const out = await apiProfile('http://api.test', 'sid-1');
+      assert.equal(seen.url, 'http://api.test/profile');
+      assert.deepEqual(JSON.parse(seen.opts.body), { session_id: 'sid-1' });
+      assert.deepEqual(out, { shape: [3, 1], columns: {} });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

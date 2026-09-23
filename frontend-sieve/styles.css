@@ -215,8 +215,10 @@ textarea{min-height:76px;resize:vertical;line-height:1.6}
 .rx{width:24px;height:24px;display:grid;place-items:center;background:var(--ink);color:var(--panel);border:none;border-radius:50%;cursor:pointer;flex:none}
 .rhint{font-size:10.5px;color:var(--ink3);padding:4px 2px}
 .repbox{border:1.5px solid var(--line2);border-radius:9px;padding:10px 12px;font-size:11px;color:var(--ink2);line-height:1.6;margin-bottom:8px}
+.repbox .rsamp{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--ink3);line-height:1.7}
+.repbox .rsamp span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.repbox .rsamp span:last-child{flex:none}
 .repbox b{color:var(--ink)}
-.repbox .rsamp{font-family:var(--mono);font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ---- saved templates dialog ---- */
 .trow{display:flex;gap:8px;margin-bottom:10px;align-items:center}
 .trow input{flex:1;min-width:0}
@@ -251,7 +253,9 @@ select:focus,input:focus{border-color:var(--ink)}
 .tile i{font-style:normal;font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3)}
 .seclab{display:flex;align-items:center;gap:8px;font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin:4px 0 9px}
 .seclab::after{content:'';flex:1;height:1px;background:var(--line)}
-.prof{border:1.5px solid var(--line2);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden}
+.prof{border:1.5px solid var(--line2);border-radius:10px;background:var(--card);margin-bottom:8px;overflow:hidden;cursor:pointer}
+.prof:hover{border-color:var(--ink)}
+.prof.sel{border-color:var(--acc);box-shadow:2px 2px 0 rgba(217,72,31,.25)}
 .prof-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 11px;border-bottom:1px solid var(--line)}
 .prof-h .pn{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prof-h .ty{flex:none;font-size:8px;letter-spacing:.1em;color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1.5px 5px}

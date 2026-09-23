@@ -293,6 +293,52 @@ function EngineFactory(){
     return meta;
   }
 
+  // Per-column distribution for the profile detail panel. Pure and bounded:
+  // scans at most SCAN_CAP rows (flags `sampled` beyond that) so a click
+  // never hangs the tab on huge files. Numeric stats/histogram use the same
+  // .85 majority rule as metaOf types; display-only precision (never part
+  // of parity comparisons, so summation order is irrelevant here).
+  function distOf(columns, rows, col, topN, bins){
+    topN = topN || 10; bins = bins || 12;
+    const SCAN_CAP = 50000;
+    const ci = columns.indexOf(col);
+    if (ci < 0) throw new Error(`unknown column "${col}"`);
+    const n = Math.min(rows.length, SCAN_CAP);
+    const freq = new Map();
+    let missing = 0, numCount = 0, seen = 0;
+    const nums = [];
+    for (let i = 0; i < n; i++){
+      const v = rows[i][ci];
+      if (MISS(v)){ missing++; continue; }
+      seen++;
+      const k = typeof v + ':' + (typeof v === 'string' ? v : JSON.stringify(v));
+      const e = freq.get(k);
+      if (e) e.c++;
+      else freq.set(k, { raw:v, c:1 });
+      if (isNumV(v)){ numCount++; nums.push(numify(v)); }
+    }
+    const top = [...freq.values()].sort((a, b) => b.c - a.c).slice(0, topN)
+      .map(e => ({ v:e.raw, c:e.c }));
+    const isNumeric = seen > 0 && numCount / seen >= .85;
+    let stats = null, hist = null;
+    if (isNumeric && nums.length){
+      let lo = nums[0], hi = nums[0], sum = 0;
+      for (const x of nums){ if (x < lo) lo = x; if (x > hi) hi = x; sum += x; }
+      stats = { min:lo, max:hi, mean:sum / nums.length, count:nums.length };
+      hist = [];
+      if (hi > lo){
+        const w = (hi - lo) / bins;
+        const counts = new Array(bins).fill(0);
+        for (const x of nums) counts[Math.min(bins - 1, Math.floor((x - lo) / w))]++;
+        for (let b = 0; b < bins; b++) hist.push({ x0:lo + b * w, x1:lo + (b + 1) * w, c:counts[b] });
+      } else hist.push({ x0:lo, x1:hi, c:nums.length });
+    }
+    return {
+      column:col, total:rows.length, scanned:n, sampled:rows.length > n,
+      missing, unique:freq.size, top, numeric:stats, hist,
+    };
+  }
+
   const colIdx = (d, c) => {
     if (c === '' || c == null) throw new Error('pick a column in the inspector first');
     const i = d.columns.indexOf(c);
@@ -1972,6 +2018,32 @@ function EngineFactory(){
     return { base: { columns: base.columns, rows: base.rows, meta: srcMeta }, outputs, results };
   }
 
+  // Row-level diff between two step frames for the before/after panel.
+  // Same comparison the preview table paints (missing-aware, string
+  // coercion), so counts always match the visible marks — unlike deltaOf,
+  // which counts strict !== for engine telemetry. Only meaningful when
+  // rows align 1:1 (rowStable steps); otherwise affected stays null and
+  // callers fall back to net row counts.
+  function diffRows(prev, out){
+    if (!prev || !out || prev.rows.length !== out.rows.length) return { affected:null, changed:null };
+    const pairs = out.columns.map(c => prev.columns.indexOf(c));
+    let affected = 0, changed = 0;
+    for (let i = 0; i < out.rows.length; i++){
+      const a = prev.rows[i], b = out.rows[i];
+      let rowHit = false;
+      for (let j = 0; j < out.columns.length; j++){
+        const pi = pairs[j];
+        if (pi < 0) continue;
+        const v = b[j], pv = a[pi];
+        const m = v == null || v === '', pm = pv == null || pv === '';
+        const hit = (!m && !pm && String(pv) !== String(v)) || (m !== pm);
+        if (hit){ changed++; rowHit = true; }
+      }
+      if (rowHit) affected++;
+    }
+    return { affected, changed };
+  }
+
   // SVG wire path between two node ports. Coerces every coordinate:
   // restored workspaces may carry string/missing positions, and "40"+236
   // concatenates (wire flies off-canvas and vanishes) while nodes still
@@ -1984,7 +2056,98 @@ function EngineFactory(){
     return `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
   }
 
-  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, runFrom, OPS, sanitizeCol, wirePath, parseFormula, formulaRefs, evalFormula, formulaToPandas, strictNum, matchCond };
+  // Dataset quality score (0-100). Twin of backend/quality.py — read its
+  // contract comment first: same five ratios, same order, same rounding,
+  // or the final integer forks. Weights live in this one expression.
+  const NUM_LIKE_RE = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+  function qualityScore(columns, rows){
+    const ncols = columns.length, nrows = rows.length;
+    const totalCells = nrows * ncols;
+    const isMiss = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
+    const isNumLike = v => {
+      if (typeof v === 'boolean') return false;
+      if (typeof v === 'number') return true;
+      if (typeof v !== 'string') return false;
+      return NUM_LIKE_RE.test(v.trim());
+    };
+    const dupKey = v => {
+      if (v == null || (typeof v === 'number' && Number.isNaN(v))) return '\x00M';
+      if (typeof v === 'boolean') return 'b:' + (v ? 'True' : 'False');
+      // JS has no int/float distinction: String(2) and String(2.0) both give
+      // '2', matching the backend's int-form rule for whole floats.
+      if (typeof v === 'number') return 'n:' + String(v);
+      // Numeric-looking text canonicalizes to number form, matching the
+      // backend twin: '25', 25 and 25.0 key alike.
+      if (typeof v === 'string'){
+        const t = v.trim();
+        if (NUM_LIKE_RE.test(t)){
+          const num = Number(t);
+          if (Number.isFinite(num)) return 'n:' + String(num);
+        }
+        return 's:' + v;
+      }
+      return 'j:' + String(v);
+    };
+    let missing = 0;
+    const seenKeys = new Set();
+    let dupRows = 0;
+    for (const r of rows){
+      const key = r.map(dupKey).join('|');
+      if (seenKeys.has(key)) dupRows++;
+      else seenKeys.add(key);
+      for (const v of r) if (isMiss(v)) missing++;
+    }
+    const nonMissing = totalCells - missing;
+    let wsOnly = 0;
+    const colStats = [];
+    for (let ci = 0; ci < ncols; ci++){
+      let present = 0, numlike = 0;
+      for (const r of rows){
+        const v = r[ci];
+        if (isMiss(v)) continue;
+        present++;
+        if (typeof v === 'string' && v !== '' && v.trim() === '') wsOnly++;
+        if (isNumLike(v)) numlike++;
+      }
+      colStats.push([present, numlike]);
+    }
+    let minority = 0, undetermined = 0;
+    for (const [present, numlike] of colStats){
+      if (present === 0) continue;
+      const frac = numlike / present;
+      const majorityNum = frac >= 0.85;
+      if (frac < 0.85 && frac > 0.15) undetermined++;
+      minority += majorityNum ? (present - numlike) : numlike;
+    }
+    const completeness = totalCells === 0 ? 1 : 1 - missing / totalCells;
+    const uniqueness = nrows === 0 ? 1 : 1 - dupRows / nrows;
+    let validity = 1, consistency = 1;
+    if (nonMissing !== 0){
+      validity = 1 - wsOnly / nonMissing;
+      consistency = 1 - minority / nonMissing;
+    }
+    const typeCorrectness = ncols === 0 ? 1 : 1 - undetermined / ncols;
+    let total = 0;
+    total += 30 * completeness;
+    total += 15 * uniqueness;
+    total += 25 * validity;
+    total += 15 * consistency;
+    total += 15 * typeCorrectness;
+    let score = Math.floor(total + 0.5);
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+    const pct = x => Math.floor(x * 100 + 0.5);
+    return {
+      score,
+      parts:{
+        completeness:pct(completeness), uniqueness:pct(uniqueness),
+        validity:pct(validity), consistency:pct(consistency),
+        type_correctness:pct(typeCorrectness),
+      },
+      counts:{ rows:nrows, columns:ncols, missing, duplicate_rows:dupRows },
+    };
+  }
+  return { MISS, numify, isNumV, parseDate, quantile, decodeBytes, parseCSVText, metaOf, distOf, diffRows, runFrom, OPS, sanitizeCol, wirePath, parseFormula, formulaRefs, evalFormula, formulaToPandas, strictNum, matchCond, qualityScore };
 }
 
 /* python string literal helper (used by op codegen) */

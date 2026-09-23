@@ -55,11 +55,15 @@ export function getApiSource() {
 }
 
 export function setApiBase(url) {
+  const raw = String(url || '').trim();
+  // Reject-don't-blank: a typo like "localhost:8000" must warn, not silently
+  // store '' and permanently override the baked default with local-only.
+  if (raw !== '' && !/^https?:\/\//i.test(raw)) throw new Error('URL must start with http:// or https://');
   const v = normalizeBase(url);
   try {
     // Store even when empty: explicit local-only must beat the baked default.
+    // Sessions stay scoped per-base (see getSessionId), so no clearing here.
     localStorage.setItem(LS_API, v);
-    localStorage.removeItem(LS_SES);
   } catch (_) {}
   return v;
 }
@@ -104,7 +108,11 @@ async function req(path, base, opts = {}, timeoutMs = 30000) {
     if (r.status === 429) throw new Error(`backend rate limit exceeded on ${path} — try again shortly`);
   }
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || `backend ${r.status} on ${path}`);
+  if (!r.ok) {
+    const err = new Error(body.detail || `backend ${r.status} on ${path}`);
+    err.status = r.status;
+    throw err;
+  }
   return body;
 }
 
@@ -134,12 +142,63 @@ export async function apiUpload(base, file) {
   const fd = new FormData();
   fd.append('file', file, file.name || 'upload.csv');
   const body = await req('/upload', base, { method: 'POST', body: fd }, 120000);
-  try { localStorage.setItem(LS_SES, body.session_id); } catch (_) {}
+  try { setSessionId(base, body.session_id); } catch (_) {}
   return body;
 }
 
-export function getSessionId() {
-  try { return localStorage.getItem(LS_SES) || ''; } catch (_) { return ''; }
+// Sessions are scoped per backend base: a sid minted by one host must never
+// be sent to another (stale ?api= links previously caused 404s). Stored as
+// a {base: sid} map; legacy single-string values are ignored (fresh upload
+// mints a scoped one).
+function readSessionMap() {
+  try {
+    const raw = localStorage.getItem(LS_SES);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    return {};
+  } catch (_) { return {}; }
+}
+
+export function getSessionId(base) {
+  try {
+    if (!base) {
+      // Back-compat for callers without a base: only honour legacy plain
+      // strings, never a map entry (avoids cross-base leakage).
+      const raw = localStorage.getItem(LS_SES);
+      if (raw && !raw.trim().startsWith('{')) return raw;
+      return '';
+    }
+    return readSessionMap()[base] || '';
+  } catch (_) { return ''; }
+}
+
+export function setSessionId(base, sid) {
+  if (!base) return;
+  const map = readSessionMap();
+  if (sid) map[base] = sid;
+  else delete map[base];
+  try { localStorage.setItem(LS_SES, JSON.stringify(map)); } catch (_) {}
+}
+
+export function clearSessionId(base) {
+  if (!base) return;
+  try {
+    const map = readSessionMap();
+    delete map[base];
+    localStorage.setItem(LS_SES, JSON.stringify(map));
+  } catch (_) {}
+}
+
+// Server-side column profile (histograms, server-computed stats) for the
+// profile detail panel. Source-data only, fetched lazily — the local
+// distOf() panel works without it.
+export function apiProfile(base, sessionId) {
+  return req('/profile', base, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
+  }, 60000);
 }
 
 /* ---------- shared pipeline templates (server) ---------- */
@@ -169,8 +228,10 @@ export function apiDeletePipeline(base, id) {
 
 // Sieve pipelines always run as a linear chain; edges are derived from
 // node order so saved templates stay minimal and unambiguous.
+// Nodes saved from the app omit `id` (steps only) — synthesize stable
+// n1.. ids so /pipelines/save never receives [{}] edges.
 export function linearEdges(nodes) {
-  const ids = nodes.map((n) => n.id);
+  const ids = (nodes || []).map((n, i) => (n && n.id) || `n${i + 1}`);
   return ids.slice(1).map((id, k) => ({ source: ids[k], target: id }));
 }
 

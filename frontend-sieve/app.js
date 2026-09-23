@@ -1,5 +1,5 @@
 import { EngineFactory, py } from './engine.js';
-import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, getSessionId, apiListPipelines, apiSavePipeline, apiLoadPipeline, apiDeletePipeline } from './api.js';
+import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, apiProfile, getSessionId, clearSessionId, apiListPipelines, apiSavePipeline, apiLoadPipeline, apiDeletePipeline } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -96,6 +96,10 @@ function workerMain(){
         const dec = E.decodeBytes(buf);
         out = { res: E.parseCSVText(dec.text), encoding: dec.encoding };
       }
+      else if (m.type === 'parseBuffer'){
+        const dec = E.decodeBytes(m.buffer);
+        out = { res: E.parseCSVText(dec.text), encoding: dec.encoding };
+      }
       else throw new Error('unknown message');
       self.postMessage({ id: m.id, ok: true, ...out });
     } catch(err){
@@ -108,7 +112,12 @@ const Jobs = { map: new Map(), seq: 1 };
 let worker = null, workerOK = false;
 (function initWorker(){
   try {
-    const src = EngineFactory.toString() + '\n' + workerMain.toString() + '\nworkerMain();';
+    // py() lives outside EngineFactory (engine.js) but op codegen calls it:
+    // stringify it into the worker too, so a future code()-in-worker path
+    // can't throw `ReferenceError: py is not defined`.
+    let pySrc = '';
+    try { pySrc = (typeof py === 'function' ? py.toString() : '') + '\n'; } catch (_) {}
+    const src = EngineFactory.toString() + '\n' + pySrc + workerMain.toString() + '\nworkerMain();';
     const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
     worker = new Worker(url);
     setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -125,29 +134,73 @@ let worker = null, workerOK = false;
     workerOK = true;
   } catch(e){ workerOK = false; }
 })();
-function callWorker(msg){
+const WORKER_TIMEOUTS = { run: 30000, meta: 30000, parseText: 60000, parseFile: 60000, parseBuffer: 60000 };
+function callWorker(msg, timeoutMs, transfer){
   return new Promise((res, rej) => {
     const id = Jobs.seq++;
-    Jobs.map.set(id, { res, rej });
-    worker.postMessage({ ...msg, id });
+    const ms = timeoutMs ?? WORKER_TIMEOUTS[msg.type] ?? 30000;
+    const timer = setTimeout(() => {
+      if (!Jobs.map.has(id)) return;
+      Jobs.map.delete(id);
+      rej(new Error(`background engine timed out on ${msg.type} — retrying in-page`));
+    }, ms);
+    Jobs.map.set(id, {
+      res: v => { clearTimeout(timer); res(v); },
+      rej: e => { clearTimeout(timer); rej(e); },
+    });
+    try {
+      worker.postMessage({ ...msg, id }, transfer || undefined);
+    } catch (e) {
+      clearTimeout(timer);
+      Jobs.map.delete(id);
+      rej(e);
+    }
   });
 }
 async function engineRun(base, nodes){
   const cells = base.rows.length * Math.max(1, base.columns.length);
   if (workerOK && cells > 12000){
-    const r = await callWorker({ type:'run', base, nodes: nodes.map(n => ({ type:n.type, enabled:n.enabled, params:n.params })) });
-    return r.res;
+    try {
+      const r = await callWorker({ type:'run', base, nodes: nodes.map(n => ({ type:n.type, enabled:n.enabled, params:n.params })) });
+      return r.res;
+    } catch (e) {
+      // Worker timeout/crash: fall back to in-page run so the pipeline never deadlocks.
+      return E.runFrom(base, nodes);
+    }
   }
   return E.runFrom(base, nodes);
 }
 async function engineParseFile(file){
-  if (workerOK) return callWorker({ type:'parseFile', file });
+  // Read once on the main thread, then TRANSFER (not clone) the buffer to
+  // the worker: avoids the ~2x memory spike of structured-cloning the File.
+  // If the worker fails/times out the buffer is detached, so re-read for
+  // the in-page fallback (cheap local re-read, file handle still held).
   const buf = await file.arrayBuffer();
-  const dec = E.decodeBytes(buf);
+  if (workerOK) {
+    try {
+      return await callWorker({ type:'parseBuffer', buffer: buf }, undefined, [buf]);
+    } catch (e) {
+      // fall through to in-page parse below (re-read: buf may be detached)
+    }
+  }
+  let dec;
+  // A transferred buffer detaches (byteLength 0) — re-read instead of
+  // decoding detached bytes. Non-detached parses directly, no second read.
+  if (buf && buf.byteLength !== 0){ try { dec = E.decodeBytes(buf); } catch (_) {} }
+  if (!dec){
+    const buf2 = await file.arrayBuffer();
+    dec = E.decodeBytes(buf2);
+  }
   return { res: E.parseCSVText(dec.text), encoding: dec.encoding };
 }
 async function engineParseText(text){
-  if (workerOK) return (await callWorker({ type:'parseText', text })).res;
+  if (workerOK) {
+    try {
+      return (await callWorker({ type:'parseText', text })).res;
+    } catch (e) {
+      // fall through to in-page parse below
+    }
+  }
   return E.parseCSVText(text);
 }
 
@@ -167,11 +220,15 @@ function renderBackendBtn(){
   else if (backend.waking){ b.innerHTML = ic('db',14) + ' Waking…'; b.title = `Waking ${backend.base} — free-tier backends sleep after ~15 min idle and take ~50s to answer. Click to change or disconnect.`; }
   else { b.innerHTML = ic('db',14) + ' Backend…'; b.title = `Backend set to ${backend.base} but unreachable. Click to change or disconnect.`; }
 }
+let backendCheckSeq = 0;
 async function backendCheck(silent){
   if (!backend.base){ backend.online = false; renderBackendBtn(); return false; }
   if (backend.waking) return false;
+  const my = ++backendCheckSeq;
+  const base = backend.base;
   backend.waking = true; backend.online = false; renderBackendBtn();
-  const ok = await apiHealthRetry(backend.base);
+  const ok = await apiHealthRetry(base);
+  if (my !== backendCheckSeq || backend.base !== base) return false;
   backend.waking = false; backend.online = ok; renderBackendBtn();
   // Note: datasets restored from IndexedDB carry no File object, so a
   // post-wake session cannot be minted for them — re-upload once and both
@@ -184,7 +241,8 @@ function backendConfigure(){
   const v = prompt('Backend API base URL (empty = local-only mode):', cur);
   if (v === null) return;
   if (v.trim() !== '' && !/^https?:\/\//i.test(v.trim())){ toast('URL must start with http:// or https://', 'alert'); return; }
-  backend.base = setApiBase(v);
+  try { backend.base = setApiBase(v); }
+  catch (e){ toast(e.message || 'Invalid backend URL', 'alert'); return; }
   backend.online = false; backend.sessionName = '';
   renderBackendBtn();
   if (backend.base){
@@ -200,26 +258,47 @@ async function backendMirrorUpload(file){
     const up = await apiUpload(backend.base, file);
     backend.sessionName = file.name || '';
     if (state.data) state.data.file = file;
+    maybeFetchProfile();
   } catch (e) {
     backend.online = false; renderBackendBtn();
     toast('Backend upload failed: ' + e.message, 'alert');
   }
 }
+// Server column profile for the detail panel (histograms, pandas stats).
+// Best-effort like everything remote: local distOf() stands alone.
+async function maybeFetchProfile(){
+  if (!backend.base || !state.data || !state.data.file) return;
+  const sid = getSessionId(backend.base);
+  if (!sid) return;
+  try {
+    state.backendProfile = await apiProfile(backend.base, sid);
+    if (!selectedNode()) renderInspector();
+  } catch (e){
+    state.backendProfile = null;
+    if (e && (e.status === 401 || e.status === 404)) clearSessionId(backend.base);
+  }
+}
 // After every LOCAL run, verify the backend agrees (background only).
-let backendSeq = 0;
+let backendSeq = 0, verifyBusy = false, lastSkippedKey = '', lastSkippedAt = 0;
 async function backendVerifyRun(){
   if (!backend.base || !state.data || !state.nodes.length) return;
-  if (!backend.online) return;
+  if (!backend.online || verifyBusy) return;
   if (!state.data.file) return; // demo/restored datasets were never mirrored — local stands alone
-  const sid = getSessionId();
+  const sid = getSessionId(backend.base);
   if (!sid) return; // no session yet (e.g. demo dataset) — local stands alone
   const my = ++backendSeq;
+  verifyBusy = true;
   try {
     const r = await apiExecute(backend.base, sid, state.nodes);
     if (my !== backendSeq) return;
     if (!r.ran){
-      const names = r.skipped.map(s => `${s.type} (${s.reason})`).join('; ');
-      toast(`Backend check skipped — local-only steps: ${names}`, 'info');
+      const key = r.skipped.map(s => `${s.type}:${s.reason}`).join('|');
+      const now = Date.now();
+      if (key !== lastSkippedKey || now - lastSkippedAt > 30000){
+        lastSkippedKey = key; lastSkippedAt = now;
+        const names = r.skipped.map(s => `${s.type} (${s.reason})`).join('; ');
+        toast(`Backend check skipped — local-only steps: ${names}`, 'info');
+      }
       return;
     }
     const b = r.backend;
@@ -230,8 +309,11 @@ async function backendVerifyRun(){
     else toast(`Backend differs — local ${local ? local.rows.length + '×' + local.columns.length : '?'} vs backend ${b.shape} (see console)`, 'alert');
   } catch (e) {
     if (my !== backendSeq) return;
+    if (e && (e.status === 401 || e.status === 404)) clearSessionId(backend.base);
     backend.online = false; renderBackendBtn();
     toast('Backend run failed: ' + e.message, 'alert');
+  } finally {
+    if (my === backendSeq) verifyBusy = false;
   }
 }
 
@@ -241,14 +323,56 @@ async function backendVerifyRun(){
 const state = {
   data:null, nodes:[], outputs:[], selected:null,
   viewStep:'final', tab:'preview', compare:true, page:0,
-  srcPos:{x:40, y:120}, outPos:{x:340, y:120}, seq:1, code:'', computing:false
+  srcPos:{x:40, y:120}, outPos:{x:340, y:120}, seq:1, code:'', computing:false,
+  backendProfile:null, profileCol:null
 };
 const view = { z:.85, px:60, py:40 };
 const NW = 236, PORTY = 18, PAGE = 100;
 
 function makeNode(type){
+  const op = E.OPS[type];
+  if (!op) throw new Error(`unknown operation "${type}"`);
   return { id:'n' + (state.seq++), type, enabled:true, x:0, y:0,
-           params: E.OPS[type].defaults(), _err:null, _delta:null, _hint:null, _inColumns:[], _inTypes:{} };
+           params: op.defaults(), _err:null, _delta:null, _hint:null, _inColumns:[], _inTypes:{} };
+}
+// Restored/applied params are untrusted (localStorage, server templates):
+// a wrong shape (rules:string, map:null, columns:string) crashes buildField
+// (forEach/includes on non-arrays). Merge onto defaults key-by-key, keeping
+// only type-compatible values; corrupt entries fall back to the default.
+function sanitizeParams(type, raw){
+  const op = E.OPS[type];
+  const defs = (op && typeof op.defaults === 'function') ? op.defaults() : {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return defs;
+  const out = { ...defs };
+  for (const k of Object.keys(defs)){
+    if (!(k in raw)) continue;
+    const d = defs[k], v = raw[k];
+    if (Array.isArray(d)) { if (Array.isArray(v)) out[k] = JSON.parse(JSON.stringify(v)); }
+    else if (d !== null && typeof d === 'object') { if (v !== null && typeof v === 'object' && !Array.isArray(v)) out[k] = JSON.parse(JSON.stringify(v)); }
+    else if (typeof d === 'boolean') { if (typeof v === 'boolean') out[k] = v; }
+    else if (typeof d === 'string') { if (typeof v === 'string') out[k] = v; }
+    else if (typeof d === 'number') { if (typeof v === 'number' && Number.isFinite(v)) out[k] = v; }
+    else out[k] = v;
+  }
+  return out;
+}
+// Rebuild a node from untrusted storage, reusing its id when safe so undo
+// preserves coalesce keys ('move:'+id / 'param:'+id) and selection. Bumps
+// state.seq past reused ids; duplicate ids in one batch get fresh ids.
+function adoptNode(x, used){
+  if (!x || !E.OPS[x.type]) return null;
+  const n = makeNode(x.type);
+  if (typeof x.id === 'string' && /^n\d+$/.test(x.id) && !used.has(x.id)){
+    const num = parseInt(x.id.slice(1), 10);
+    if (Number.isFinite(num) && num >= state.seq) state.seq = num + 1;
+    n.id = x.id;
+  }
+  used.add(n.id);
+  n.enabled = x.enabled !== false;
+  try { n.params = sanitizeParams(x.type, x.params); } catch (_) {}
+  const pos = asXY(x, { x: 0, y: 0 });
+  n.x = pos.x; n.y = pos.y;
+  return n;
 }
 function nodeCols(n){
   if (n._inColumns && n._inColumns.length) return n._inColumns;
@@ -260,15 +384,16 @@ function labelOf(id){
   if (id === '__src') return 'source';
   if (id === '__out') return 'output';
   const n = state.nodes.find(x => x.id === id);
-  return n ? E.OPS[n.type].name.toLowerCase() : 'step';
+  return n && E.OPS[n.type] ? E.OPS[n.type].name.toLowerCase() : 'step';
 }
 
 /* ---- history (undo/redo) ---- */
 const hist = { stack: [], idx: -1 };
 function snap(label, cokey){
   return { label, cokey, at: Date.now(),
-    nodes: state.nodes.map(n => ({ type:n.type, enabled:n.enabled, params: JSON.parse(JSON.stringify(n.params)), x:n.x, y:n.y })),
-    srcPos: { ...state.srcPos }, outPos: { ...state.outPos } };
+    nodes: state.nodes.map(n => ({ id:n.id, type:n.type, enabled:n.enabled, params: JSON.parse(JSON.stringify(n.params)), x:n.x, y:n.y })),
+    srcPos: { ...state.srcPos }, outPos: { ...state.outPos },
+    selected: state.selected, viewStep: state.viewStep };
 }
 function pushHist(label, cokey){
   if (!state.data) return;
@@ -295,17 +420,13 @@ function asXY(p, fb){
   return { x: Number.isNaN(x) ? fb.x : x, y: Number.isNaN(y) ? fb.y : y };
 }
 function restoreSnap(s){
-  state.nodes = s.nodes.map(x => {
-    if (!E.OPS[x.type]) return null;
-    const n = makeNode(x.type);
-    n.enabled = x.enabled; n.params = JSON.parse(JSON.stringify(x.params));
-    const pos = asXY(x, { x: 0, y: 0 });
-    n.x = pos.x; n.y = pos.y;
-    return n;
-  }).filter(Boolean);
+  if (!s || !Array.isArray(s.nodes)) return;
+  const used = new Set();
+  state.nodes = s.nodes.map(x => adoptNode(x, used)).filter(Boolean);
   state.srcPos = asXY(s.srcPos, { x: 40, y: 120 });
   state.outPos = asXY(s.outPos, { x: 340, y: 120 });
-  state.selected = null; state.viewStep = 'final';
+  state.selected = (typeof s.selected === 'string' && state.nodes.some(n => n.id === s.selected)) ? s.selected : null;
+  state.viewStep = (s.viewStep === 'final' || (Number.isInteger(s.viewStep) && s.viewStep >= 0 && s.viewStep <= state.nodes.length)) ? s.viewStep : 'final';
   requestRun(0); renderNodes(); renderInspector(); updateUndoBtns(); persistSoon();
 }
 function undo(){ if (!state.data || hist.idx <= 0) return; hist.idx--; restoreSnap(hist.stack[hist.idx]); toast('Undo — ' + hist.stack[hist.idx + 1].label, 'undo'); }
@@ -342,8 +463,9 @@ function persistNow(){
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       v:2, savedAt: Date.now(), datasetName: state.data.name,
-      nodes: state.nodes.map(n => ({ type:n.type, enabled:n.enabled, params:n.params, x:n.x, y:n.y })),
-      srcPos: state.srcPos, outPos: state.outPos, view
+      nodes: state.nodes.map(n => ({ id:n.id, type:n.type, enabled:n.enabled, params:n.params, x:n.x, y:n.y })),
+      srcPos: state.srcPos, outPos: state.outPos, view,
+      selected: state.selected, viewStep: state.viewStep
     }));
     updateSaveChip('saved');
   } catch(e){ updateSaveChip('error'); }
@@ -394,7 +516,7 @@ async function persistDataset(){
 /* ==================================================================
    RUN SCHEDULING — memoised, worker-backed, stale-result-safe
    ================================================================== */
-let runJob = 0, dirtyFrom = Infinity, running = false, latestJob = 0;
+let runJob = 0, dirtyFrom = Infinity, running = false, latestJob = 0, healAttempts = 0;
 const scheduleRun = debounce(() => doRun(), 140);
 function requestRun(from){
   dirtyFrom = Math.min(dirtyFrom, clamp(from, 0, Math.max(0, state.nodes.length)));
@@ -434,7 +556,11 @@ function applyRun(from, res, nodesSlice){
   // output ("Step 2 · ?" with 1 step), trips the length check below, and
   // re-runs forever — stuck "computing…", churned renders, starved paints.
   state.outputs.splice(from, state.outputs.length - from, ...res.outputs);
-  if (state.outputs.length !== state.nodes.length + 1) requestRun(0);
+  if (state.outputs.length !== state.nodes.length + 1){
+    healAttempts++;
+    if (healAttempts <= 3) requestRun(0);
+    else { healAttempts = 0; toast('Pipeline outputs out of sync — replay the run (Ctrl+Enter)', 'alert'); }
+  } else healAttempts = 0;
   ensureDeep(0); ensureDeep(state.outputs.length - 1);
   renderNodes(); refreshInspectorAfterRun(); renderPreview(); renderCode();
   persistSoon();
@@ -452,8 +578,10 @@ function refreshInspectorAfterRun(){
 }
 function setComputing(b){
   state.computing = b;
+  // #computeChip was removed from the shell; progress surfaces via the
+  // pvMeta "computing…" chip. Keep the lookup guarded for legacy shells.
   const el = $('#computeChip'); if (el) el.hidden = !b;
-  $('#pvScroll').setAttribute('aria-busy', b ? 'true' : 'false');
+  const sc = $('#pvScroll'); if (sc) sc.setAttribute('aria-busy', b ? 'true' : 'false');
 }
 /* deep stats (duplicate + unique counts) computed lazily off the UI path */
 let deepBusySet = new Set();
@@ -464,7 +592,13 @@ function ensureDeep(i){
   setTimeout(async () => {
     try {
       let meta;
-      if (workerOK) meta = (await callWorker({ type:'meta', data:{ columns:o.columns, rows:o.rows } })).res;
+      if (workerOK) {
+        try {
+          meta = (await callWorker({ type:'meta', data:{ columns:o.columns, rows:o.rows } })).res;
+        } catch (e) {
+          meta = E.metaOf(o.columns, o.rows, true);
+        }
+      }
       else meta = E.metaOf(o.columns, o.rows, true);
       if (state.outputs[i] === o){ o.meta = meta; renderPreview(); renderInspector(); }
     } catch(e){ /* non-fatal */ }
@@ -731,13 +865,18 @@ function initCanvasEvents(){
   $('#btnRun').onclick  = () => { requestRun(0); playRun(); };
 
   const bc = $('#btnClear'); let armed = false, tmr;
+  const setClearLabel = txt => {
+    const s = bc.querySelector('span');
+    if (s) s.textContent = txt;
+    else bc.textContent = txt;
+  };
   bc.onclick = () => {
     if (!state.data || !state.nodes.length){ toast('Nothing to clear', 'info'); return; }
     if (!armed){
-      armed = true; bc.classList.add('arm'); bc.querySelector('span').textContent = 'Sure?';
-      tmr = setTimeout(() => { armed = false; bc.classList.remove('arm'); bc.querySelector('span').textContent = 'Clear steps'; }, 2200);
+      armed = true; bc.classList.add('arm'); setClearLabel('Sure?');
+      tmr = setTimeout(() => { armed = false; bc.classList.remove('arm'); setClearLabel('Clear steps'); }, 2200);
     } else {
-      clearTimeout(tmr); armed = false; bc.classList.remove('arm'); bc.querySelector('span').textContent = 'Clear steps';
+      clearTimeout(tmr); armed = false; bc.classList.remove('arm'); setClearLabel('Clear steps');
       state.nodes = []; state.selected = null; state.viewStep = 'final';
       requestRun(0); renderNodes(); renderInspector(); renderPreview(); renderCode();
       pushHist('cleared pipeline'); toast('Pipeline cleared', 'trash');
@@ -895,14 +1034,31 @@ function duplicateNode(n){
    ================================================================== */
 function tile(v, l){ return `<div class="tile"><b>${esc(String(v))}</b><i>${esc(l)}</i></div>`; }
 const TYGLYPH = { num:'123', date:'DATE', text:'ABC' };
-function profileHTML(meta, columns, rowCount){
+// Quality scores memoized by row-array identity (outputs are rebuilt per
+// run, so this recomputes exactly once per run and never leaks: dead
+// outputs drop out of the WeakMap with their rows).
+const scoreCache = new WeakMap();
+function qualityOf(columns, rows){
+  let s = scoreCache.get(rows);
+  if (!s){ s = E.qualityScore(columns, rows); scoreCache.set(rows, s); }
+  return s;
+}
+// Before/after diff, memoized per output frame like quality scores: page
+// turns re-render constantly, the scan runs once per run.
+const diffCache = new WeakMap();
+function diffOf(prev, out){
+  let d = diffCache.get(out);
+  if (!d){ d = E.diffRows(prev, out); diffCache.set(out, d); }
+  return d;
+}
+function profileHTML(meta, columns, rowCount, sel){
   return columns.map(c => {
     const ty = meta.types[c] || 'text';
     const m = meta.missingByCol[c] || 0;
     const pct = rowCount ? Math.round(m / rowCount * 100) : 0;
     const u = meta.uniqByCol ? (meta.uniqByCol[c] != null ? `${meta.uniqByCol[c]} unique` : '') : '';
     const sample = meta.samples && meta.samples[c] != null ? meta.samples[c] : '';
-    return `<div class="prof">
+    return `<div class="prof${sel === c ? ' sel' : ''}" data-col="${esc(c)}" role="button" tabindex="0" title="Inspect ${esc(c)}">
       <div class="prof-h"><span class="pn">${esc(c)}</span><span class="ty">${TYGLYPH[ty]}</span></div>
       <div class="prof-b">
         ${m ? `${fmt(m)} empty (${pct}%) · ` : ''}${u}
@@ -910,6 +1066,48 @@ function profileHTML(meta, columns, rowCount){
         ${sample !== '' ? `<div class="psamp">“${esc(String(sample)).slice(0,60)}”</div>` : ''}
       </div></div>`;
   }).join('');
+}
+// Column detail for the Analyze flow: local distribution always (exact for
+// the loaded data), server-computed stats beneath when a backend session
+// exists. Histogram is local (current data); server medians/std complement
+// it rather than replacing it.
+function fmtN(v){
+  if (v == null || (typeof v === 'number' && !Number.isFinite(v))) return '—';
+  if (typeof v === 'number') return Number.isInteger(v) ? fmt(v) : String(Math.round(v * 100) / 100);
+  return String(v);
+}
+function profileDetailHTML(d, col){
+  const meta = (state.outputs[0] && state.outputs[0].meta) || null;
+  const ty = (meta && meta.types[col]) || 'text';
+  let dist = null;
+  try { dist = E.distOf(d.columns, d.rows, col); } catch (e){ return `<div class="repbox">Could not profile ${esc(col)}: ${esc(e.message)}</div>`; }
+  const missPct = d.rows.length ? Math.round(dist.missing / d.rows.length * 100) : 0;
+  let html = `<div class="seclab">Column detail — ${esc(col)}</div><div class="repbox">`
+    + `<b>${esc(col)}</b> <span>· ${esc(ty)} · ${fmt(dist.missing)} empty (${missPct}%) · ${fmt(dist.unique)} unique${dist.sampled ? ` · first ${fmt(dist.scanned)} rows sampled` : ''}</span>`;
+  const topMax = Math.max(1, ...dist.top.map(t => t.c));
+  for (const t of dist.top){
+    const lab = t.v === null || t.v === undefined ? '∅' : String(t.v);
+    html += `<div class="rsamp"><span>${esc(lab.slice(0, 40))}</span><span>×${fmt(t.c)}</span></div>`
+      + `<div class="mbar"><i style="width:${Math.round(t.c / topMax * 100)}%"></i></div>`;
+  }
+  if (dist.numeric){
+    const s = dist.numeric;
+    html += `<div class="rsamp"><span>min ${fmtN(s.min)} · max ${fmtN(s.max)} · mean ${fmtN(s.mean)}</span></div>`;
+    const hMax = Math.max(1, ...dist.hist.map(h => h.c));
+    for (const h of dist.hist){
+      html += `<div class="rsamp"><span>${fmtN(h.x0)}–${fmtN(h.x1)}</span><span>×${fmt(h.c)}</span></div>`
+        + `<div class="mbar"><i style="width:${Math.round(h.c / hMax * 100)}%"></i></div>`;
+    }
+  }
+  const srv = state.backendProfile && state.backendProfile.columns && state.backendProfile.columns[col];
+  if (srv){
+    const bits = [];
+    if (srv.median != null) bits.push(`median ${fmtN(srv.median)}`);
+    if (srv.std != null) bits.push(`std ${fmtN(srv.std)}`);
+    if (srv.unique_count != null) bits.push(`${fmt(srv.unique_count)} unique (server)`);
+    if (bits.length) html += `<div class="rsamp"><span>Server: ${bits.map(esc).join(' · ')}</span></div>`;
+  }
+  return html + `</div>`;
 }
 function colOpts(node, val){
   const cols = nodeCols(node);
@@ -1135,12 +1333,16 @@ function renderInspector(){
     const src = state.outputs[0];
     if (!fin || !src){ B.innerHTML = '<div class="empty">Computing…</div>'; return; }
     const dr = src.rows.length - fin.rows.length;
+    const qSrc = qualityOf(src.columns, src.rows), qFin = qualityOf(fin.columns, fin.rows);
+    const dq = qFin.score - qSrc.score;
     H.innerHTML = `<div class="ih-t"><span class="ihic">${ic('download',17)}</span>Clean Output</div>
       <div class="ih-s">final dataset after ${state.nodes.filter(n => n.enabled).length} active step(s)</div>`;
     B.innerHTML = `<div class="tiles">
         ${tile(fmt(fin.rows.length), 'rows out')}
         ${tile(fin.columns.length, 'columns')}
         ${tile(fmt(fin.meta.missingTotal), 'empty cells')}
+        ${tile(qFin.score, 'quality score')}
+        ${tile((dq >= 0 ? '+' : '\u2212') + fmt(Math.abs(dq)), 'score vs source')}
         ${tile((dr >= 0 ? '−' : '+') + fmt(Math.abs(dr)), 'rows vs source')}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -1166,6 +1368,7 @@ function renderInspector(){
       ${tile(d.columns.length, 'columns')}
       ${meta ? tile(fmt(meta.missingTotal), 'empty cells') : ''}
       ${meta && meta.dupCount != null ? tile(fmt(meta.dupCount), 'duplicate rows') : ''}
+      ${tile(qualityOf(d.columns, d.rows).score, 'quality score')}
     </div>`;
   if (warns.length || infos.length){
     html += '<div class="seclab">Import quality report</div><div class="qlist">';
@@ -1173,7 +1376,8 @@ function renderInspector(){
       html += `<div class="qitem ${w.level}">${ic(w.level === 'warn' ? 'alert' : 'info', 13)}<span>${esc(w.msg)}</span></div>`;
     html += '</div>';
   }
-  if (meta) html += `<div class="seclab">Column profile</div>${profileHTML(meta, d.columns, d.rows.length)}`;
+  if (meta) html += `<div class="seclab">Column profile</div>${profileHTML(meta, d.columns, d.rows.length, state.profileCol)}`;
+  if (state.profileCol && d.columns.includes(state.profileCol)) html += profileDetailHTML(d, state.profileCol);
   html += `<div class="hintbox" style="margin-top:14px">
       ${d.persisted === false ? '<b>Storage:</b> ' + esc(d.persistNote || 'not persisted') + ' — the pipeline is still autosaved.<br><br>' : ''}
       Click a step on the canvas to configure it, or add one from the palette. Steps run in order; each node shows its exact effect.</div>`;
@@ -1203,8 +1407,10 @@ function renderPreview(){
   }
   const i = viewIdx(), out = state.outputs[i], src = state.outputs[0];
   const prev = i > 0 ? state.outputs[i-1] : null;
+  const prevNode = i > 0 ? state.nodes[i-1] : null;
+  const prevOp = prevNode ? E.OPS[prevNode.type] : null;
   const label = out.node || i > 0
-    ? `Step ${i} · ${esc((state.nodes[i-1] && E.OPS[state.nodes[i-1].type].name) || '?')}`
+    ? `Step ${i} · ${esc((prevOp && prevOp.name) || '?')}`
     : 'Source — ' + esc(state.data.name);
 
   meta.innerHTML = `${state.computing ? '<span class="chip comp"><i></i>computing…</span>' : ''}
@@ -1218,11 +1424,16 @@ function renderPreview(){
   const dR = total - src.rows.length, dM = mN - src.meta.missingTotal;
   const sg = x => x > 0 ? '+' + fmt(x) : fmt(x);
   const canDiff = i > 0 && out.rowStable && prev;
+  const stepQ = i > 0 && prev ? qualityOf(prev.columns, prev.rows).score : null;
+  const outQ = qualityOf(out.columns, out.rows).score;
+  const stepDiff = canDiff ? diffOf(prev, out) : null;
   tools.innerHTML =
     `<span class="chip"><b>${fmt(total)}</b> rows</span>
      <span class="chip"><b>${out.columns.length}</b> cols</span>
      <span class="chip ${mN ? 'warn' : ''}"><b>${fmt(mN)}</b> empty</span>
      ${out.meta.dupCount != null ? `<span class="chip ${out.meta.dupCount ? 'warn' : ''}"><b>${fmt(out.meta.dupCount)}</b> dup</span>` : ''}
+     ${stepDiff && stepDiff.affected !== null ? `<span class="chip"><b>${fmt(stepDiff.affected)}</b> rows affected</span>` : ''}
+     ${i > 0 ? `<span class="chip dchip">Δ Q ${sg(outQ - stepQ)} vs prev</span>` : ''}
      ${i > 0 ? `<span class="chip dchip">Δ ${sg(dR)} rows · Δ ${sg(dM)} empty vs source</span>` : ''}
      ${canDiff
        ? `<button class="chip tog ${state.compare ? 'on' : ''}" id="tglCmp" aria-pressed="${state.compare}">${ic('eye',12)} changes</button>`
@@ -1337,7 +1548,7 @@ function genCode(){
     L.push(...op.code(ctx, n.params, n._hint), '');
   });
   const off = state.nodes.filter(n => !n.enabled);
-  if (off.length) L.push(`# Bypassed in the app (not emitted): ${off.map(n => E.OPS[n.type].name).join(', ')}`, '');
+  if (off.length) L.push(`# Bypassed in the app (not emitted): ${off.map(n => (E.OPS[n.type] && E.OPS[n.type].name) || n.type).join(', ')}`, '');
   L.push(`df.to_csv("${base}_clean.csv", index=False)`, '',
          'print(f"clean dataset: {df.shape[0]} rows x {df.shape[1]} columns")');
   return L.join('\n');
@@ -1374,7 +1585,9 @@ function renderCode(){
 function downloadBlob(name, blob){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = name; a.click();
+  a.download = name;
+  // Firefox ignores clicks on detached anchors — attach first.
+  document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 function exportCSV(){
@@ -1530,6 +1743,7 @@ function applyDataset(name, parsed, encoding, bytes, file){
   state.data = { name, columns: parsed.columns, rows: parsed.rows, warnings: parsed.warnings || [], encoding, delim: parsed.delim, bytes, file: file || null };
   state.selected = null; state.viewStep = 'final'; state.page = 0;
   state.outputs = [];
+  state.backendProfile = null; state.profileCol = null;
   histReset(); pushHist('loaded data');
   requestRun(0);
   persistDataset();
@@ -1670,8 +1884,8 @@ function runSelfTests(){
   try { E.OPS['rename-columns'].run({ columns:['a','b'], rows:[] }, { map:{ a:'b' } }); } catch(e){ threw = true; }
   t('rename duplicate rejected', threw, true);
   const rr = E.runFrom({ columns:['v'], rows:[['1'],['2']] }, [{ type:'sort-rows', enabled:true, params:{ column:'v', dir:'desc' } }]);
-  t('engine run returns outputs', rr.outputs.length, 1);
-  t('engine sort desc', rr.outputs[0].rows, [['2'],['1']]);
+  t('engine run returns outputs', rr.outputs.length, 2);
+  t('engine sort desc', rr.outputs[1].rows, [['2'],['1']]);
   const dis = E.runFrom({ columns:['v'], rows:[['1']] }, [{ type:'nope-op', enabled:true, params:{} }]);
   t('unknown op isolates error', !!dis.results[0].err, true);
 
@@ -1847,7 +2061,7 @@ async function applyTemplate(id, name){
     const nodes = (t.nodes || []).filter(x => x && E.OPS[x.type]).map(x => {
       const n = makeNode(x.type);
       n.enabled = x.enabled !== false;
-      try { n.params = { ...n.params, ...(x.params || {}) }; } catch (e){}
+      try { n.params = sanitizeParams(x.type, x.params); } catch (e){}
       return n;
     });
     if (!nodes.length){ toast('Template has no usable steps', 'alert'); return; }
@@ -1923,6 +2137,25 @@ function initChrome(){
   $('#pvTools').addEventListener('click', e => {
     if (e.target.closest('#tglCmp')){ state.compare = !state.compare; renderPreview(); }
   });
+  // Profile cards toggle the column detail panel (delegated: the inspector
+  // re-renders on every run). Keyboard: cards are tabbable, Enter/Space act.
+  const profActivate = (el) => {
+    if (!el || !state.data) return;
+    const col = el.dataset.col;
+    if (!col || !state.data.columns.includes(col)) return;
+    state.profileCol = state.profileCol === col ? null : col;
+    renderInspector();
+  };
+  $('#inspBody').addEventListener('click', e => {
+    const card = e.target.closest('.prof');
+    if (card) profActivate(card);
+  });
+  $('#inspBody').addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('prof')){
+      e.preventDefault();
+      profActivate(e.target);
+    }
+  });
 
   let rstArmed = false, rstTmr;
   $('#btnReset').onclick = () => {
@@ -1936,7 +2169,7 @@ function initChrome(){
   };
 
   const dlg = $('#dlgKeys');
-  $('#btnKeys').onclick = () => dlg.showModal();
+  $('#btnKeys').onclick = () => { if (!dlg.open) dlg.showModal(); };
   $('#btnOkKeys').onclick = () => dlg.close();
   $('#btnCloseKeys').onclick = () => dlg.close();
   $('#btnSelfTest').onclick = () => runSelfTests();
@@ -1962,16 +2195,22 @@ function initChrome(){
   window.addEventListener('dragleave', e => { if (!e.relatedTarget) ov.style.display = 'none'; });
   window.addEventListener('drop', e => {
     e.preventDefault(); ov.style.display = 'none';
-    const f = e.dataTransfer.files[0]; if (f) readFile(f);
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) readFile(f);
   });
 
   window.addEventListener('keydown', e => {
-    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    const ae = document.activeElement;
+    const typing = !!ae && !!ae.tagName && /INPUT|SELECT|TEXTAREA/.test(ae.tagName);
+    // While typing, native input undo must win: only Ctrl+Enter (replay)
+    // passes through, Ctrl+Z/Y return early for the browser to handle.
+    if (typing){
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); requestRun(0); playRun(); }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y'){ e.preventDefault(); redo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter'){ e.preventDefault(); requestRun(0); playRun(); return; }
-    if (typing) return;
-    if (e.key === '?' ){ e.preventDefault(); dlg.showModal(); return; }
+    if (e.key === '?' ){ e.preventDefault(); if (!dlg.open) dlg.showModal(); return; }
     if (e.key === '+' || e.key === '='){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1.18); return; }
     if (e.key === '-'){ const r = $('#viewport').getBoundingClientRect(); zoomAt(r.width/2, r.height/2, 1/1.18); return; }
     if (e.key === '0'){ fitView(); return; }
@@ -2019,21 +2258,23 @@ async function boot(){
     state.data = { name: ds.name, columns: ds.columns, rows: ds.rows, warnings: ds.warnings || [],
                    encoding: ds.encoding || 'UTF-8', delim: ds.delim, bytes: ds.bytes, persisted: true };
     if (saved && Array.isArray(saved.nodes)){
-      state.nodes = saved.nodes.filter(x => E.OPS[x.type]).map(x => {
-        const n = makeNode(x.type);
-        n.enabled = x.enabled !== false;
-        n.params = x.params || n.params;
-        const pos = asXY(x, { x: 0, y: 0 });
-        n.x = pos.x; n.y = pos.y;
-        return n;
-      });
+      const used = new Set();
+      state.nodes = saved.nodes.filter(x => x && E.OPS[x.type]).map(x => adoptNode(x, used)).filter(Boolean);
       if (saved.srcPos) state.srcPos = asXY(saved.srcPos, { x: 40, y: 120 });
       if (saved.outPos) state.outPos = asXY(saved.outPos, { x: 340, y: 120 });
+      if (typeof saved.selected === 'string' && state.nodes.some(n => n.id === saved.selected)) state.selected = saved.selected;
+      if (saved.viewStep === 'final' || (Number.isInteger(saved.viewStep) && saved.viewStep >= 0 && saved.viewStep <= state.nodes.length)) state.viewStep = saved.viewStep;
     }
     hideWelcome();
     requestRun(0);
     updateChip(); renderNodes(); renderInspector(); renderPreview(); renderCode();
-    if (saved && saved.view){ Object.assign(view, saved.view); applyView(); zoomLab(); }
+    if (saved && saved.view && typeof saved.view === 'object'){
+      const vz = Number(saved.view.z), vpx = Number(saved.view.px), vpy = Number(saved.view.py);
+      if (Number.isFinite(vz)) view.z = clamp(vz, .35, 1.8);
+      if (Number.isFinite(vpx)) view.px = vpx;
+      if (Number.isFinite(vpy)) view.py = vpy;
+      applyView(); zoomLab();
+    }
     else fitView();
     updateSaveChip('saved');
     toast(`Restored your workspace — ${ds.name} (${fmt(ds.rows.length)} rows)`, 'check');

@@ -23,6 +23,29 @@ deploys via `.vercelignore`.
 Per-browser overrides: topbar backend button (localStorage) and
 `?api=<url>` beat `config.js`; clearing both runs local-only.
 
+## Analyze (profiling)
+
+With a dataset loaded, the inspector shows tiles (rows, columns, empty
+cells, duplicate rows), the import quality report, and a per-column
+profile (type, missing %, unique count, sample). Clicking a column card
+opens its detail: top values with counts, numeric min/max/mean with a
+distribution histogram, plus server-computed medians/std when a backend
+session exists. Local stats are exact for the loaded data and need no
+backend; the histogram scans at most 50k rows (flagged when sampled).
+
+Stepping through the preview shows each step's effect: rows-affected and
+quality-delta chips vs the previous step (changed cells are marked in the
+table for row-stable steps), alongside the running delta vs source.
+
+## Quality score (0–100)
+
+Source and output inspectors show a quality score with its five parts
+(completeness 30, uniqueness 15, validity 25, consistency 15,
+type-correctness 15) so improvement is visible as a number. The formula is
+twinned cell-for-cell with `backend/quality.py` — same ratios, same order,
+same rounding — and locked by hand-computed expectations plus the messy
+corpus in `backend/tests/test_quality.py`.
+
 ## Structure
 
 - `index.html` — shell + markup (loads `config.js`, then `app.js` module)
