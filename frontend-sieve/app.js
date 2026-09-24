@@ -583,9 +583,21 @@ function refreshInspectorAfterRun(){
   if (!n){ renderInspector(); return; }
   const errKey = n._err || '', colsKey = (n._inColumns || []).join('\u0001');
   const repKey = JSON.stringify(n._report || null);
-  if (n._lastErrKey !== errKey || n._lastColsKey !== colsKey || n._lastRepKey !== repKey){
+  if (n._lastColsKey !== colsKey || n._lastRepKey !== repKey){
     n._lastErrKey = errKey; n._lastColsKey = colsKey; n._lastRepKey = repKey;
-    renderInspector();
+    renderInspector(); return;
+  }
+  if (n._lastErrKey !== errKey){
+    n._lastErrKey = errKey;
+    const B = $('#inspBody'); if (!B) return;
+    const old = B.querySelector('.errbox');
+    if (n._err){
+      const box = old || elDiv('errbox', '');
+      box.innerHTML = ic('alert',14) + `<div>${esc(n._err)}</div>`;
+      if (!old) B.insertBefore(box, B.firstChild);
+    } else if (old){
+      old.remove();
+    }
   }
 }
 function setComputing(b){
@@ -612,7 +624,7 @@ function ensureDeep(i){
         }
       }
       else meta = E.metaOf(o.columns, o.rows, true);
-      if (state.outputs[i] === o){ o.meta = meta; renderPreview(); renderInspector(); }
+      if (state.outputs[i] === o){ o.meta = meta; renderPreview(); if (!isInspectorEditing()) renderInspector(); }
     } catch(e){ /* non-fatal */ }
     deepBusySet.delete(i);
   }, 500);
@@ -1156,6 +1168,12 @@ function mkSelect(opts, val){
   }
   return s;
 }
+/* ---------- inspector editing guard ---------- */
+function isInspectorEditing(){
+  const a = document.activeElement;
+  return !!(a && a.closest && a.closest('#inspBody') && /^(TEXTAREA|INPUT)$/.test(a.tagName));
+}
+
 let paramDeb;
 /* PARAM: ★ EXAM — runs on EVERY setting change. requestRun(i) re-runs from this step, 60ms debounce rebuilds form. Change debounce time only. */
 function onParam(node, rebuildForm){
