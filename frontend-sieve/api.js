@@ -545,21 +545,6 @@ export function sieveToBackend(sieveNodes) {
           custom_chars: p.custom == null ? '' : String(p.custom),
         },
       });
-    } else if (t === 'standardize-categories') {
-      if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
-      if (!['keep', 'lower', 'upper', 'title'].includes(p.method)) {
-        skipped.push({ type: t, reason: `unknown case "${p.method}"` });
-        continue;
-      }
-      const mapping = {};
-      for (const [o, n] of Object.entries(p.map || {})) {
-        if (n !== '' && n != null) mapping[o] = String(n).trim();
-      }
-      nodes.push({
-        id: id(),
-        type: 'standardize-categories',
-        config: { columns: [...p.columns], method: p.method, mapping },
-      });
     } else if (t === 'log-transform') {
       if (!need(p.columns && p.columns.length, 'no columns ticked')) continue;
       if (!['ln', 'log10', 'log2'].includes(p.base)) {

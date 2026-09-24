@@ -98,8 +98,7 @@ Fully mapped: `fill-missing` (mean/median/mode/custom/ffill/bfill+limit)
 `conditional-column`, `validate-column` → `validate-column`,
 `find-invalid` → `find-invalid`, `clip-values` → `clip-values`,
 `find-replace-pattern` → `find-replace-pattern`, `remove-special-chars` →
-`remove-special-chars`, `standardize-categories` →
-`standardize-categories`, `log-transform` → `log-transform`.
+`remove-special-chars`, `log-transform` → `log-transform`.
 
 Local-only (backend check skips the run and says why instead of comparing
 against different semantics): `drop-duplicates/keep-last` (backend always

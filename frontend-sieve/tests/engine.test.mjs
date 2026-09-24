@@ -680,26 +680,6 @@ describe('remove-special-chars', () => {
   });
 });
 
-describe('standardize-categories', () => {
-  it('trims, recases, then maps', () => {
-    const out = E.OPS['standardize-categories'].run(
-      { columns: ['c'], rows: [[' Sales '], ['SALES'], ['HR']] },
-      { columns: ['c'], method: 'lower', map: { sale: 'Sales' } },
-    );
-    assert.deepEqual(
-      out.rows.map((r) => r[0]),
-      ['sales', 'sales', 'hr'],
-    );
-  });
-  it('title-cases like the backend twin', () => {
-    const out = E.OPS['standardize-categories'].run(
-      { columns: ['c'], rows: [["o'brien"]] },
-      { columns: ['c'], method: 'title', map: {} },
-    );
-    assert.equal(out.rows[0][0], "O'brien");
-  });
-});
-
 describe('log-transform', () => {
   it('compresses positives, nulls the rest', () => {
     const out = E.OPS['log-transform'].run(

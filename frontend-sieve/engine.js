@@ -1851,66 +1851,6 @@ function EngineFactory(){
       }
     },
 
-    'standardize-categories': {
-      name:'Standardize Categories', icon:'check', group:'Categories', rowStable:true,
-      blurb:'Unify spellings, then apply mappings',
-      defaults: () => ({ columns:[], method:'lower', map:{} }),
-      schema: [
-        { k:'columns', t:'multi', label:'Columns (tick at least one)' },
-        { k:'method', t:'seg', label:'Letter case', opts:[['keep','Keep'],['lower','lower'],['upper','UPPER'],['title','Title']] },
-        { k:'map', t:'rename', label:'Custom mappings — blank keeps the value' }
-      ],
-      summary: p => {
-        const e = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null).length;
-        return `${(p.columns && p.columns.length) ? p.columns.join(', ') : '—'} · ${p.method}${e ? ` + ${e} mapping${e === 1 ? '' : 's'}` : ''}`;
-      },
-      run(d, p){
-        if (!p.columns || !p.columns.length) throw new Error('tick at least one column');
-        if (!['keep','lower','upper','title'].includes(p.method)) throw new Error(`unknown case "${p.method}"`);
-        const idx = p.columns.map(c => colIdx(d, c));
-        const entries = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null);
-        // Trim → case → mapping: the same order as the backend twin.
-        const applyCase = s => {
-          if (p.method === 'lower') return s.toLowerCase();
-          if (p.method === 'upper') return s.toUpperCase();
-          if (p.method === 'title') return s.replace(/\S+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
-          return s;
-        };
-        const lookup = new Map(entries);
-        return { columns: d.columns, rows: d.rows.map(r => {
-          let row = r;
-          for (const ci of idx){
-            const v = row[ci];
-            if (MISS(v) || typeof v !== 'string') continue;
-            let nv = applyCase(v.trim());
-            if (lookup.has(nv)) nv = lookup.get(nv);
-            if (nv !== v) row = replaceCell(row, ci, nv);
-          }
-          return row;
-        })};
-      },
-      code: (ctx, p) => {
-        const cs = p.columns.map(py).join(', ');
-        // A cols list (never df["a", "b"] tuple indexing, which breaks past
-        // one column) — mirrors the backend twin line for line.
-        const caseLine = {
-          keep:`# unchanged case`,
-          lower:`df[cols] = df[cols].str.lower()`,
-          upper:`df[cols] = df[cols].str.upper()`,
-          title:`df[cols] = df[cols].str.replace(r"\\S+", lambda m: m.group(0)[:1].upper() + m.group(0)[1:].lower(), regex=True)`
-        }[p.method];
-        const lines = [
-          `cols = [${cs}]`,
-          `# trim + case first, custom mappings second (missing untouched)`,
-          `df[cols] = df[cols].apply(lambda s: s.str.strip() if s.dtype == object else s)`,
-          caseLine
-        ];
-        const entries = Object.entries(p.map || {}).filter(([, v]) => v !== '' && v != null);
-        if (entries.length) lines.push(`df[cols] = df[cols].replace({${entries.map(([o, n]) => `${py(o)}: ${py(String(n).trim())}`).join(', ')}})`);
-        return lines;
-      }
-    },
-
     'log-transform': {
       name:'Log Transform', icon:'sigma', group:'Numbers', rowStable:true,
       blurb:'Compress skewed numbers with logs',

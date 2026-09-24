@@ -237,7 +237,6 @@ describe('sieveToBackend wave-4 mappings', () => {
       { type: 'clip-values', enabled: true, params: { columns: ['Score'], min: '1', max: '5' } },
       { type: 'find-replace-pattern', enabled: true, params: { columns: ['Email'], pattern: '\\d+', replacement: '#', regex: true, case: true } },
       { type: 'remove-special-chars', enabled: true, params: { columns: ['City'], letters: true, numbers: true, spaces: true, custom: '' } },
-      { type: 'standardize-categories', enabled: true, params: { columns: ['Dept'], method: 'lower', map: {} } },
       { type: 'log-transform', enabled: true, params: { columns: ['Score'], base: 'ln', invalid: 'null' } },
     ]);
     assert.equal(skipped.length, 0);
@@ -250,9 +249,8 @@ describe('sieveToBackend wave-4 mappings', () => {
       id: 'n3', type: 'remove-special-chars',
       config: { columns: ['City'], letters: true, numbers: true, spaces: true, custom_chars: '' },
     });
-    assert.deepEqual(nodes[3].config, { columns: ['Dept'], method: 'lower', mapping: {} });
-    assert.deepEqual(nodes[4], {
-      id: 'n5', type: 'log-transform', config: { columns: ['Score'], method: 'ln', on_invalid: 'null' },
+    assert.deepEqual(nodes[3], {
+      id: 'n4', type: 'log-transform', config: { columns: ['Score'], method: 'ln', on_invalid: 'null' },
     });
   });
 
