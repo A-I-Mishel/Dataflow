@@ -3,7 +3,7 @@
 # env with: pip freeze | grep -Ei 'fastapi|uvicorn|pandas|multipart|pydantic|scikit|sqlalchemy|psycopg2|openpyxl'
 fastapi==0.141.1
 uvicorn[standard]==0.53.0
-pandas==3.0.5
+pandas==3.0.6
 openpyxl==3.1.5
 python-multipart==0.0.32
 pydantic==2.13.5
