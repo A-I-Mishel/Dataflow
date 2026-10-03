@@ -33,7 +33,8 @@ class LargeFileEntry:
     """On-disk backing for uploads too big to keep fully in memory.
 
     Only a small preview is held in RAM; the full CSV stays in a temp file
-    and is processed in chunks.
+    and is processed in chunks. XLSX uploads never use this path (rejected
+    over the threshold — workbooks cannot be chunk-scanned like CSV).
     """
 
     path: str
@@ -43,6 +44,9 @@ class LargeFileEntry:
     # Delimiter sniffed at upload (shared rule with the Sieve parser), so
     # chunk re-reads split identically without re-sniffing.
     sep: str = ","
+    # Source kind ("csv" or "xlsx") + sheet used, for execute/profile parity.
+    file_kind: str = "csv"
+    sheet: str | None = None
 
 
 large_files: Dict[str, Tuple[datetime, LargeFileEntry]] = {}
@@ -183,6 +187,8 @@ def store_large_session(
     total_rows: int,
     encoding: str,
     sep: str = ",",
+    file_kind: str = "csv",
+    sheet: str | None = None,
 ) -> None:
     old: Optional[Tuple[datetime, LargeFileEntry]] = large_files.get(session_id)
     if old is not None and old[1].path != path:
@@ -199,6 +205,8 @@ def store_large_session(
             total_rows=total_rows,
             encoding=encoding,
             sep=sep,
+            file_kind=file_kind,
+            sheet=sheet,
         ),
     )
     while len(large_files) > MAX_LARGE_FILES:
@@ -239,6 +247,8 @@ def get_large_session(session_id: str) -> LargeFileEntry:
         total_rows=large.total_rows,
         encoding=large.encoding,
         sep=large.sep,
+        file_kind=getattr(large, "file_kind", "csv"),
+        sheet=getattr(large, "sheet", None),
     )
 
 

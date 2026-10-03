@@ -118,6 +118,11 @@ def _build_dummy_frame(nodes: List[PipelineNode]) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 
+def _is_excel_filename(filename: str) -> bool:
+    name: str = (filename or "").strip().lower()
+    return name.endswith(".xlsx") or name.endswith(".xlsm")
+
+
 def generate_script(
     nodes: List[PipelineNode], edges: List[Dict[str, str]], filename: str = "data.csv"
 ) -> str:
@@ -161,12 +166,16 @@ def generate_script(
         code_blocks.append(code)
 
     lines: List[str] = []
+    use_excel: bool = _is_excel_filename(filename)
     lines.append("import pandas as pd")
     lines.append("import numpy as np")
     lines.append("from sklearn.preprocessing import LabelEncoder")
     lines.append("")
-    lines.append("# Load dataset")
-    lines.append(f'df = pd.read_csv("{filename}")')
+    lines.append("# Load dataset (first sheet for Excel workbooks)")
+    if use_excel:
+        lines.append(f'df = pd.read_excel("{filename}", sheet_name=0, engine="openpyxl")')
+    else:
+        lines.append(f'df = pd.read_csv("{filename}")')
     lines.append('print(f"Original shape: {df.shape}")')
     lines.append("")
     for idx, node in enumerate(sorted_nodes):
@@ -175,7 +184,10 @@ def generate_script(
         lines.append(code_blocks[idx])
         lines.append("")
     lines.append("# Save cleaned dataset")
-    lines.append('df.to_csv("cleaned_data.csv", index=False)')
+    if use_excel:
+        lines.append('df.to_excel("cleaned_data.xlsx", index=False)')
+    else:
+        lines.append('df.to_csv("cleaned_data.csv", index=False)')
     lines.append('print(f"Cleaned shape: {df.shape}")')
     lines.append('print("Done!")')
     script: str = "\n".join(lines) + "\n"

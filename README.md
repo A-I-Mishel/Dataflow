@@ -1,7 +1,7 @@
 # Sieve — No-Code Data Cleaning Studio
 
 Visual data-cleaning pipelines in your browser: build steps on a canvas,
-preview every step, export a clean CSV + the pandas script that reproduces
+preview every step, export a clean CSV/XLSX + the pandas script that reproduces
 it. Local-first engine with an optional FastAPI backend check — when a
 backend URL is configured, each run is additionally verified against the
 pandas engine and mismatches surface as toasts (local results always win).
@@ -20,7 +20,7 @@ pandas engine and mismatches surface as toasts (local results always win).
 - `backend/` — FastAPI + pandas API (upload, execute, profile, generate,
   download, saved pipelines). Deployed on Render; also the parity
   reference for the local engine.
-- `test-materials/` — a big messy CSV for trying the app.
+- `test-materials/` — big messy CSV + XLSX twins for trying the app (Excel reads first sheet only).
 
 ## Run locally
 

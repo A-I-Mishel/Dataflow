@@ -177,7 +177,70 @@ async function engineRun(base, nodes){
   }
   return E.runFrom(base, nodes);
 }
+function isExcelFile(file, buf){
+  const name = (file && file.name || '').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xlsm')) return true;
+  if (buf && buf.byteLength >= 4){
+    const b = new Uint8Array(buf.slice(0, 4));
+    if (b[0] === 0x50 && b[1] === 0x4B && b[2] === 0x03 && b[3] === 0x04) return true;
+  }
+  return false;
+}
+function parseXLSXBuffer(buf){
+  // First-sheet-only by design (matches backend pd.read_excel sheet_name=0).
+  if (typeof XLSX === 'undefined') throw new Error('Excel support failed to load — refresh and retry');
+  const wb = XLSX.read(buf, { type: 'array', sheetStubs: false, cellDates: true });
+  const names = wb.SheetNames || [];
+  if (!names.length) throw new Error('no worksheets found in workbook');
+  const ws = wb.Sheets[names[0]];
+  // header:1 keeps raw grid; defval:'' pads short rows like parseCSVText.
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+  const nonEmpty = grid.filter(r => Array.isArray(r) && r.some(c => String(c).trim() !== ''));
+  if (!nonEmpty.length) throw new Error('no data rows found in file');
+  const normCell = v => {
+    if (v == null) return '';
+    if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+    if (typeof v === 'number'){
+      if (Number.isInteger(v) && Math.abs(v) < 1e15) return String(v);
+      return String(v);
+    }
+    if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+    return String(v);
+  };
+  let width = 0;
+  for (const r of nonEmpty){ if (r.length > width) width = r.length; }
+  const rows = nonEmpty.map(r => {
+    const out = [];
+    for (let i = 0; i < width; i++) out.push(normCell(i < r.length ? r[i] : ''));
+    return out;
+  });
+  const warnings = [];
+  const seen = {};
+  const columns = rows[0].map((c, i) => {
+    let n = String(c).trim() || `column_${i+1}`;
+    if (seen[n]){
+      let k = seen[n], m;
+      do { k++; m = `${n}_${k}`; } while (seen[m]);
+      seen[n] = k;
+      warnings.push({ level: 'warn', msg: `Duplicate header “${String(c).trim()}” renamed to “${m}”.` });
+      n = m;
+    }
+    seen[n] = 1;
+    return n;
+  });
+  const body = rows.slice(1);
+  if (names.length > 1) warnings.push({ level: 'info', msg: `Workbook has ${names.length} sheets — using first sheet “${names[0]}”.` });
+  return { columns, rows: body, warnings, delim: ',', sheet: names[0], sheetCount: names.length };
+}
 async function engineParseFile(file){
+  // XLSX cannot go through the CSV worker (EngineFactory is pure text):
+  // parse workbooks on the main thread via vendored SheetJS.
+  const peek = await file.slice(0, 4).arrayBuffer().catch(() => null);
+  if (isExcelFile(file, peek)){
+    const buf = await file.arrayBuffer();
+    const res = parseXLSXBuffer(buf);
+    return { res, encoding: 'UTF-8' };
+  }
   // Read once on the main thread, then TRANSFER (not clone) the buffer to
   // the worker: avoids the ~2x memory spike of structured-cloning the File.
   // If the worker fails/times out the buffer is detached, so re-read for
@@ -519,7 +582,7 @@ async function persistDataset(){
   const est = d.rows.length * Math.max(1, d.columns.length) * 12;
   if (est > 45e6){ d.persisted = false; d.persistNote = 'too large to autosave'; updateSaveChip('big'); return; }
   try {
-    await idbSet('dataset', { name:d.name, columns:d.columns, rows:d.rows, warnings:d.warnings, encoding:d.encoding, delim:d.delim, bytes:d.bytes, savedAt: Date.now() });
+    await idbSet('dataset', { name:d.name, columns:d.columns, rows:d.rows, warnings:d.warnings, encoding:d.encoding, delim:d.delim, bytes:d.bytes, sheet:d.sheet || null, sheetCount:d.sheetCount || null, fileKind:d.fileKind || null, savedAt: Date.now() });
     d.persisted = true; d.persistNote = '';
   } catch(e){ d.persisted = false; d.persistNote = 'storage unavailable'; }
 }
@@ -1014,7 +1077,7 @@ function moveNode(n, dir){
 }
 /* ADD-BUTTON: ★ EXAM — "add new step type" ends here. n.x+300 = spacing, auto-picks first column. To change default position, edit numbers below. */
 function addNode(type){
-  if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
+  if (!state.data){ toast('Load a dataset first — upload a CSV/Excel file or open a demo', 'alert'); return; }
   const n = makeNode(type);
   const last = state.nodes[state.nodes.length - 1];
   if (last){
@@ -1400,10 +1463,12 @@ function renderInspector(){
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
         <button class="btn primary" id="inspDlCsv" style="flex:1;justify-content:center">${ic('download',14)} Clean CSV</button>
+        <button class="btn" id="inspDlXlsx" style="flex:1;justify-content:center">${ic('download',14)} Excel</button>
         <button class="btn" id="inspViewCode" style="flex:1;justify-content:center">${ic('code',14)} Python</button>
       </div>
       <div class="hintbox">Export the result as CSV, or take the generated pandas script and run it anywhere — the notebook becomes your pipeline.</div>`;
     $('#inspDlCsv').onclick = exportCSV;
+    if ($('#inspDlXlsx')) $('#inspDlXlsx').onclick = exportXLSX;
     $('#inspViewCode').onclick = () => setTab('code');
     return;
   }
@@ -1415,7 +1480,7 @@ function renderInspector(){
   const warns = (d.warnings || []).filter(w => w.level === 'warn');
   const infos = (d.warnings || []).filter(w => w.level === 'info');
   H.innerHTML = `<div class="ih-t"><span class="ihic">${ic('db',17)}</span>${id === '__src' ? 'Source data' : 'Dataset'}</div>
-    <div class="ih-s">${esc(d.name)} · ${esc(d.encoding || 'UTF-8')}${d.delim && d.delim !== ',' ? ' · delimiter “' + esc(d.delim) + '”' : ''}${d.bytes ? ' · ' + fmtBytes(d.bytes) : ''}</div>`;
+    <div class="ih-s">${esc(d.name)} · ${esc(d.encoding || 'UTF-8')}${d.sheet ? ' · sheet “' + esc(d.sheet) + '”' : ''}${d.delim && d.delim !== ',' ? ' · delimiter “' + esc(d.delim) + '”' : ''}${d.bytes ? ' · ' + fmtBytes(d.bytes) : ''}</div>`;
   let html = `<div class="tiles">
       ${tile(fmt(d.rows.length), 'rows')}
       ${tile(d.columns.length, 'columns')}
@@ -1585,7 +1650,9 @@ function genCode(){
          '"""', '',
          'import pandas as pd');
   if (en.some(n => n.type === 'one-hot')) L.push('import re');
-  L.push('', `df = pd.read_csv(${py(d.name)})`, '');
+  const isXlsx = /\.xls[xm]$/i.test(d.name || '');
+  if (isXlsx) L.push('', `df = pd.read_excel(${py(d.name)}, sheet_name=0, engine="openpyxl")`, '');
+  else L.push('', `df = pd.read_csv(${py(d.name)})`, '');
   const needNum = en.some(n => n._hint && n._hint.num);
   const needStr = en.some(n => n._hint && n._hint.str);
   if (needNum) L.push(...PY_NUM_HELPER, '');
@@ -1605,7 +1672,9 @@ function genCode(){
   });
   const off = state.nodes.filter(n => !n.enabled);
   if (off.length) L.push(`# Bypassed in the app (not emitted): ${off.map(n => (E.OPS[n.type] && E.OPS[n.type].name) || n.type).join(', ')}`, '');
-  L.push(`df.to_csv("${base}_clean.csv", index=False)`, '',
+  if (isXlsx) L.push(`df.to_excel("${base}_clean.xlsx", index=False)`, '',
+         'print(f"clean dataset: {df.shape[0]} rows x {df.shape[1]} columns")');
+  else L.push(`df.to_csv("${base}_clean.csv", index=False)`, '',
          'print(f"clean dataset: {df.shape[0]} rows x {df.shape[1]} columns")');
   return L.join('\n');
 }
@@ -1665,6 +1734,26 @@ function exportCSV(){
   const base = state.data.name.replace(/\.[^.]*$/, '');
   downloadBlob(base + '_clean.csv', new Blob(parts, { type:'text/csv' }));
   toast(`Exported ${fmt(fin.rows.length)} clean rows` + (guards ? ` · ${guards} cell(s) escaped for spreadsheet safety` : ''), 'download');
+}
+function exportXLSX(){
+  const fin = state.outputs[state.outputs.length - 1];
+  if (!state.data || !fin){ toast('Load a dataset first', 'alert'); return; }
+  if (typeof XLSX === 'undefined'){ toast('Excel support failed to load — refresh and retry', 'alert'); return; }
+  const cols = fin.columns;
+  let guards = 0;
+  const cell = v => {
+    let s = v == null ? '' : String(v);
+    if (s !== '' && (/^[=+@\t\r]/.test(s) || /^-(?![.\d])/.test(s))){ s = "'" + s; guards++; }
+    return s;
+  };
+  const aoa = [cols.map(cell)];
+  for (const r of fin.rows) aoa.push(cols.map((_, j) => cell(r[j])));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'cleaned');
+  const base = state.data.name.replace(/\.[^.]*$/, '');
+  XLSX.writeFile(wb, base + '_clean.xlsx');
+  toast(`Exported ${fmt(fin.rows.length)} clean rows as Excel` + (guards ? ` · ${guards} cell(s) escaped for spreadsheet safety` : ''), 'download');
 }
 function exportCode(){
   if (!state.data){ toast('Load a dataset first', 'alert'); return; }
@@ -1797,7 +1886,7 @@ function updateChip(){
     : `${ic('file',14)}<b>no dataset</b>`;
 }
 function applyDataset(name, parsed, encoding, bytes, file){
-  state.data = { name, columns: parsed.columns, rows: parsed.rows, warnings: parsed.warnings || [], encoding, delim: parsed.delim, bytes, file: file || null };
+  state.data = { name, columns: parsed.columns, rows: parsed.rows, warnings: parsed.warnings || [], encoding, delim: parsed.delim, bytes, file: file || null, sheet: parsed.sheet || null, sheetCount: parsed.sheetCount || null, fileKind: /\.xls[xm]$/i.test(name || '') ? 'xlsx' : 'csv' };
   state.selected = null; state.viewStep = 'final'; state.page = 0;
   state.outputs = [];
   state.backendProfile = null; state.profileCol = null;
@@ -1814,6 +1903,9 @@ function applyDataset(name, parsed, encoding, bytes, file){
 async function readFile(file){
   if (!file) return;
   if (file.size > 120 * 1024 * 1024){ toast('File is larger than 120 MB — split it or sample it first', 'alert'); return; }
+  // Parity with the backend large-file guard: workbooks cannot be
+  // chunk-processed, so the server rejects Excel over 50MB outright.
+  if (/\.xls[xm]$/i.test(file.name || '') && file.size > 50 * 1024 * 1024){ toast('Excel files over 50 MB are not supported — save as CSV and retry', 'alert'); return; }
   setBusy(true, file.name);
   try {
     const r = await engineParseFile(file);
@@ -1843,7 +1935,7 @@ async function loadSample(key){
 function applyPipelinePreset(key){
   const p = PIPELINE_PRESETS.find(x => x.key === key);
   if (!p) return;
-  if (!state.data){ toast('Load a dataset first — upload a CSV or open a demo', 'alert'); return; }
+  if (!state.data){ toast('Load a dataset first — upload a CSV/Excel file or open a demo', 'alert'); return; }
   const cols = state.outputs.length
     ? state.outputs[state.outputs.length - 1].columns
     : state.data.columns;
@@ -2201,12 +2293,13 @@ function initChrome(){
     else togglePanel('insp');
   };
   applyPanelPrefs();
-  $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload CSV';
+  $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload';
   $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
   $('#btnBackend').onclick = backendConfigure;
   $('#btnReset').innerHTML   = ic('trash',14) + ' Reset';
   $('#btnKeys').innerHTML    = ic('question',15);
   $('#btnExportCsv').innerHTML  = ic('download',14) + ' Clean CSV';
+  $('#btnExportXlsx').innerHTML = ic('download',14) + ' Excel';
   $('#btnExportCode').innerHTML = ic('code',14) + ' Python Code';
   $('#btnRun').innerHTML   = ic('play',13) + '<span>Replay</span>';
   $('#btnUndo').innerHTML  = ic('undo',14);
@@ -2218,7 +2311,7 @@ function initChrome(){
   $('#btnClear').innerHTML = ic('trash',13) + '<span>Clear steps</span>';
   $('#btnCopyCode').innerHTML = ic('copy',13) + ' Copy';
   $('#btnDlCode').innerHTML   = ic('download',13) + ' .py';
-  $('#wUpload').innerHTML = ic('upload',14) + ' Upload CSV';
+  $('#wUpload').innerHTML = ic('upload',14) + ' Upload';
   $('#wSample').innerHTML = ic('table',14) + ' Try a demo dataset';
   $('#startHintIc').innerHTML = ic('arrowr',14);
   $$('.btab')[0].innerHTML = ic('table',14) + ' Data Preview';
@@ -2230,6 +2323,7 @@ function initChrome(){
   $('#wSample').onclick   = () => loadSample('hr');
   $('#fileInput').onchange = e => { if (e.target.files[0]) readFile(e.target.files[0]); e.target.value = ''; };
   $('#btnExportCsv').onclick = exportCSV;
+  $('#btnExportXlsx').onclick = exportXLSX;
   $('#btnExportCode').onclick = exportCode;
   $('#btnCopyCode').onclick = async () => {
     const ok = await copyText(state.code);
@@ -2365,7 +2459,9 @@ async function boot(){
 
   if (ds && ds.columns && ds.rows){
     state.data = { name: ds.name, columns: ds.columns, rows: ds.rows, warnings: ds.warnings || [],
-                   encoding: ds.encoding || 'UTF-8', delim: ds.delim, bytes: ds.bytes, persisted: true };
+                   encoding: ds.encoding || 'UTF-8', delim: ds.delim, bytes: ds.bytes, persisted: true,
+                   sheet: ds.sheet || null, sheetCount: ds.sheetCount || null,
+                   fileKind: ds.fileKind || (/\.xls[xm]$/i.test(ds.name || '') ? 'xlsx' : 'csv') };
     if (saved && Array.isArray(saved.nodes)){
       const used = new Set();
       state.nodes = saved.nodes.filter(x => x && E.OPS[x.type]).map(x => adoptNode(x, used)).filter(Boolean);

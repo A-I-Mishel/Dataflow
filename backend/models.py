@@ -135,6 +135,10 @@ class ExecuteRequest(BaseModel):
     session_id: str = Field(max_length=MAX_ID_LENGTH)
     nodes: List[PipelineNode] = Field(max_length=MAX_NODES)
     edges: List[Dict[str, str]] = Field(max_length=MAX_EDGES)
+    # Optional source filename hint for /generate codegen (sessionless):
+    # when it ends with .xlsx/.xlsm the emitted script uses read_excel /
+    # to_excel instead of read_csv / to_csv. Never required.
+    filename: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
 
 
 class UploadResponse(BaseModel):
@@ -145,6 +149,10 @@ class UploadResponse(BaseModel):
     row_count: int
     preview: List[Dict[str, Any]]
     missing_values: Dict[str, int]
+    # Source kind ("csv" or "xlsx") + first-sheet info for Excel uploads.
+    file_kind: str = "csv"
+    sheet: Optional[str] = None
+    sheet_count: Optional[int] = None
     large: bool = False
     # True when dtypes come from the preview sample only (large files):
     # exact for missing counts, estimates for types. Honest clients never

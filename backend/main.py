@@ -4,6 +4,7 @@ HOW IT FITS: Browser -> main.py routes -> engine.py -> transforms/*.py. Upload m
 WHERE TO EDIT: To add endpoint: copy one @app.post block + add Pydantic model in models.py. Route groups: upload/execute/generate/profile/pipelines.
 """
 import codecs
+import io
 import json
 import logging
 import os
@@ -13,9 +14,9 @@ from collections.abc import Callable, Iterator
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
@@ -255,6 +256,73 @@ def _detect_delimiter(path: str, encoding: str) -> str:
     return ","  # unreachable; keeps type checkers calm.
 
 
+def _is_excel_filename(filename: Optional[str]) -> bool:
+    name: str = (filename or "").strip().lower()
+    return name.endswith(".xlsx") or name.endswith(".xlsm")
+
+
+def _is_excel_bytes(path: str) -> bool:
+    """ZIP magic (PK\x03\x04) identifies OOXML workbooks regardless of name."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read(4) == b"PK\x03\x04"
+    except OSError:
+        return False
+
+
+def _read_excel_df(path: str) -> Tuple[pd.DataFrame, Optional[str], Optional[int]]:
+    """Read the first sheet of a workbook. Returns (df, sheet_name, sheet_count).
+
+    First-sheet-only by design: multi-sheet workbooks warn, never fan out.
+    Values mirror the frontend SheetJS path (first row = headers, cached
+    formula values, dates as read by openpyxl/pandas).
+    """
+    try:
+        with pd.ExcelFile(path, engine="openpyxl") as xls:
+            sheet_names: List[str] = list(xls.sheet_names or [])
+            sheet_count: Optional[int] = len(sheet_names) if sheet_names else None
+            sheet: Optional[str] = sheet_names[0] if sheet_names else None
+            try:
+                df: pd.DataFrame = pd.read_excel(xls, sheet_name=0, engine="openpyxl")
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Excel is empty or invalid") from exc
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"Failed parsing Excel: {exc}") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed parsing Excel: {exc}") from exc
+    if df.shape[1] == 0:
+        raise HTTPException(status_code=400, detail="Excel is empty or invalid")
+    try:
+        df.columns = [
+            f"column_{i + 1}" if pd.isna(c) else str(c) for i, c in enumerate(df.columns)
+        ]
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid Excel headers: {exc}") from exc
+    # Dedupe like the CSV path (a,a -> a,a_2) so downstream ops never collide.
+    seen: Dict[str, int] = {}
+    deduped: List[str] = []
+    for i, col in enumerate(df.columns.tolist()):
+        name: str = str(col).strip() or f"column_{i + 1}"
+        if name in seen:
+            k: int = seen[name]
+            candidate: str = ""
+            while True:
+                k += 1
+                candidate = f"{name}_{k}"
+                if candidate not in seen:
+                    break
+            seen[name] = k
+            seen[candidate] = 1
+            deduped.append(candidate)
+        else:
+            seen[name] = 1
+            deduped.append(name)
+    df.columns = deduped
+    return df, sheet, sheet_count
+
+
 def _read_preview_df(path: str, encoding: str, sep: str = ",") -> pd.DataFrame:
     try:
         df: pd.DataFrame = pd.read_csv(path, nrows=PREVIEW_ROWS, encoding=encoding, sep=sep)
@@ -292,6 +360,52 @@ def _log_session_meta(
         logger.warning("Session metadata logging failed: %s", exc)
 
 
+def _store_small_df(
+    tmp_path: str,
+    key: str,
+    session_id: str,
+    filename: Optional[str],
+    db: Session,
+    df: pd.DataFrame,
+    file_kind: str = "csv",
+    sheet: Optional[str] = None,
+    sheet_count: Optional[int] = None,
+) -> UploadResponse:
+    # Temp file is fully parsed at this point; remove it before storing the
+    # frame (idempotent helper, safe if a caller already unlinked).
+    _unlink_upload_tmp(tmp_path)
+
+    # Exact upload-time cardinality over the complete frame (never the
+    # 5-row preview). Columns that fail to compute are omitted (unknown),
+    # never zero. Matches get_dummies' default dummy_na=False semantics.
+    unique_counts: Dict[str, int] = {}
+    for col in df.columns.tolist():
+        try:
+            unique_counts[str(col)] = int(df[col].nunique(dropna=True))
+        except Exception as exc:
+            logger.warning("Cardinality scan failed for column '%s': %s", col, exc)
+
+    store_session(key, df)
+    logger.info("Stored session %s with shape %s", session_id, df.shape)
+    log_memory_usage("upload")
+    _log_session_meta(db, session_id, filename, int(df.shape[0]), [str(c) for c in df.columns.tolist()])
+
+    return UploadResponse(
+        session_id=session_id,
+        filename=filename or ("upload.xlsx" if file_kind == "xlsx" else "upload.csv"),
+        columns=[str(c) for c in df.columns.tolist()],
+        dtypes=_dtypes_dict(df),
+        row_count=int(df.shape[0]),
+        preview=_sanitize_records(df, 5),
+        missing_values=_missing_dict(df),
+        file_kind=file_kind,
+        sheet=sheet,
+        sheet_count=sheet_count,
+        unique_counts=unique_counts,
+        cardinality_available=True,
+    )
+
+
 def _handle_small_upload(
     tmp_path: str,
     key: str,
@@ -319,34 +433,26 @@ def _handle_small_upload(
             df.columns = [str(c) for c in df.columns]
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Invalid CSV headers: {exc}") from exc
-    finally:
+    except HTTPException:
         _unlink_upload_tmp(tmp_path)
+        raise
+    return _store_small_df(tmp_path, key, session_id, filename, db, df, file_kind="csv")
 
-    # Exact upload-time cardinality over the complete frame (never the
-    # 5-row preview). Columns that fail to compute are omitted (unknown),
-    # never zero. Matches get_dummies' default dummy_na=False semantics.
-    unique_counts: Dict[str, int] = {}
-    for col in df.columns.tolist():
-        try:
-            unique_counts[str(col)] = int(df[col].nunique(dropna=True))
-        except Exception as exc:
-            logger.warning("Cardinality scan failed for column '%s': %s", col, exc)
 
-    store_session(key, df)
-    logger.info("Stored session %s with shape %s", session_id, df.shape)
-    log_memory_usage("upload")
-    _log_session_meta(db, session_id, filename, int(df.shape[0]), [str(c) for c in df.columns.tolist()])
-
-    return UploadResponse(
-        session_id=session_id,
-        filename=filename or "upload.csv",
-        columns=[str(c) for c in df.columns.tolist()],
-        dtypes=_dtypes_dict(df),
-        row_count=int(df.shape[0]),
-        preview=_sanitize_records(df, 5),
-        missing_values=_missing_dict(df),
-        unique_counts=unique_counts,
-        cardinality_available=True,
+def _handle_small_excel_upload(
+    tmp_path: str,
+    key: str,
+    session_id: str,
+    filename: Optional[str],
+    db: Session,
+) -> UploadResponse:
+    try:
+        df, sheet, sheet_count = _read_excel_df(tmp_path)
+    except HTTPException:
+        _unlink_upload_tmp(tmp_path)
+        raise
+    return _store_small_df(
+        tmp_path, key, session_id, filename, db, df, file_kind="xlsx", sheet=sheet, sheet_count=sheet_count
     )
 
 
@@ -398,7 +504,7 @@ def _handle_large_upload(
 
 
 # ROUTE GROUP: data in/out — ★ CHANGE HERE for upload limits/errors.
-# upload: CSV -> session (RAM or disk if > threshold). 413 if >200MB. Returns session_id + 5-row preview.
+# upload: CSV/XLSX -> session (RAM or disk if > threshold for CSV). 413 if >200MB. Returns session_id + 5-row preview.
 @app.post("/upload", response_model=UploadResponse)
 async def upload_csv(
     request: Request,
@@ -426,13 +532,16 @@ async def upload_csv(
     # so 200MB files cannot exhaust server memory.
     tmp_path: Optional[str] = None
     total_size: int = 0
+    first_bytes: bytes = b""
     try:
-        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as tmp:
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".upload") as tmp:
             tmp_path = tmp.name
             while True:
                 chunk: bytes = await file.read(UPLOAD_CHUNK_SIZE_BYTES)
                 if not chunk:
                     break
+                if not first_bytes:
+                    first_bytes = chunk[:4]
                 total_size += len(chunk)
                 if total_size > MAX_UPLOAD_SIZE_BYTES:
                     raise HTTPException(status_code=413, detail="File too large. Maximum 200MB.")
@@ -455,6 +564,21 @@ async def upload_csv(
     if total_size == 0:
         _unlink_upload_tmp(tmp_path)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    is_excel: bool = _is_excel_filename(file.filename) or first_bytes == b"PK\x03\x04"
+    # Double-check by content when the name lies (e.g. .csv containing ZIP).
+    if not is_excel and total_size > 0:
+        is_excel = _is_excel_bytes(tmp_path)
+    if is_excel:
+        # Workbooks cannot be chunk-scanned like CSV: reject huge ones with
+        # an actionable hint instead of OOMing the worker.
+        if total_size > LARGE_FILE_THRESHOLD_BYTES:
+            _unlink_upload_tmp(tmp_path)
+            raise HTTPException(
+                status_code=400,
+                detail="Excel files over 50MB are not supported - save as CSV and retry.",
+            )
+        return _handle_small_excel_upload(tmp_path, key, session_id, file.filename, db)
 
     if total_size <= LARGE_FILE_THRESHOLD_BYTES:
         encoding: str = _detect_csv_encoding(tmp_path)
@@ -544,7 +668,9 @@ def generate(request: ExecuteRequest) -> GenerateResponse:
     # Sessionless by design: code generation only replays node configs
     # against a dummy frame and never touches uploaded data, so an expired
     # session must not block exporting code after a successful run.
-    code: str = generate_script(request.nodes, request.edges, filename="data.csv")
+    # The optional filename hint selects read_excel/to_excel for workbooks.
+    filename: str = request.filename or "data.csv"
+    code: str = generate_script(request.nodes, request.edges, filename=filename)
     return GenerateResponse(code=code)
 
 
@@ -555,22 +681,36 @@ def _csv_chunks(df: pd.DataFrame, chunk_rows: int = 50000) -> Iterator[str]:
         yield df.iloc[start : start + chunk_rows].to_csv(index=False, header=False)
 
 
-@app.get("/download/{session_id}")
+@app.get("/download/{session_id}", response_model=None)
 def download(
     session_id: str,
     bom: bool = False,
+    format: Optional[str] = Query(default=None),
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-) -> StreamingResponse:
+):
     evict_old_sessions()
     df: pd.DataFrame = get_result(_storage_key(x_api_key, session_id))
     logger.info("Download result for session %s shape %s", session_id, df.shape)
     # Neutralize spreadsheet-formula cells (=HYPERLINK(...) etc.) so the
-    # downloaded CSV cannot execute code when opened in Excel/Sheets.
+    # download cannot execute code when opened in Excel/Sheets.
     # Operates on a copy — the stored result frame is never mutated.
+    safe_df: pd.DataFrame = _neutralize_formulas(df)
+    wants_xlsx: bool = (format or "").strip().lower() in ("xlsx", "excel")
+    if wants_xlsx:
+        buf = io.BytesIO()
+        try:
+            safe_df.to_excel(buf, index=False, sheet_name="cleaned", engine="openpyxl")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed writing Excel: {exc}") from exc
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=cleaned_data.xlsx"},
+        )
     # The BOM is opt-in (?bom=1) for Excel users: on by default it would
     # corrupt naive Unix parsers (a leading \ufeff lands in the first
     # column name), including re-imports of our own exports.
-    stream = _csv_chunks(_neutralize_formulas(df))
+    stream = _csv_chunks(safe_df)
     if bom:
         stream = _with_bom(stream)
     return StreamingResponse(
