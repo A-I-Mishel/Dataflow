@@ -336,8 +336,11 @@ def test_parity_wave3_ops() -> None:
 
 
 def test_parity_wave4_ops() -> None:
-    """Wave-4 additions: clip, regex find-replace, special-char removal,
-    category standardization — all cell-for-cell. log-transform is covered
+    """Wave-4 additions: clip, regex find-replace, special-char removal —
+    all cell-for-cell. standardize-categories was removed from the frontend
+    engine (old pipelines render it as a removable broken step), so it has no
+    parity counterpart; its backend behavior stays covered by
+    test_transforms.py::test_standardize_categories. log-transform is covered
     by unit tests on both sides instead: V8 Math.log and glibc libm disagree
     in the last ulp (ln(3) = ...096 vs ...098), so exact cell parity is
     unachievable by construction — same documented boundary as z-score."""
@@ -346,7 +349,6 @@ def test_parity_wave4_ops() -> None:
             {"type": "clip-values", "params": {"columns": ["PerformanceScore"], "min": "2", "max": "4"}},
             {"type": "find-replace-pattern", "params": {"columns": ["Email"], "pattern": "\\d+", "replacement": "#", "regex": True, "case": True}},
             {"type": "remove-special-chars", "params": {"columns": ["Email"], "letters": True, "numbers": True, "spaces": True, "custom": ""}},
-            {"type": "standardize-categories", "params": {"columns": ["Department"], "method": "lower", "map": {}}},
         ]
     )
     backend = backend_run(
@@ -369,13 +371,6 @@ def test_parity_wave4_ops() -> None:
                 numbers=True,
                 spaces=True,
                 custom_chars="",
-            ),
-            _node(
-                "n4",
-                "standardize-categories",
-                columns=["Department"],
-                method="lower",
-                mapping={},
             ),
         ]
     )
