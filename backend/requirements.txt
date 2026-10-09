@@ -1,7 +1,7 @@
 # Production dependencies (installed on Render).
 # Pinned exact versions for reproducible builds; regenerate from a known-good
 # env with: pip freeze | grep -Ei 'fastapi|uvicorn|pandas|multipart|pydantic|scikit|sqlalchemy|psycopg2|openpyxl'
-fastapi==0.141.1
+fastapi==0.142.2
 uvicorn[standard]==0.53.0
 pandas==3.0.5
 openpyxl==3.1.5
