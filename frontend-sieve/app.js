@@ -1,5 +1,5 @@
 import { EngineFactory, py } from './engine.js';
-import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, apiProfile, getSessionId, clearSessionId, apiListPipelines, apiSavePipeline, apiLoadPipeline, apiDeletePipeline } from './api.js';
+import { getApiBase, getApiSource, setApiBase, apiHealthRetry, apiUpload, apiExecute, apiProfile, getSessionId, clearSessionId, apiListPipelines, apiSavePipeline, apiLoadPipeline, apiDeletePipeline, apiMe, apiLogin, apiSignup, apiLogout, getAuthToken, setAuthToken, clearAuthToken } from './api.js';
 
 'use strict';
 /* ==================================================================
@@ -74,6 +74,8 @@ const IC = {
   redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   save:'<path d="M5 4h11l3 3v13H5Z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>',
+  logout:'<path d="M13.5 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5h7"/><path d="M12.5 12H21m0 0-3.5-3.5M21 12l-3.5 3.5"/>',
   question:'<circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.2A2.5 2.5 0 0 1 14.5 10c0 1.6-2.4 2-2.4 3.4M12 16.6v.1"/>'
 };
 function ic(n, s=15){ return `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${IC[n]||''}</svg>`; }
@@ -282,11 +284,227 @@ async function engineParseText(text){
    mismatches surface as toasts; they never replace local results.
    ================================================================== */
 const backend = { base: '', online: false, waking: false, sessionName: '' };
-/* TEXT: ★ EXAM — top-bar backend button labels. Change ONLY the quoted strings ('Local-only', 'Backend ✓'...). Logic stays. */
+
+/* ==================================================================
+   ACCOUNTS — mandatory sign in. The local engine still does all cleaning
+   in the browser; the account gates the app and owns server templates.
+   ================================================================== */
+const auth = { user: null, mode: 'signin', busy: false };
+const WS_PIPELINE_KEY = 'sieve.pipeline.v2';
+const WS_DATASET_KEY = 'dataset';
+
+function setFlash(msg){
+  try { sessionStorage.setItem('sieve.flash', msg); } catch (_) {}
+}
+function takeFlash(){
+  try {
+    const msg = sessionStorage.getItem('sieve.flash');
+    sessionStorage.removeItem('sieve.flash');
+    return msg || '';
+  } catch (_) { return ''; }
+}
+
+// Prevent `beforeunload` from writing the signed-in user's workspace into an
+// anonymous key after auth.user has already been cleared (sign-out/expiry).
+function haltBrowserPersistence(){
+  clearTimeout(persistTimer); persistTimer = null;
+  clearTimeout(saveChipTimer); saveChipTimer = null;
+  state.data = null;
+}
+
+// Per-account browser namespace: two people on one laptop never restore
+// each other's dataset or draft pipeline. `.anon` is only used behind the
+// login gate (for example while a stored session is being checked).
+function wsKey(name){
+  return `${name}.${auth.user ? 'u.' + auth.user.id : 'anon'}`;
+}
+
+function renderAccountBtn(){
+  const b = $('#btnAccount');
+  if (!b) return;
+  b.classList.toggle('signed-in', !!auth.user);
+  if (auth.user){
+    b.innerHTML = ic('user',14) + `<span>${esc(auth.user.email)}</span>`;
+    b.title = `Signed in as ${auth.user.email}. Click for account / sign out.`;
+  } else {
+    b.innerHTML = ic('user',14) + ' Sign in';
+    b.title = 'Sign in or create an account';
+  }
+}
+
+function renderGateBackend(){
+  const label = $('#gateBackendLabel');
+  if (label) label.textContent = backend.base || 'not configured';
+  const btn = $('#btnGateBackend');
+  if (btn) btn.textContent = backend.base ? 'Change' : 'Set backend URL';
+}
+
+function gateError(msg){
+  const box = $('#gateError');
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = msg;
+}
+
+function setGateMode(mode){
+  auth.mode = mode === 'signup' ? 'signup' : 'signin';
+  const up = auth.mode === 'signup';
+  const title = $('#gateTitle'), note = $('#gateNote');
+  if (title) title.textContent = up ? 'Create your account' : 'Sign in to continue';
+  if (note) note.textContent = up
+    ? 'Accounts keep your saved templates private and available on any device. Datasets are never saved to your account.'
+    : 'Sieve requires an account. Sign in to open your workspace and saved templates.';
+  const submit = $('#btnGateSubmit');
+  if (submit) submit.textContent = up ? 'Create account' : 'Sign in';
+  const switchText = $('#gateSwitchText');
+  if (switchText) switchText.textContent = up ? 'Already have an account?' : 'New to Sieve?';
+  const switcher = $('#btnGateSwitch');
+  if (switcher) switcher.textContent = up ? 'Sign in' : 'Create an account';
+  const password = $('#gatePassword');
+  if (password){
+    password.setAttribute('autocomplete', up ? 'new-password' : 'current-password');
+    password.placeholder = up ? 'At least 8 characters' : 'Your password';
+  }
+  const error = $('#gateError');
+  if (error) error.hidden = true;
+}
+
+function showGate(mode){
+  const gate = $('#authGate');
+  if (!gate) return;
+  gate.hidden = false;
+  setGateMode(mode || auth.mode || 'signin');
+  renderGateBackend();
+  const status = $('#gateStatus');
+  if (status) status.hidden = true;
+  // A previous session check may have disabled the form while waiting on a
+  // sleeping backend; re-enable it whenever the gate is shown again.
+  const form = $('#gateForm');
+  if (form) form.querySelectorAll('input,button').forEach(el => { el.disabled = false; });
+  const input = $('#gateEmail');
+  if (input) setTimeout(() => input.focus(), 40);
+}
+
+function hideGate(){
+  const gate = $('#authGate');
+  if (gate) gate.hidden = true;
+}
+
+function setAccountDialog(){
+  if (!auth.user) return;
+  $('#authEmail').textContent = auth.user.email;
+  $('#authAvatar').textContent = String(auth.user.email || '?').slice(0, 1).toUpperCase();
+}
+
+function openAuth(){
+  if (!auth.user){ showGate('signin'); return; }
+  setAccountDialog();
+  const dlg = $('#dlgAuth');
+  if (!dlg.open) dlg.showModal();
+}
+
+async function loadAccount(){
+  auth.user = null;
+  renderAccountBtn();
+  if (!backend.base) return false;
+  if (!getAuthToken(backend.base)) return false;
+  try {
+    const out = await apiMe(backend.base);
+    auth.user = out && out.user ? out.user : null;
+  } catch (_) {
+    // Network errors keep the stored token for the next boot; a 401 was
+    // already cleared by api.js and fires `sieve:auth-expired`.
+    auth.user = null;
+  }
+  renderAccountBtn();
+  return !!auth.user;
+}
+
+// Boot gate: nothing in the workspace is restored until `/auth/me` succeeds.
+async function requireAccount(){
+  const gate = $('#authGate');
+  if (!gate) return false;
+  const status = $('#gateStatus');
+  if (status){ status.hidden = false; status.textContent = 'Checking your saved session… the free server may take up to a minute to wake.'; }
+  // Do not let a returning visitor race the stored-token check with a manual
+  // sign-in while a cold backend is still waking.
+  const form = $('#gateForm');
+  if (form) form.querySelectorAll('input,button').forEach(el => { el.disabled = true; });
+  const signedIn = await loadAccount();
+  if (signedIn){
+    hideGate();
+    return true;
+  }
+  if (status) status.hidden = true;
+  showGate(auth.mode || 'signin');
+  const flash = takeFlash();
+  if (flash) toast(flash, 'check');
+  return false;
+}
+
+async function submitGateAuth(e){
+  if (e) e.preventDefault();
+  if (auth.busy) return;
+  if (!backend.base){
+    gateError('Set the backend URL first — accounts live on the server');
+    return;
+  }
+  const email = $('#gateEmail').value.trim();
+  const password = $('#gatePassword').value;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ gateError('Enter a valid email address'); return; }
+  if (password.length < 8){ gateError('Password must be at least 8 characters'); return; }
+  const up = auth.mode === 'signup';
+  const btn = $('#btnGateSubmit');
+  const error = $('#gateError');
+  auth.busy = true;
+  btn.disabled = true;
+  btn.textContent = up ? 'Creating account…' : 'Signing in…';
+  if (error) error.hidden = true;
+  try {
+    const out = up
+      ? await apiSignup(backend.base, email, password)
+      : await apiLogin(backend.base, email, password);
+    setAuthToken(backend.base, out.token);
+    setFlash(up ? `Account created — signed in as ${out.user.email}` : `Signed in as ${out.user.email}`);
+    // Reload instead of restoring in place: boot then runs the workspace
+    // restore under this account's namespace, with no stale DOM state.
+    location.reload();
+  } catch (err){
+    gateError(err && err.message ? err.message : 'Could not sign in');
+    auth.busy = false;
+    btn.disabled = false;
+    btn.textContent = up ? 'Create account' : 'Sign in';
+  }
+}
+
+async function signOut(){
+  const btn = $('#btnSignOut');
+  if (btn){ btn.disabled = true; btn.textContent = 'Signing out…'; }
+  haltBrowserPersistence();
+  try {
+    if (backend.base) await apiLogout(backend.base);
+  } catch (_) { /* local sign-out still wins */ }
+  clearAuthToken(backend.base);
+  if (backend.base) clearSessionId(backend.base);
+  auth.user = null;
+  setFlash('Signed out');
+  location.reload();
+}
+
+window.addEventListener('sieve:auth-expired', () => {
+  if (!auth.user){ showGate('signin'); return; }
+  haltBrowserPersistence();
+  if (backend.base) clearSessionId(backend.base);
+  auth.user = null;
+  setFlash('Your session expired — sign in again');
+  location.reload();
+});
+
+/* TEXT: ★ EXAM — top-bar backend button labels. Change ONLY the quoted strings ('Backend off', 'Backend ✓'...). Logic stays. */
 function renderBackendBtn(){
   const b = $('#btnBackend');
   if (!b) return;
-  if (!backend.base){ b.innerHTML = ic('db',14) + ' Local-only'; b.title = 'No backend configured — everything runs in this browser. Click to add a backend URL.'; }
+  if (!backend.base){ b.innerHTML = ic('db',14) + ' Backend off'; b.title = 'No backend configured — sign-in and saved templates need one. Click to add a backend URL.'; }
   else if (backend.online){ b.innerHTML = ic('db',14) + ' Backend ✓'; b.title = `Connected to ${backend.base}. Click to change or disconnect.`; }
   else if (backend.waking){ b.innerHTML = ic('db',14) + ' Waking…'; b.title = `Waking ${backend.base} — free-tier backends sleep after ~15 min idle and take ~50s to answer. Click to change or disconnect.`; }
   else { b.innerHTML = ic('db',14) + ' Backend…'; b.title = `Backend set to ${backend.base} but unreachable. Click to change or disconnect.`; }
@@ -310,17 +528,21 @@ async function backendCheck(silent){
 /* TEXT: ★ EXAM — backend URL prompt. Change default 'http://localhost:8000' or prompt text below only. */
 function backendConfigure(){
   const cur = backend.base || 'http://localhost:8000';
-  const v = prompt('Backend API base URL (empty = local-only mode):', cur);
+  const v = prompt('Backend API base URL (required — accounts and saved templates live there):', cur);
   if (v === null) return;
   if (v.trim() !== '' && !/^https?:\/\//i.test(v.trim())){ toast('URL must start with http:// or https://', 'alert'); return; }
-  try { backend.base = setApiBase(v); }
+  let next = '';
+  try { next = setApiBase(v); }
   catch (e){ toast(e.message || 'Invalid backend URL', 'alert'); return; }
+  backend.base = next;
   backend.online = false; backend.sessionName = '';
-  renderBackendBtn();
-  if (backend.base){
-    toast('Backend set — checking connection…', 'db');
-    backendCheck(false).then(ok => { if (ok && state.data && state.data.file) backendMirrorUpload(state.data.file); });
-  } else toast('Local-only mode — backend disconnected', 'check');
+  haltBrowserPersistence();
+  auth.user = null;
+  // Login tokens are scoped per backend base, and the gate must re-check
+  // whichever server the browser is now pointed at. A reload gives that
+  // for free and drops any workspace restored from the old account.
+  setFlash(next ? 'Backend updated — sign in to continue' : 'A backend is required to sign in');
+  location.reload();
 }
 // Mirror the raw File to the backend so /execute has a session. Silent:
 // local parsing already succeeded; a backend failure must not disturb it.
@@ -509,8 +731,7 @@ function updateUndoBtns(){
   $('#btnRedo').disabled = hist.idx >= hist.stack.length - 1;
 }
 
-/* ---- persistence ---- */
-const LS_KEY = 'sieve.pipeline.v2';
+/* ---- persistence (keys are namespaced per signed-in account) ---- */
 let persistTimer = null;
 function updateSaveChip(mode){
   const elc = $('#saveChip');
@@ -535,7 +756,7 @@ function persistNow(){
   clearTimeout(saveChipTimer);
   if (!state.data) return;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({
+    localStorage.setItem(wsKey(WS_PIPELINE_KEY), JSON.stringify({
       v:2, savedAt: Date.now(), datasetName: state.data.name,
       nodes: state.nodes.map(n => ({ id:n.id, type:n.type, enabled:n.enabled, params:n.params, x:n.x, y:n.y })),
       srcPos: state.srcPos, outPos: state.outPos, view,
@@ -582,7 +803,7 @@ async function persistDataset(){
   const est = d.rows.length * Math.max(1, d.columns.length) * 12;
   if (est > 45e6){ d.persisted = false; d.persistNote = 'too large to autosave'; updateSaveChip('big'); return; }
   try {
-    await idbSet('dataset', { name:d.name, columns:d.columns, rows:d.rows, warnings:d.warnings, encoding:d.encoding, delim:d.delim, bytes:d.bytes, sheet:d.sheet || null, sheetCount:d.sheetCount || null, fileKind:d.fileKind || null, savedAt: Date.now() });
+    await idbSet(wsKey(WS_DATASET_KEY), { name:d.name, columns:d.columns, rows:d.rows, warnings:d.warnings, encoding:d.encoding, delim:d.delim, bytes:d.bytes, sheet:d.sheet || null, sheetCount:d.sheetCount || null, fileKind:d.fileKind || null, savedAt: Date.now() });
     d.persisted = true; d.persistNote = '';
   } catch(e){ d.persisted = false; d.persistNote = 'storage unavailable'; }
 }
@@ -1986,10 +2207,36 @@ function applyPipelinePreset(key){
   toast(p.name + ' applied — ' + newNodes.length + ' step(s)', 'check');
 }
 async function resetWorkspace(){
-  try { await idbDel('dataset'); } catch(e){}
-  try { localStorage.removeItem(LS_KEY); } catch(e){}
+  haltBrowserPersistence();
+  try { await idbDel(wsKey(WS_DATASET_KEY)); } catch(e){}
+  try { localStorage.removeItem(wsKey(WS_PIPELINE_KEY)); } catch(e){}
   try { localStorage.removeItem('sieve.sessionId'); } catch(e){}
   location.reload();
+}
+
+// One-time adoption of the pre-account workspace: the first account to sign
+// in on this browser claims it, then the un-namespaced keys disappear so a
+// second account cannot see the same dataset.
+async function adoptLegacyWorkspace(){
+  if (!auth.user) return;
+  try {
+    const mine = await idbGet(wsKey(WS_DATASET_KEY));
+    if (!mine){
+      const legacy = await idbGet(WS_DATASET_KEY);
+      if (legacy){
+        await idbSet(wsKey(WS_DATASET_KEY), legacy);
+        await idbDel(WS_DATASET_KEY);
+      }
+    }
+    const minePipeline = localStorage.getItem(wsKey(WS_PIPELINE_KEY));
+    if (!minePipeline){
+      const legacyPipeline = localStorage.getItem(WS_PIPELINE_KEY);
+      if (legacyPipeline){
+        localStorage.setItem(wsKey(WS_PIPELINE_KEY), legacyPipeline);
+        localStorage.removeItem(WS_PIPELINE_KEY);
+      }
+    }
+  } catch(e){ /* storage blocked: start with an empty workspace */ }
 }
 
 /* ==================================================================
@@ -2179,8 +2426,8 @@ function togglePanel(which){
   syncPanelButtons();
 }
 /* ==================================================================
-   SERVER TEMPLATES — saved pipelines live on the backend (never the
-   dataset). Local-only mode has no templates; the dialog says so.
+   SERVER TEMPLATES — saved pipelines live in the signed-in account on
+   the backend (never the dataset).
    ================================================================== */
 function snapshotNodesForSave(){
   return state.nodes.map(n => ({
@@ -2230,8 +2477,12 @@ async function openTemplates(){
   const dlg = $('#dlgTemplates'), note = $('#tplNote');
   if (!backend.base){
     note.hidden = false;
-    note.textContent = 'Connect a backend first — templates live on the server, and this browser is local-only.';
+    note.textContent = 'Connect a backend first — templates live on the server.';
     $('#tplList').innerHTML = '';
+  } else if (!auth.user){
+    toast('Sign in to use saved templates', 'info');
+    showGate('signin');
+    return;
   } else {
     note.hidden = true;
     await refreshTemplateList();
@@ -2241,6 +2492,7 @@ async function openTemplates(){
 async function saveCurrentTemplate(){
   try {
     if (!backend.base){ toast('Connect a backend first — templates live on the server', 'alert'); return; }
+    if (!auth.user){ toast('Sign in to save templates to your account', 'info'); showGate('signin'); return; }
     if (!state.data){ toast('Load a dataset first', 'alert'); return; }
     const name = $('#inpTemplateName').value;
     await apiSavePipeline(backend.base, name, snapshotNodesForSave());
@@ -2294,7 +2546,11 @@ function initChrome(){
   };
   applyPanelPrefs();
   $('#btnUpload').innerHTML  = ic('upload',14) + ' Upload';
-  $('#btnBackend').innerHTML   = ic('db',14) + ' Local-only';
+  $('#btnAccount').onclick = openAuth;
+  $('#btnGateSwitch').onclick = () => setGateMode(auth.mode === 'signup' ? 'signin' : 'signup');
+  $('#gateForm').addEventListener('submit', submitGateAuth);
+  $('#btnGateBackend').onclick = backendConfigure;
+  $('#btnBackend').innerHTML   = ic('db',14) + ' Backend off';
   $('#btnBackend').onclick = backendConfigure;
   $('#btnReset').innerHTML   = ic('trash',14) + ' Reset';
   $('#btnKeys').innerHTML    = ic('question',15);
@@ -2390,6 +2646,12 @@ function initChrome(){
   });
   tdlg.addEventListener('click', e => { if (e.target === tdlg) tdlg.close(); });
 
+  const adlg = $('#dlgAuth');
+  $('#btnOkAuth').onclick = () => adlg.close();
+  $('#btnCloseAuth').onclick = () => adlg.close();
+  $('#btnSignOut').onclick = signOut;
+  adlg.addEventListener('click', e => { if (e.target === adlg) adlg.close(); });
+
   const ov = $('#dropOverlay');
   ['dragover','dragenter'].forEach(ev => window.addEventListener(ev, e => {
     e.preventDefault();
@@ -2440,6 +2702,7 @@ async function boot(){
   initChrome();
   backend.base = getApiBase();
   renderBackendBtn();
+  renderAccountBtn();
   // A ?api= link override is session-only by design (see api.js): say
   // plainly where data is going so a shared link can never silently
   // redirect uploads.
@@ -2452,10 +2715,15 @@ async function boot(){
   updateSaveChip('');
   applyView(); zoomLab();
 
+  // MANDATORY LOGIN: the gate is visible from first paint. Nothing below
+  // runs until a real token resolves through /auth/me.
+  if (!(await requireAccount())) return;
+  await adoptLegacyWorkspace();
+
   let ds = null;
-  try { ds = await idbGet('dataset'); } catch(e){}
+  try { ds = await idbGet(wsKey(WS_DATASET_KEY)); } catch(e){}
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch(e){}
+  try { saved = JSON.parse(localStorage.getItem(wsKey(WS_PIPELINE_KEY)) || 'null'); } catch(e){}
 
   if (ds && ds.columns && ds.rows){
     state.data = { name: ds.name, columns: ds.columns, rows: ds.rows, warnings: ds.warnings || [],
@@ -2484,7 +2752,7 @@ async function boot(){
     updateSaveChip('saved');
     toast(`Restored your workspace — ${ds.name} (${fmt(ds.rows.length)} rows)`, 'check');
   } else {
-    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    try { localStorage.removeItem(wsKey(WS_PIPELINE_KEY)); } catch(e){}
     $('#welcome').hidden = false;
     renderInspector();
   }

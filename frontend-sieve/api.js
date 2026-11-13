@@ -10,6 +10,7 @@
 // - Change timeout / retry .......... req(), reqOnce() (30s default, 1 retry on 429).
 // - Add new operation mapping ....... sieveToBackend() (~30-branch translator).
 // - Change session handling ......... getSessionId()/setSessionId() (scoped per base).
+// - Accounts ........................ getAuthToken()/setAuthToken(), apiLogin/apiSignup/apiLogout.
 // SAFE TO EDIT: base URL strings, timeout numbers. DO NOT change fetch shape
 //   without updating backend/main.py route too.
 // Sieve ↔ FastAPI bridge (hybrid mode).
@@ -32,6 +33,7 @@
 
 const LS_API = 'sieve.apiBase';
 const LS_SES = 'sieve.sessionId';
+const LS_AUTH = 'sieve.authTokens';
 
 export function getApiBase() {
   // Precedence: explicit ?api= param (SESSION-ONLY, never persisted: a
@@ -89,6 +91,52 @@ function normalizeBase(u) {
   return s;
 }
 
+/* ---------- account token (scoped per backend base) ---------- */
+// A token minted by one backend must never be sent to another host (same
+// reason sessions are scoped per base). Values are keyed by normalized base.
+function readAuthMap() {
+  try {
+    const raw = localStorage.getItem(LS_AUTH);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    return {};
+  } catch (_) { return {}; }
+}
+
+// WHAT: Bearer token for THIS backend base only. ★ EXAM: rarely edit.
+export function getAuthToken(base) {
+  if (!base) return '';
+  try { return readAuthMap()[base] || ''; } catch (_) { return ''; }
+}
+
+export function setAuthToken(base, token) {
+  if (!base) return;
+  try {
+    const map = readAuthMap();
+    if (token) map[base] = String(token);
+    else delete map[base];
+    localStorage.setItem(LS_AUTH, JSON.stringify(map));
+  } catch (_) {}
+}
+
+export function clearAuthToken(base) {
+  if (!base) return;
+  try {
+    const map = readAuthMap();
+    delete map[base];
+    localStorage.setItem(LS_AUTH, JSON.stringify(map));
+  } catch (_) {}
+}
+
+function notifyAuthExpired() {
+  try {
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('sieve:auth-expired'));
+    }
+  } catch (_) {}
+}
+
 function numIfNumeric(v) {
   if (typeof v !== 'string') return v;
   const t = v.trim();
@@ -100,8 +148,11 @@ function numIfNumeric(v) {
 async function reqOnce(path, base, opts, timeoutMs) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
+  const headers = new Headers((opts && opts.headers) || {});
+  const token = getAuthToken(base);
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
   try {
-    return await fetch(base + path, { ...opts, signal: ctl.signal });
+    return await fetch(base + path, { ...opts, headers, signal: ctl.signal });
   } catch (e) {
     if (e && e.name === 'AbortError') throw new Error(`backend timed out on ${path}`);
     throw e;
@@ -120,6 +171,15 @@ async function req(path, base, opts = {}, timeoutMs = 30000) {
     await new Promise((res) => setTimeout(res, Math.min(wait, 30) * 1000));
     r = await reqOnce(path, base, opts, timeoutMs);
     if (r.status === 429) throw new Error(`backend rate limit exceeded on ${path} — try again shortly`);
+  }
+  // A 401 on a request that carried a token means the stored login is stale.
+  // Forget it once and tell the UI, so the next request runs anonymous or
+  // the user can sign in again. Login/signup 401s are ordinary bad-password
+  // answers and must not clear a token the user is about to replace.
+  if (r.status === 401 && getAuthToken(base)
+      && !path.startsWith('/auth/login') && !path.startsWith('/auth/signup')) {
+    clearAuthToken(base);
+    notifyAuthExpired();
   }
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {
@@ -151,6 +211,34 @@ export async function apiHealthRetry(base, onAttempt) {
   }
   return false;
 }
+
+/* ---------- accounts ---------- */
+// WHAT: Create an account. Returns {token, user}. Caller stores the token
+// with setAuthToken(base, token). ★ EXAM: change timeout only.
+export function apiSignup(base, email, password) {
+  // 90s: mandatory login must survive a Render free-tier cold start (~50s).
+  return req('/auth/signup', base, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  }, 90000);
+}
+
+// WHAT: Sign in. Returns {token, user}. Same storage rule as signup.
+export function apiLogin(base, email, password) {
+  // Same cold-start allowance as signup.
+  return req('/auth/login', base, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  }, 90000);
+}
+
+// WHAT: Current account for the stored token. Returns {user}; 401 = stale.
+export const apiMe = (base) => req('/auth/me', base, {}, 60000);
+
+// WHAT: Invalidate the token server-side. Idempotent. Caller clears local copy.
+export const apiLogout = (base) => req('/auth/logout', base, { method: 'POST' }, 30000);
 
 export async function apiUpload(base, file) {
   // WHAT: Sends CSV to backend POST /upload to mint session_id (background only).

@@ -18,6 +18,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 RULES: List[Tuple[str, int, int]] = [
     ("/upload", 30, 60),
     ("/execute", 60, 60),
+    # Slower buckets for credential endpoints: makes online guessing
+    # (and mass signups) noticeably more expensive without blocking humans.
+    ("/auth/login", 20, 60),
+    ("/auth/signup", 10, 60),
 ]
 DEFAULT_LIMIT: Tuple[int, int] = (300, 60)
 EXEMPT_PREFIXES: Tuple[str, ...] = ("/health", "/docs", "/openapi.json", "/redoc")

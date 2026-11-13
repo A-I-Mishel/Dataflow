@@ -13,7 +13,8 @@
   - Pipeline canvas ......... id="viewport" / id="world" / id="nodesLayer"
   - Bottom preview/code ..... id="pvTableWrap" / id="codePre"
   - Right settings panel .... id="inspector" (inspHead / inspBody)
-  - Popups .................. id="dlgTemplates", id="dlgKeys"
+  - Login gate .............. id="authGate" (visible from first paint)
+  - Popups .................. id="dlgTemplates", id="dlgAuth", id="dlgKeys"
   - To add NEW button: 1) copy a <button> line here 2) bind it in app.js
     (search BIND: in app.js). Both steps needed or button does nothing.
   - To change TITLE/text: edit directly here, safe, nothing breaks.
@@ -36,6 +37,36 @@
 </head>
 <body>
 
+<!-- MANDATORY LOGIN GATE: visible from first paint, hidden only after
+     /auth/me accepts a stored token. app.js never restores the workspace
+     until this succeeds. -->
+<div id="authGate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <div class="gateCard">
+    <div class="gateBrand">
+      <span class="gateMark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.3l-4 2.5v-8.8Z"/></svg></span>
+      <div><b>Sieve</b><span>no-code data cleaning studio</span></div>
+    </div>
+    <h2 id="gateTitle">Sign in to continue</h2>
+    <p class="gateNote" id="gateNote">Sieve requires an account. Sign in to open your workspace and saved templates.</p>
+    <div class="gateStatus" id="gateStatus" hidden>Checking your saved session…</div>
+    <form class="auth-form" id="gateForm" novalidate>
+      <label class="auth-field">Email
+        <input type="email" id="gateEmail" autocomplete="email" maxlength="254" placeholder="you@example.com" spellcheck="false">
+      </label>
+      <label class="auth-field">Password
+        <input type="password" id="gatePassword" autocomplete="current-password" maxlength="128" placeholder="Your password">
+      </label>
+      <div class="auth-error" id="gateError" hidden></div>
+      <button class="btn primary auth-submit" id="btnGateSubmit" type="submit">Sign in</button>
+    </form>
+    <div class="auth-switch"><span id="gateSwitchText">New to Sieve?</span> <button type="button" class="linkbtn" id="btnGateSwitch">Create an account</button></div>
+    <div class="gateBackend">
+      <span>Backend: <b id="gateBackendLabel">not configured</b></span>
+      <button type="button" class="linkbtn" id="btnGateBackend">Set backend URL</button>
+    </div>
+  </div>
+</div>
+
 <header id="topbar">
   <!-- EXAM: TOP BAR — ★ change button text/order here. Each id= is bound in app.js (Ctrl+F BIND:) and painted in styles.css #topbar. Safe to reorder. -->
   <div class="brand">
@@ -47,6 +78,7 @@
   <button class="btn ghost" id="btnInspector" title="Inspector" aria-controls="inspector" aria-expanded="true"></button>
   <div class="top-actions">
     <div class="dschip" id="dsChip"></div>
+    <button class="btn ghost acctbtn" id="btnAccount" title="Sign in or create an account"></button>
     <button class="btn ghost" id="btnBackend" title="Backend API status — click to configure (empty = local-only)"></button>
     <span class="savechip" id="saveChip" title="Your dataset and pipeline are stored in this browser only">autosaves locally</span>
     <button class="btn ghost" id="btnSamples"></button>
@@ -163,6 +195,21 @@
   <div class="dlg-f">
     <button class="btn sm primary" id="btnOkTemplates">Done</button>
   </div>
+</dialog>
+
+<dialog id="dlgAuth" aria-label="Account">
+  <div class="dlg-h"><b id="authTitle">Your account</b><button class="navb" id="btnCloseAuth" aria-label="Close">✕</button></div>
+  <div class="dlg-b">
+    <div class="auth-account">
+      <span class="auth-avatar" id="authAvatar">?</span>
+      <div class="auth-who">
+        <b id="authEmail"></b>
+        <span>Templates you save are private to this account. Datasets are never saved to your account.</span>
+      </div>
+    </div>
+    <button class="btn danger auth-submit" id="btnSignOut" type="button">Sign out</button>
+  </div>
+  <div class="dlg-f"><button class="btn sm" id="btnOkAuth">Done</button></div>
 </dialog>
 
 <dialog id="dlgKeys" aria-label="Keyboard shortcuts">

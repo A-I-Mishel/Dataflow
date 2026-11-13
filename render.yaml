@@ -11,7 +11,9 @@ services:
     # memory (see backend/session_store.py). Any --workers > 1, autoscale
     # replica, or second instance shards sessions (upload on A → 404 on B).
     # Migrate to a shared store before scaling; see README.
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    # --proxy-headers trusts Render's reverse proxy so rate limits key on the
+    # real client IP (otherwise every visitor shares the proxy's bucket).
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips="*"
     healthCheckPath: /health
     envVars:
       - key: FRONTEND_URLS
@@ -20,18 +22,19 @@ services:
         # slash) or browsers block the API.
         value: https://dataflow-cleaner.vercel.app
       - key: PIPELINES_READ_ONLY
-        # Shared templates are user-facing now (Saved button in the app):
-        # listing/reading is open to all, save/delete allowed. Flip back to
-        # "true" if template vandalism ever appears.
+        # Account-scoped templates are user-facing (Saved button): signed-in
+        # users may save/delete their own. Flip to "true" to freeze the
+        # library while keeping reads open.
         value: "false"
-      # Uncomment the DATABASE_URL block below together with the database
-      # below to keep saved pipelines across sleeps (free Postgres expires
-      # after 90 days; without it the app uses SQLite on ephemeral disk).
-      # - key: DATABASE_URL
-      #   fromDatabase:
-      #     name: dataflow-db
-      #     property: connectionString
-
-#databases:
-#  - name: dataflow-db
-#    plan: free
+      # Neon PostgreSQL connection string, pasted in the Render dashboard
+      # (Environment -> DATABASE_URL). `sync: false` makes Render prompt for
+      # it instead of storing the secret in this file.
+      #
+      # Why Neon and not Render Free Postgres: Render free databases expire
+      # 30 days after creation; Neon's free plan does not. Never deploy
+      # mandatory login on a database that is scheduled to disappear.
+      #
+      # Expected shape:
+      #   postgresql://USER:PASSWORD@HOST/DB?sslmode=require
+      - key: DATABASE_URL
+        sync: false

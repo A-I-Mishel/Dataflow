@@ -12,6 +12,16 @@ venv/
 # Runtime data (recreated automatically)
 app.db
 backend/app.db
+backend/test*.db
+backend/*-test*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local secrets / environment
+.env
+.env.*
+!.env.example
 
 # Logs
 *.log

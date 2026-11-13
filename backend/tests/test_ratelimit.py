@@ -29,6 +29,8 @@ def test_bucket_selection() -> None:
     assert bucket_for("/health") == "default"
     assert limit_for("/upload") == (30, 60)
     assert limit_for("/execute") == (60, 60)
+    assert limit_for("/auth/login") == (20, 60)
+    assert limit_for("/auth/signup") == (10, 60)
     assert limit_for("/pipelines") == (300, 60)
 
 

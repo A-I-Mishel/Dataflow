@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+import auth
 import crud
 from database import Base, SessionLocal, engine, get_db
 from engine import (
@@ -41,7 +42,7 @@ from models import (
     ProfileResponse,
     UploadResponse,
 )
-from models_db import SavedPipeline
+from models_db import SavedPipeline, User
 from profiler import profile_dataframe
 from sanitize import dtypes_dict as _dtypes_dict
 from sanitize import missing_dict as _missing_dict
@@ -71,12 +72,12 @@ logger = logging.getLogger(__name__)
 # Create SQLite tables on import so they exist under uvicorn, TestClient,
 # and pytest alike (lifespan/startup hooks do not run for bare TestClient).
 Base.metadata.create_all(bind=engine)
-# Upgrade pre-owner databases in place (no-op when already applied).
+# Upgrade pre-account databases in place (no-op when already applied).
 with SessionLocal() as _upgrade_db:
     try:
-        crud.ensure_owner_column(_upgrade_db)
+        crud.ensure_pipeline_schema(_upgrade_db)
     except Exception:
-        logger.warning("owner-column upgrade skipped", exc_info=True)
+        logger.warning("pipeline-schema upgrade skipped", exc_info=True)
 # Telemetry retention: session metadata and execution logs accumulate one
 # row per upload/run with no other cleanup. Purge at boot (workers restart
 # often on free-tier hosting, so this runs frequently enough) instead of
@@ -86,6 +87,10 @@ with SessionLocal() as _purge_db:
         crud.purge_old_records(_purge_db)
     except Exception:
         logger.warning("telemetry purge skipped", exc_info=True)
+    try:
+        auth.purge_expired_sessions(_purge_db)
+    except Exception:
+        logger.warning("login-session purge skipped", exc_info=True)
 
 MAX_UPLOAD_SIZE_BYTES: int = 200 * 1024 * 1024
 UPLOAD_CHUNK_SIZE_BYTES: int = 1024 * 1024
@@ -125,6 +130,36 @@ class PipelineDetail(BaseModel):
 
 class DeleteResult(BaseModel):
     message: str
+
+
+class AuthRequest(BaseModel):
+    email: str = Field(max_length=254)
+    # Hashing caps real passwords at 128 chars in auth.validate_password;
+    # this outer bound only stops absurd payloads from reaching scrypt.
+    password: str = Field(max_length=1024)
+
+
+class AuthUser(BaseModel):
+    id: str
+    email: str
+    created_at: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: AuthUser
+
+
+class AuthMeResponse(BaseModel):
+    user: AuthUser
+
+
+def _auth_user(user: User) -> AuthUser:
+    return AuthUser(
+        id=user.id,
+        email=user.email,
+        created_at=user.created_at.isoformat() if user.created_at else "",
+    )
 
 
 def _pipeline_created_at(row: SavedPipeline) -> str:
@@ -187,7 +222,7 @@ app.add_middleware(
     allow_origins=ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "DELETE"],
-    allow_headers=["Content-Type", "X-Session-Id", "X-Api-Key"],
+    allow_headers=["Content-Type", "Authorization", "X-Session-Id", "X-Api-Key"],
 )
 
 
@@ -195,15 +230,57 @@ app.add_middleware(
 # without importing the FastAPI app module.
 
 
-def _storage_key(api_key: Optional[str], session_id: str) -> str:
-    namespace: str = api_key.strip() if api_key and api_key.strip() else "default"
-    return f"{namespace}:{session_id}"
+def _bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    scheme, sep, token = authorization.partition(" ")
+    if not sep or scheme.lower() != "bearer":
+        return None
+    cleaned: str = token.strip()
+    return cleaned or None
 
 
-def _owner(api_key: Optional[str]) -> str:
-    """API-key namespace owning saved pipelines. Same rule as _storage_key
-    so data-plane and pipeline-plane isolation agree."""
-    return api_key.strip() if api_key and api_key.strip() else "default"
+def require_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    """Mandatory account gate for every data/pipeline endpoint.
+
+    Missing, malformed, expired, or revoked tokens all answer 401 with the
+    same shape so the browser can return to the sign-in screen. The old
+    X-API-Key / anonymous fallbacks are deliberately gone: no account means
+    no data plane.
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Sign in required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = _bearer_token(authorization)
+    if token is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user: Optional[User] = auth.resolve_token(db, token)
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Your session expired — please sign in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def _owner(user: User) -> str:
+    """Every uploaded session and saved pipeline lives under user:<id>."""
+    return f"user:{user.id}"
+
+
+def _storage_key(user: User, session_id: str) -> str:
+    return f"{_owner(user)}:{session_id}"
 
 
 def _unlink_upload_tmp(path: str) -> None:
@@ -503,6 +580,67 @@ def _handle_large_upload(
     )
 
 
+# ROUTE GROUP: accounts — signup/login/logout/me. Passwords are scrypt
+# hashes; tokens are random and stored only as SHA-256 digests. Every data
+# route below requires one of these tokens: the app has no anonymous mode.
+@app.post("/auth/signup", response_model=AuthResponse, status_code=201)
+def signup(payload: AuthRequest, db: Session = Depends(get_db)) -> AuthResponse:
+    email: str = auth.normalize_email(payload.email)
+    problem: str = auth.email_error(email) or auth.validate_password(payload.password)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
+    if crud.get_user_by_email(db, email) is not None:
+        raise HTTPException(
+            status_code=409, detail="An account with this email already exists"
+        )
+    try:
+        user: User = crud.create_user(db, email, auth.hash_password(payload.password))
+    except IntegrityError:
+        # Concurrent signup for the same address: the unique index is the
+        # final arbiter, so report the same friendly 409, never a 500.
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="An account with this email already exists"
+        ) from None
+    auth.purge_expired_sessions(db)
+    token: str = auth.issue_token(db, user)
+    return AuthResponse(token=token, user=_auth_user(user))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(payload: AuthRequest, db: Session = Depends(get_db)) -> AuthResponse:
+    email: str = auth.normalize_email(payload.email)
+    user: Optional[User] = crud.get_user_by_email(db, email)
+    # verify_login also burns the dummy scrypt hash for unknown emails so
+    # account existence cannot be inferred from response time.
+    if not auth.verify_login(payload.password, user):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    assert user is not None
+    auth.purge_expired_sessions(db)
+    token: str = auth.issue_token(db, user)
+    return AuthResponse(token=token, user=_auth_user(user))
+
+
+@app.post("/auth/logout", response_model=DeleteResult)
+def logout(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> DeleteResult:
+    # Idempotent: signing out with an already-expired token still succeeds
+    # so the browser can always clear its local copy.
+    auth.revoke_token(db, _bearer_token(authorization))
+    return DeleteResult(message="Signed out")
+
+
+@app.get("/auth/me", response_model=AuthMeResponse)
+def me(user: User = Depends(require_user)) -> AuthMeResponse:
+    return AuthMeResponse(user=_auth_user(user))
+
+
 # ROUTE GROUP: data in/out — ★ CHANGE HERE for upload limits/errors.
 # upload: CSV/XLSX -> session (RAM or disk if > threshold for CSV). 413 if >200MB. Returns session_id + 5-row preview.
 @app.post("/upload", response_model=UploadResponse)
@@ -510,7 +648,7 @@ async def upload_csv(
     request: Request,
     file: UploadFile = File(...),
     x_session_id: Optional[str] = Header(default=None, alias="x-session-id"),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ) -> UploadResponse:
     evict_old_sessions()
@@ -524,7 +662,7 @@ async def upload_csv(
             pass
 
     session_id: str = x_session_id.strip() if x_session_id and x_session_id.strip() else uuid.uuid4().hex
-    key: str = _storage_key(x_api_key, session_id)
+    key: str = _storage_key(user, session_id)
     # A retried upload under the same session id must not orphan a temp file.
     discard_large_session(key)
 
@@ -591,11 +729,11 @@ async def upload_csv(
 @app.post("/execute", response_model=ExecuteResponse)
 def execute(
     request: ExecuteRequest,
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ) -> ExecuteResponse:
     evict_old_sessions()
-    key: str = _storage_key(x_api_key, request.session_id)
+    key: str = _storage_key(user, request.session_id)
     result: pd.DataFrame
     intermediates: List[NodePreview] = []
     if is_large_session(key):
@@ -646,10 +784,10 @@ def execute(
 @app.post("/profile", response_model=ProfileResponse)
 def profile(
     request: ProfileRequest,
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    user: User = Depends(require_user),
 ) -> ProfileResponse:
     evict_old_sessions()
-    key: str = _storage_key(x_api_key, request.session_id)
+    key: str = _storage_key(user, request.session_id)
     if is_large_session(key):
         # Profiling 200MB row-by-row would OOM; profile the stored preview
         # but report the true row count. Column stats are estimates.
@@ -664,7 +802,9 @@ def profile(
 
 # ROUTE: /generate — ★ sessionless by design (works after session expiry). Replays node configs on dummy frame via generator.py.
 @app.post("/generate", response_model=GenerateResponse)
-def generate(request: ExecuteRequest) -> GenerateResponse:
+def generate(
+    request: ExecuteRequest, _user: User = Depends(require_user)
+) -> GenerateResponse:
     # Sessionless by design: code generation only replays node configs
     # against a dummy frame and never touches uploaded data, so an expired
     # session must not block exporting code after a successful run.
@@ -686,10 +826,10 @@ def download(
     session_id: str,
     bom: bool = False,
     format: Optional[str] = Query(default=None),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    user: User = Depends(require_user),
 ):
     evict_old_sessions()
-    df: pd.DataFrame = get_result(_storage_key(x_api_key, session_id))
+    df: pd.DataFrame = get_result(_storage_key(user, session_id))
     logger.info("Download result for session %s shape %s", session_id, df.shape)
     # Neutralize spreadsheet-formula cells (=HYPERLINK(...) etc.) so the
     # download cannot execute code when opened in Excel/Sheets.
@@ -733,12 +873,13 @@ def _with_bom(chunks: Iterator[str]) -> Iterator[bytes]:
 
 
 def _pipelines_read_only() -> bool:
-    """True when the deployment disables shared-template mutations.
+    """True when the deployment disables template mutations.
 
-    Local default is writable. Production sets PIPELINES_READ_ONLY=true
-    (see render.yaml): listing/reading stays open (no PII in templates),
-    but anonymous save/delete — i.e. vandalism — is refused with 403.
-    Read at request time so tests can toggle it via monkeypatch.
+    Local default is writable. Setting PIPELINES_READ_ONLY=true keeps
+    listing/reading open (no PII in templates) while save/delete return
+    403, e.g. to freeze a library around a demo. render.yaml leaves it
+    false so signed-in users manage their own templates. Read at request
+    time so tests can toggle it via monkeypatch.
     """
     return (os.environ.get("PIPELINES_READ_ONLY") or "").strip().lower() in (
         "1",
@@ -758,12 +899,12 @@ def _require_pipelines_writable() -> None:
 @app.post("/pipelines/save", response_model=PipelineSummary)
 def save_pipeline(
     payload: PipelineSaveRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> PipelineSummary:
     _require_pipelines_writable()
     evict_old_sessions()
-    owner: str = _owner(x_api_key)
+    owner: str = _owner(user)
     name: str = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Pipeline name must not be empty")
@@ -774,9 +915,8 @@ def save_pipeline(
     try:
         row: SavedPipeline = crud.create_pipeline(db, name, payload.nodes, payload.edges, owner)
     except IntegrityError:
-        # `name` stays globally unique at the DB level (see models_db), so a
-        # second namespace reusing the name trips the constraint even though
-        # the per-owner pre-check passed. Report the same 400, never a 500.
+        # Two concurrent saves for the same (owner, name) can both pass the
+        # pre-check; the composite UNIQUE constraint is the final arbiter.
         db.rollback()
         raise HTTPException(
             status_code=400, detail=f"A pipeline named '{name}' already exists"
@@ -788,11 +928,11 @@ def save_pipeline(
 
 @app.get("/pipelines", response_model=List[PipelineSummary])
 def list_pipelines(
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> List[PipelineSummary]:
     evict_old_sessions()
-    rows: List[SavedPipeline] = crud.get_pipelines(db, _owner(x_api_key))
+    rows: List[SavedPipeline] = crud.get_pipelines(db, _owner(user))
     return [
         PipelineSummary(id=row.id, name=row.name, created_at=_pipeline_created_at(row))
         for row in rows
@@ -802,13 +942,13 @@ def list_pipelines(
 @app.get("/pipelines/{pipeline_id}", response_model=PipelineDetail)
 def get_pipeline(
     pipeline_id: str,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> PipelineDetail:
     evict_old_sessions()
-    # Scoped by owner: another key's id reads as 404, never 403, so ids
-    # cannot be probed for existence across namespaces.
-    row = crud.get_pipeline(db, pipeline_id, _owner(x_api_key))
+    # Scoped by owner: another account's id reads as 404, never 403, so
+    # ids cannot be probed for existence across accounts.
+    row = crud.get_pipeline(db, pipeline_id, _owner(user))
     if row is None:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     try:
@@ -830,12 +970,12 @@ def get_pipeline(
 @app.delete("/pipelines/{pipeline_id}", response_model=DeleteResult)
 def delete_pipeline(
     pipeline_id: str,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> DeleteResult:
     _require_pipelines_writable()
     evict_old_sessions()
-    deleted: int = crud.delete_pipeline(db, pipeline_id, _owner(x_api_key))
+    deleted: int = crud.delete_pipeline(db, pipeline_id, _owner(user))
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     return DeleteResult(message="Deleted")

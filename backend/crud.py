@@ -1,5 +1,5 @@
 """FILE: backend/crud.py
-PURPOSE: DB reads/writes for saved pipelines + logs.
+PURPOSE: DB reads/writes for users, auth sessions, saved pipelines + logs.
 HOW IT FITS: main.py -> crud.create/get/list/log. Stores nodes_json/edges_json blobs, owner-scoped.
 WHERE TO EDIT: To add query: copy one func, keep owner filter or users see each other data.
 """
@@ -10,10 +10,72 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from models_db import ExecutionLog, SavedPipeline, SessionMeta
+from models_db import AuthSession, ExecutionLog, SavedPipeline, SessionMeta, User
 
 # Any is unavoidable here: pipeline nodes/edges are arbitrary JSON blobs
 # (ids, types, configs, positions) that must round-trip byte-identically.
+
+
+def create_user(db: Session, email: str, password_hash: str) -> User:
+    row: User = User(
+        id=str(uuid4()),
+        email=email,
+        password_hash=password_hash,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_user(db: Session, user_id: str) -> Optional[User]:
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    return db.query(User).filter(User.email == email).first()
+
+
+def create_auth_session(
+    db: Session,
+    token_hash: str,
+    user_id: str,
+    created_at: datetime,
+    expires_at: datetime,
+) -> AuthSession:
+    row: AuthSession = AuthSession(
+        token_hash=token_hash,
+        user_id=user_id,
+        created_at=created_at,
+        expires_at=expires_at,
+    )
+    db.add(row)
+    db.commit()
+    return row
+
+
+def get_auth_session(db: Session, token_hash: str) -> Optional[AuthSession]:
+    return db.query(AuthSession).filter(AuthSession.token_hash == token_hash).first()
+
+
+def delete_auth_session(db: Session, token_hash: str) -> int:
+    deleted: int = (
+        db.query(AuthSession)
+        .filter(AuthSession.token_hash == token_hash)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
+
+
+def delete_expired_auth_sessions(db: Session, cutoff: datetime) -> int:
+    deleted: int = (
+        db.query(AuthSession)
+        .filter(AuthSession.expires_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
 
 
 def create_pipeline(
@@ -73,12 +135,20 @@ def delete_pipeline(db: Session, pipeline_id: str, owner: str = "default") -> in
     return deleted
 
 
-def ensure_owner_column(db: Session) -> None:
-    """Add SavedPipeline.owner to databases created before the column existed.
+def ensure_pipeline_schema(db: Session) -> None:
+    """Upgrade pre-account SQLite databases in place.
 
-    Fresh databases get it from create_all; this ALTER covers existing
-    app.db files (including the on-disk dev DB). Backfills 'default'.
-    No-op on Postgres (column exists) and when already applied.
+    Two historical shapes need fixing:
+
+    1. Tables created before the `owner` column existed get it added and
+       backfilled with 'default' (those rows were anonymous/test data).
+    2. Tables whose `name` column is globally UNIQUE get rebuilt with a
+       (owner, name) UNIQUE constraint, so two accounts may reuse a template
+       name. A fresh database already has the new shape, and SQLAlchemy's
+       create_all never alters an existing table, hence the manual rebuild.
+
+    Postgres uses Alembic-less create_all too, but production is a fresh Neon
+    database; this helper is a no-op on non-SQLite dialects.
     """
     from sqlalchemy import text
 
@@ -89,6 +159,61 @@ def ensure_owner_column(db: Session) -> None:
         db.execute(text("ALTER TABLE saved_pipelines ADD COLUMN owner VARCHAR DEFAULT 'default'"))
         db.execute(text("UPDATE saved_pipelines SET owner = 'default' WHERE owner IS NULL"))
         db.commit()
+
+    legacy_name_unique: bool = False
+    for row in db.execute(text("PRAGMA index_list(saved_pipelines)")).fetchall():
+        # (seq, index_name, is_unique, origin, partial)
+        index_name, is_unique = row[1], row[2]
+        if not is_unique:
+            continue
+        indexed_cols = [
+            info[2] for info in db.execute(text(f'PRAGMA index_info("{index_name}")'))
+        ]
+        if indexed_cols == ["name"]:
+            legacy_name_unique = True
+            break
+
+    if not legacy_name_unique:
+        return
+
+    # SQLite cannot DROP a constraint; rebuild the small metadata table.
+    # Clear a leftover from a previously interrupted migration first.
+    db.execute(text("DROP TABLE IF EXISTS saved_pipelines_new"))
+    db.execute(
+        text(
+            """
+            CREATE TABLE saved_pipelines_new (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                name VARCHAR NOT NULL,
+                nodes_json TEXT NOT NULL,
+                edges_json TEXT NOT NULL,
+                created_at DATETIME,
+                owner VARCHAR NOT NULL DEFAULT 'default',
+                CONSTRAINT uq_saved_pipelines_owner_name UNIQUE (owner, name)
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            INSERT INTO saved_pipelines_new
+                (id, name, nodes_json, edges_json, created_at, owner)
+            SELECT id, name, nodes_json, edges_json, created_at,
+                   COALESCE(owner, 'default')
+            FROM saved_pipelines
+            """
+        )
+    )
+    db.execute(text("DROP TABLE saved_pipelines"))
+    db.execute(text("ALTER TABLE saved_pipelines_new RENAME TO saved_pipelines"))
+    db.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_saved_pipelines_owner "
+            "ON saved_pipelines (owner)"
+        )
+    )
+    db.commit()
 
 
 def log_execution(

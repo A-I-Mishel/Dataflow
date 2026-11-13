@@ -34,7 +34,8 @@ def test_large_upload_execute_profile_generate_download(
     assert body["columns"] == ["A", "B", "C"]
     assert body["missing_values"] == {"A": 0, "B": 1, "C": 1}
     sid: str = body["session_id"]
-    assert f"default:{sid}" in session_store.large_files
+    # Sessions live under the signed-in account namespace (user:<id>:sid).
+    assert any(key.endswith(f":{sid}") for key in session_store.large_files)
 
     ex = client.post(
         "/execute",
@@ -159,7 +160,10 @@ def test_large_session_eviction_unlinks_temp_file(
     _force_large_path(monkeypatch)
     up = client.post("/upload", files={"file": ("big.csv", CSV_TEXT, "text/csv")})
     assert up.status_code == 200
-    key: str = f"default:{up.json()['session_id']}"
+    sid: str = up.json()["session_id"]
+    key: str = next(
+        key for key in session_store.large_files if key.endswith(f":{sid}")
+    )
     _stored_at, entry = session_store.large_files[key]
     assert os.path.exists(entry.path)
     session_store.large_files[key] = (datetime(2000, 1, 1), entry)

@@ -18,6 +18,15 @@ def test_blank_falls_back_to_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
     assert resolve_database_url() == "sqlite:///./app.db"
 
 
+def test_render_refuses_ephemeral_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Render's disk is ephemeral; booting there without a real database would
+    # silently erase every account on the next restart.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    with pytest.raises(RuntimeError, match="DATABASE_URL is required"):
+        resolve_database_url()
+
+
 def test_postgres_scheme_fixed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@host:5432/db")
     assert resolve_database_url() == "postgresql://user:pass@host:5432/db"

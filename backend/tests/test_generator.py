@@ -4,17 +4,20 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
+from uuid import uuid4
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
 from fastapi.testclient import TestClient
 
+from database import SessionLocal
 from engine import execute_pipeline
 from generator import generate_script
 from main import app
 from models import NodeConfig, PipelineNode
+from models_db import AuthSession, User
 
 client = TestClient(app)
 
@@ -168,25 +171,46 @@ def test_download_endpoint() -> None:
     pd.testing.assert_frame_equal(parsed, expected, check_dtype=False)
 
 
+def _signup(prefix: str) -> Dict[str, Any]:
+    email = f"{prefix}-{uuid4().hex[:10]}@example.test"
+    res = client.post(
+        "/auth/signup", json={"email": email, "password": "Sieve-pass-123"}
+    )
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
+def _cleanup(user: Dict[str, Any]) -> None:
+    with SessionLocal() as db:
+        user_id = user["user"]["id"]
+        db.query(AuthSession).filter(AuthSession.user_id == user_id).delete()
+        db.query(User).filter(User.id == user_id).delete()
+        db.commit()
+
+
 def test_session_isolation() -> None:
-    upload = client.post(
-        "/upload",
-        files={"file": ("d.csv", "X\n1\n", "text/csv")},
-        headers={"X-API-Key": "browser-a"},
-    )
-    assert upload.status_code == 200
-    session_id: str = upload.json()["session_id"]
-    executed = client.post(
-        "/execute",
-        json={"session_id": session_id, "nodes": [], "edges": []},
-        headers={"X-API-Key": "browser-a"},
-    )
-    assert executed.status_code == 200
-    same_key = client.get(
-        f"/download/{session_id}", headers={"X-API-Key": "browser-a"}
-    )
-    other_key = client.get(
-        f"/download/{session_id}", headers={"X-API-Key": "browser-b"}
-    )
-    assert same_key.status_code == 200
-    assert other_key.status_code == 404
+    a = _signup("session-a")
+    b = _signup("session-b")
+    try:
+        headers_a = {"Authorization": f"Bearer {a['token']}"}
+        headers_b = {"Authorization": f"Bearer {b['token']}"}
+        upload = client.post(
+            "/upload",
+            files={"file": ("d.csv", "X\n1\n", "text/csv")},
+            headers=headers_a,
+        )
+        assert upload.status_code == 200
+        session_id: str = upload.json()["session_id"]
+        executed = client.post(
+            "/execute",
+            json={"session_id": session_id, "nodes": [], "edges": []},
+            headers=headers_a,
+        )
+        assert executed.status_code == 200
+        same_user = client.get(f"/download/{session_id}", headers=headers_a)
+        other_user = client.get(f"/download/{session_id}", headers=headers_b)
+        assert same_user.status_code == 200
+        assert other_user.status_code == 404
+    finally:
+        _cleanup(a)
+        _cleanup(b)

@@ -1,11 +1,11 @@
-# Sieve — data-cleaning frontend (local-first + optional backend check)
+# Sieve - data-cleaning frontend (local engine + mandatory accounts)
 
 Static app, no build step. ES modules require http(s) — open via any
 static server, not `file://` (module CORS), e.g. `npx serve .`.
 
-Hybrid mode: the local engine is always the source of truth. When a
-backend URL is configured (topbar `Local-only` button, `?api=<url>`, or
-`window.SIEVE_API_URL`), uploads are mirrored to `POST /upload` and every
+The local engine is always the source of truth. The backend URL
+(topbar button, `?api=<url>`, or `window.SIEVE_API_URL`) is required for
+login; once signed in, uploads are mirrored to `POST /upload` and every
 run is additionally verified with `POST /execute` in the background.
 Agreement/divergence surfaces as toasts; remote failures never block local
 results. CSP allows backend calls (`connect-src http: https:`).
@@ -21,7 +21,24 @@ URL. Security headers live in `vercel.json`; unit tests are excluded from
 deploys via `.vercelignore`.
 
 Per-browser overrides: topbar backend button (localStorage) and
-`?api=<url>` beat `config.js`; clearing both runs local-only.
+`?api=<url>` beat `config.js`. A backend is required to sign in, so
+clearing it leaves the login gate asking for a URL.
+
+## Accounts (mandatory)
+
+The login gate covers the app from first paint; the workspace is restored
+only after `GET /auth/me` accepts the stored token. The gate handles both
+sign in and account creation. Tokens are scoped per backend base in
+localStorage and sent as `Authorization: Bearer …`; a 401 clears the stale
+token and returns the user to the gate.
+
+Signed-in templates are private to the account. Browser persistence is
+namespaced per account (`sieve.pipeline.v2.u.<id>` and IndexedDB
+`dataset.u.<id>`), so two accounts on one laptop do not share a dataset or
+draft pipeline. The cleaning engine still runs entirely in the browser;
+datasets are never stored in the account database, though a connected
+backend receives a temporary copy for pandas verification. A backend is
+required to sign in — there is no anonymous local-only mode.
 
 ## Analyze (profiling)
 
@@ -56,7 +73,8 @@ corpus in `backend/tests/test_quality.py`.
 - `engine.js` — pure engine (`EngineFactory`, `py`); imports cleanly in
   node, stringifies into the Web Worker unchanged
 - `api.js` — FastAPI bridge (`getApiBase`, `apiUpload`, `apiExecute`,
-  `sieveToBackend`); pure translator, zero DOM deps
+  `apiLogin`/`apiSignup`/`apiLogout`, `sieveToBackend`); pure translator,
+  zero DOM deps
 - `app.js` — state, canvas, inspector, preview, exports, boot
 - `tests/parity-run.mjs` — backend parity runner (dev only, excluded
   from deploys via `.vercelignore`)
@@ -114,9 +132,9 @@ to remove one. Templates store steps only — never datasets — and applying
 one to a different dataset surfaces the usual per-node errors for columns
 that do not exist (undo restores the previous pipeline).
 
-Templates need a backend (local-only mode explains itself in the dialog)
-and live in its database: on free-tier hosting they reset when the service
-sleeps. `PIPELINES_READ_ONLY=true` turns the library read-only.
+Templates live in the backend database, private to the signed-in account
+(Neon PostgreSQL in production, so they survive Render restarts).
+`PIPELINES_READ_ONLY=true` turns the library read-only.
 
 ## Cutover status
 
