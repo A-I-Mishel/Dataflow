@@ -1,4 +1,4 @@
-# Sieve — No-Code Data Cleaning Studio
+# Data Cleaner — No-Code Data Cleaning Studio
 
 Visual data-cleaning pipelines in your browser: build steps on a canvas,
 preview every step, export a clean CSV/XLSX + the pandas script that reproduces
@@ -91,7 +91,7 @@ database would lose every account on the next sleep or deploy.
 
 ## Tests
 
-- Sieve unit tests: `node --test tests/engine.test.mjs tests/api.test.mjs`
+- Frontend unit tests: `node --test tests/engine.test.mjs tests/api.test.mjs`
   from `frontend-sieve/`.
 - Backend: `pytest tests/` from `backend/` (includes
   `test_sieve_parity.py`, cell-for-cell local-vs-pandas checks, and

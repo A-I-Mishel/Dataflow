@@ -26,9 +26,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light">
-<meta name="description" content="Sieve — build visual data-cleaning pipelines in your browser, preview every step, export clean CSV/XLSX and the pandas code that reproduces it. 100% local.">
+<meta name="description" content="Data Cleaner — build visual data-cleaning pipelines in your browser, preview every step, export clean CSV/XLSX and the pandas code that reproduces it. 100% local.">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; worker-src blob:; child-src blob:; connect-src http: https:">
-<title>Sieve — No-Code Data Cleaning Studio</title>
+<title>Data Cleaner — No-Code Data Cleaning Studio</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23D9481F' d='M3 4.5h18l-7 8.2v6.3l-4 2.5v-8.8Z'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,10 +44,10 @@
   <div class="gateCard">
     <div class="gateBrand">
       <span class="gateMark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.3l-4 2.5v-8.8Z"/></svg></span>
-      <div><b>Sieve</b><span>no-code data cleaning studio</span></div>
+      <div><b>Data Cleaner</b><span>no-code data cleaning studio</span></div>
     </div>
     <h2 id="gateTitle">Sign in to continue</h2>
-    <p class="gateNote" id="gateNote">Sieve requires an account. Sign in to open your workspace and saved templates.</p>
+    <p class="gateNote" id="gateNote">Data Cleaner requires an account. Sign in to open your workspace and saved templates.</p>
     <div class="gateStatus" id="gateStatus" hidden>Checking your saved session…</div>
     <form class="auth-form" id="gateForm" novalidate>
       <label class="auth-field">Email
@@ -59,7 +59,7 @@
       <div class="auth-error" id="gateError" hidden></div>
       <button class="btn primary auth-submit" id="btnGateSubmit" type="submit">Sign in</button>
     </form>
-    <div class="auth-switch"><span id="gateSwitchText">New to Sieve?</span> <button type="button" class="linkbtn" id="btnGateSwitch">Create an account</button></div>
+    <div class="auth-switch"><span id="gateSwitchText">New to Data Cleaner?</span> <button type="button" class="linkbtn" id="btnGateSwitch">Create an account</button></div>
     <div class="gateBackend">
       <span>Backend: <b id="gateBackendLabel">not configured</b></span>
       <button type="button" class="linkbtn" id="btnGateBackend">Set backend URL</button>
@@ -71,7 +71,7 @@
   <!-- EXAM: TOP BAR — ★ change button text/order here. Each id= is bound in app.js (Ctrl+F BIND:) and painted in styles.css #topbar. Safe to reorder. -->
   <div class="brand">
     <span class="mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.3l-4 2.5v-8.8Z"/></svg></span>
-    <h1>Sieve</h1>
+    <h1>Data Cleaner</h1>
     <span class="tag">— no-code data cleaning studio</span>
   </div>
   <button class="btn ghost" id="btnPalette" title="Operations palette" aria-controls="palette" aria-expanded="true"></button>
@@ -230,7 +230,7 @@
   </div>
 </dialog>
 
-<noscript><div style="padding:40px;font-family:monospace">Sieve needs JavaScript — everything runs locally in your browser.</div></noscript>
+<noscript><div style="padding:40px;font-family:monospace">Data Cleaner needs JavaScript — everything runs locally in your browser.</div></noscript>
 
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="config.js"></script>

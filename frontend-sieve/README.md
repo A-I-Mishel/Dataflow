@@ -1,4 +1,4 @@
-# Sieve - data-cleaning frontend (local engine + mandatory accounts)
+# Data Cleaner - data-cleaning frontend (local engine + mandatory accounts)
 
 Static app, no build step. ES modules require http(s) — open via any
 static server, not `file://` (module CORS), e.g. `npx serve .`.
