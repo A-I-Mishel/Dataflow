@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pandas as pd
+import numpy as np
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -25,6 +26,7 @@ from transforms.extract_date_part import apply_extract_date_part
 from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.fourier_smooth import apply_fourier_smooth
 from transforms.find_invalid import apply_find_invalid
 from transforms.find_replace_pattern import apply_find_replace_pattern
 from transforms.group_rare import apply_group_rare
@@ -788,3 +790,91 @@ def test_log_transform() -> None:
     assert result["v"].isna().tolist()[2:] == [True, True, True]
     with pytest.raises(HTTPException):
         apply_log_transform(df, NodeConfig(columns=["v"], method="ln", on_invalid="error"))
+
+
+def test_fourier_smooth_attenuates_high_frequency() -> None:
+    # Slow wave + strong high-frequency wobble: the low-pass keeps the slow
+    # wave and kills the wobble.
+    t: np.ndarray = np.arange(64)
+    df: pd.DataFrame = pd.DataFrame({"v": np.sin(t / 4.0) + 0.5 * np.sin(t)})
+    result, code = apply_fourier_smooth(
+        df, NodeConfig(columns=["v"], keep=0.25, decimals=6)
+    )
+    _assert_valid_code(code)
+    assert result.shape == (64, 1)
+    assert np.abs(result["v"].to_numpy() - np.sin(t / 4.0)).max() < 0.25
+
+
+def test_fourier_smooth_constant_column_unchanged() -> None:
+    df: pd.DataFrame = pd.DataFrame({"v": [5.0] * 16})
+    result, code = apply_fourier_smooth(df, NodeConfig(columns=["v"], keep=0.25))
+    _assert_valid_code(code)
+    assert result["v"].tolist() == [5.0] * 16
+
+
+def test_fourier_smooth_keep_one_is_identity() -> None:
+    # keep >= 1 caps the bin count at the full half-spectrum: nothing is
+    # zeroed, so the transform inverts to the input (within rounding).
+    vals: List[float] = [1.25, 2.5, 3.75, 4.0, 5.25, 6.5, 7.75, 8.0]
+    df: pd.DataFrame = pd.DataFrame({"v": vals})
+    result, code = apply_fourier_smooth(df, NodeConfig(columns=["v"], keep=1, decimals=6))
+    _assert_valid_code(code)
+    assert result["v"].tolist() == vals
+
+
+def test_fourier_smooth_rejects_missing_and_text() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"v": [1.0, 2.0, None, 4.0, 5.0, 6.0, 7.0, 8.0]}
+    )
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"]))
+    df2: pd.DataFrame = pd.DataFrame(
+        {"v": [1.0, "x", 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
+    )
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df2, NodeConfig(columns=["v"]))
+
+
+def test_fourier_smooth_rejects_unknown_and_missing_columns(
+    sample_df: pd.DataFrame,
+) -> None:
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(sample_df, NodeConfig(columns=["Nope"]))
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(sample_df, NodeConfig())
+
+
+def test_fourier_smooth_rejects_bad_params() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"v": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
+    )
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"], keep=0))
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"], keep=float("inf")))
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"], decimals=-1))
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"], decimals=13))
+
+
+def test_fourier_smooth_needs_four_rows() -> None:
+    df: pd.DataFrame = pd.DataFrame({"v": [1.0, 2.0, 3.0]})
+    with pytest.raises(HTTPException):
+        apply_fourier_smooth(df, NodeConfig(columns=["v"]))
+
+
+def test_fourier_smooth_engine_integration() -> None:
+    df: pd.DataFrame = pd.DataFrame(
+        {"v": [3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0]}
+    )
+    nodes: List[PipelineNode] = [
+        PipelineNode(
+            id="n1",
+            type="fourier-smooth",
+            config=NodeConfig(columns=["v"], keep=0.25),
+        )
+    ]
+    final, _ = execute_pipeline_with_intermediates(df, nodes, [])
+    assert final.shape == (8, 1)
+    assert final["v"].tolist() != df["v"].tolist()  # actually smoothed

@@ -76,7 +76,8 @@ const IC = {
   save:'<path d="M5 4h11l3 3v13H5Z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',
   user:'<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/>',
   logout:'<path d="M13.5 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5h7"/><path d="M12.5 12H21m0 0-3.5-3.5M21 12l-3.5 3.5"/>',
-  question:'<circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.2A2.5 2.5 0 0 1 14.5 10c0 1.6-2.4 2-2.4 3.4M12 16.6v.1"/>'
+  question:'<circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.2A2.5 2.5 0 0 1 14.5 10c0 1.6-2.4 2-2.4 3.4M12 16.6v.1"/>',
+  wave:'<path d="M2.5 12q4.75-9.5 9.5 0t9.5 0"/>'
 };
 function ic(n, s=15){ return `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${IC[n]||''}</svg>`; }
 
@@ -1871,6 +1872,7 @@ function genCode(){
          '"""', '',
          'import pandas as pd');
   if (en.some(n => n.type === 'one-hot')) L.push('import re');
+  if (en.some(n => n.type === 'fourier-smooth')) L.push('import numpy as np');
   const isXlsx = /\.xls[xm]$/i.test(d.name || '');
   if (isXlsx) L.push('', `df = pd.read_excel(${py(d.name)}, sheet_name=0, engine="openpyxl")`, '');
   else L.push('', `df = pd.read_csv(${py(d.name)})`, '');

@@ -322,3 +322,35 @@ describe('apiProfile', () => {
     }
   });
 });
+
+describe('sieveToBackend fourier-smooth', () => {
+  it('maps column/keep/decimals onto the mirrored backend op', () => {
+    const { nodes, edges, skipped } = sieveToBackend(
+      one('fourier-smooth', { column: 'Age', keep: '0.25', decimals: '4' }),
+    );
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes, [
+      { id: 'n1', type: 'fourier-smooth', config: { columns: ['Age'], keep: 0.25, decimals: 4 } },
+    ]);
+    assert.deepEqual(edges, []);
+  });
+  it('blank fields fall back to the backend defaults', () => {
+    const { nodes, skipped } = sieveToBackend(
+      one('fourier-smooth', { column: 'Age', keep: '', decimals: '' }),
+    );
+    assert.equal(skipped.length, 0);
+    assert.deepEqual(nodes[0].config, { columns: ['Age'], keep: 0.25 });
+  });
+  it('skips invalid keep/decimals with a reason instead of guessing', () => {
+    const badKeep = sieveToBackend(one('fourier-smooth', { column: 'Age', keep: '0', decimals: '4' }));
+    assert.equal(badKeep.nodes.length, 0);
+    assert.equal(badKeep.skipped[0].type, 'fourier-smooth');
+    assert.match(badKeep.skipped[0].reason, /positive/);
+    const badDec = sieveToBackend(one('fourier-smooth', { column: 'Age', keep: '0.25', decimals: '13' }));
+    assert.equal(badDec.nodes.length, 0);
+    assert.match(badDec.skipped[0].reason, /decimals/);
+    const noCol = sieveToBackend(one('fourier-smooth', { column: '', keep: '0.25', decimals: '4' }));
+    assert.equal(noCol.nodes.length, 0);
+    assert.match(noCol.skipped[0].reason, /column/);
+  });
+});

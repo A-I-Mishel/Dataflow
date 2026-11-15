@@ -49,6 +49,7 @@ _NODE_TO_IMPORT: Dict[str, Tuple[str, str]] = {
     "remove-special-chars": ("transforms.remove_special_chars", "apply_remove_special_chars"),
     "standardize-categories": ("transforms.standardize_categories", "apply_standardize_categories"),
     "log-transform": ("transforms.log_transform", "apply_log_transform"),
+    "fourier-smooth": ("transforms.fourier_smooth", "apply_fourier_smooth"),
 }
 
 

@@ -375,3 +375,60 @@ def test_parity_wave4_ops() -> None:
         ]
     )
     assert frames_equal(sieve, backend) == []
+
+
+def test_parity_fourier_smooth() -> None:
+    """fourier-smooth, cell-for-cell. The filter drops PerformanceScore's
+    missing rows first (the FFT refuses missing values on both sides), then
+    the low-pass smooth runs. Exact twiddle tables in the JS FFT keep both
+    engines within rounding distance; the step's own decimals rounding makes
+    the comparison deterministic (float summation order differs only in the
+    last ulps — the same boundary as the z-score/log-transform notes above)."""
+    sieve = sieve_run(
+        [
+            {"type": "filter-rows", "params": {"column": "PerformanceScore", "op": ">", "value": "0"}},
+            {"type": "fourier-smooth", "params": {"column": "PerformanceScore", "keep": "0.25", "decimals": "4"}},
+        ]
+    )
+    backend = backend_run(
+        [
+            _node(
+                "n1",
+                "filter-rows",
+                conditions=[{"column": "PerformanceScore", "operator": ">", "value": 0}],
+            ),
+            _node(
+                "n2",
+                "fourier-smooth",
+                columns=["PerformanceScore"],
+                keep=0.25,
+                decimals=4,
+            ),
+        ]
+    )
+    assert frames_equal(sieve, backend) == []
+
+    # Second lock: a different cutoff/rounding combo on the same column.
+    sieve2 = sieve_run(
+        [
+            {"type": "filter-rows", "params": {"column": "PerformanceScore", "op": ">", "value": "0"}},
+            {"type": "fourier-smooth", "params": {"column": "PerformanceScore", "keep": "0.5", "decimals": "4"}},
+        ]
+    )
+    backend2 = backend_run(
+        [
+            _node(
+                "n1",
+                "filter-rows",
+                conditions=[{"column": "PerformanceScore", "operator": ">", "value": 0}],
+            ),
+            _node(
+                "n2",
+                "fourier-smooth",
+                columns=["PerformanceScore"],
+                keep=0.5,
+                decimals=4,
+            ),
+        ]
+    )
+    assert frames_equal(sieve2, backend2) == []

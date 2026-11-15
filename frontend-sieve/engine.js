@@ -371,6 +371,45 @@ function EngineFactory(){
   }
   const sanitizeCol = s => String(s).replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '') || 'col';
 
+  // Iterative radix-2 Cooley–Tukey FFT (in-place, complex), used by the
+  // fourier-smooth op. Pure JS mirror of the numpy rfft/irfft pipeline the
+  // backend runs: twiddles come from a fresh cos/sin table (no recurrence
+  // drift, so both engines stay within rounding distance of each other) and
+  // the inverse conjugates the twiddle, then divides by n.
+  function fftCore(re, im, inverse){
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++){        // bit-reversal permutation
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j |= bit;
+      if (i < j){
+        const tr = re[i]; re[i] = re[j]; re[j] = tr;
+        const ti = im[i]; im[i] = im[j]; im[j] = ti;
+      }
+    }
+    const half = n >> 1;
+    const twr = new Float64Array(half), twi = new Float64Array(half);
+    for (let j = 0; j < half; j++){
+      const ang = 2 * Math.PI * j / n;
+      twr[j] = Math.cos(ang);
+      twi[j] = (inverse ? 1 : -1) * Math.sin(ang);
+    }
+    for (let len = 2; len <= n; len <<= 1){
+      const halfLen = len >> 1, step = n / len;
+      for (let i = 0; i < n; i += len){
+        for (let j = 0; j < halfLen; j++){
+          const t = j * step, wr = twr[t], wi = twi[t];
+          const a = i + j, b = a + halfLen;
+          const vr = re[b] * wr - im[b] * wi;
+          const vi = re[b] * wi + im[b] * wr;
+          re[b] = re[a] - vr; im[b] = im[a] - vi;
+          re[a] += vr; im[a] += vi;
+        }
+      }
+    }
+    if (inverse){ for (let i = 0; i < n; i++){ re[i] /= n; im[i] /= n; } }
+  }
+
   /* ---- operation library: pure (data, params) → new data ----
      ★ EXAM — ADD NEW OPERATION: copy one 'key': {...} block below.
      Each op MUST have: run(d,p)=does it, code(ctx,p,hint)=pandas string, hint()=helper.
@@ -861,6 +900,74 @@ function EngineFactory(){
         const dec = /^\d+$/.test(String(p.decimals ?? '').trim()) ? String(parseInt(p.decimals, 10)) : '2';
         const cs = (p.columns || []).map(py).join(', ');
         return [`df[[${cs}]] = df[[${cs}]].round(${dec})`];
+      }
+    },
+
+    // Fourier Transform = FFT low-pass smoothing: decompose a numeric column
+    // into frequency waves, keep the lowest `keep` fraction of bins, invert.
+    // run() mirrors backend/transforms/fourier_smooth.py exactly — zero-pad
+    // to the next power of two, half-up bin count k = int(keep·half+0.5)
+    // clamped to [2, half], zero bins k..M-k, inverse, round to `decimals`
+    // (rounding makes the JS/numpy float-sum difference disappear).
+    'fourier-smooth': {
+      name:'Fourier Transform', icon:'wave', group:'Numbers', rowStable:true,
+      blurb:'FFT low-pass: strip high-frequency noise from a numeric column',
+      defaults: () => ({ column:'', keep:'0.25', decimals:'4' }),
+      schema: [
+        { k:'column', t:'column', label:'Numeric column' },
+        { k:'keep', t:'text', label:'Frequencies to keep (0–1)', ph:'e.g. 0.25' },
+        { k:'decimals', t:'text', label:'Round result to decimals', ph:'e.g. 4' }
+      ],
+      summary: p => `${p.column || '—'} · keep ${p.keep === '' || p.keep == null ? '0.25' : p.keep} of frequencies → ${p.decimals === '' || p.decimals == null ? '4' : p.decimals} dp`,
+      hint: () => null,
+      run(d, p){
+        if (!p.column) throw new Error('no column selected');
+        const ci = colIdx(d, p.column);
+        const kf = Number(p.keep === '' || p.keep == null ? 0.25 : p.keep);
+        if (!Number.isFinite(kf) || kf <= 0) throw new Error('frequencies to keep must be a positive number (0–1)');
+        const decS = String(p.decimals ?? '').trim();
+        const dec = decS === '' ? 4 : (/^\d+$/.test(decS) ? parseInt(decS, 10) : NaN);
+        if (Number.isNaN(dec) || dec < 0 || dec > 12) throw new Error('decimals must be a whole number between 0 and 12');
+        const n = d.rows.length;
+        if (n < 4) throw new Error('Fourier Transform needs at least 4 rows with values');
+        // strictNum() deliberately rejects what numify() accepts (currency,
+        // thousands) — pandas to_numeric() refuses those too, so both engines
+        // refuse the same inputs and parity holds.
+        const xs = new Float64Array(n);
+        for (let i = 0; i < n; i++){
+          const num = strictNum(d.rows[i][ci], p.column);
+          if (num == null) throw new Error(`"${p.column}" has missing values — run Fill Missing first`);
+          if (!Number.isFinite(num)) throw new Error(`"${p.column}" has non-finite values`);
+          xs[i] = num;
+        }
+        let M = 4; while (M < n) M <<= 1;          // zero-pad to next pow2 (matches np.fft.rfft(n=M))
+        const re = new Float64Array(M), im = new Float64Array(M);
+        re.set(xs);
+        fftCore(re, im, false);
+        // Low-pass: zero full-spectrum bins k..M-k, which is exactly what
+        // S[k:] = 0 on the half-spectrum means after conjugate completion.
+        const halfBins = M / 2 + 1;
+        const k = Math.max(2, Math.min(halfBins, Math.floor(kf * halfBins + 0.5)));
+        for (let j = k; j <= M - k; j++){ re[j] = 0; im[j] = 0; }
+        fftCore(re, im, true);
+        return { columns: d.columns, rows: d.rows.map((r, i) => replaceCell(r, ci, Number(re[i].toFixed(dec)))) };
+      },
+      code: (ctx, p) => {
+        const c = py(p.column);
+        const kf = Number(p.keep === '' || p.keep == null ? 0.25 : p.keep);
+        const keep = (Number.isFinite(kf) && kf > 0) ? String(kf) : '0.25';
+        const decS = String(p.decimals ?? '').trim();
+        const dec = /^\d+$/.test(decS) && parseInt(decS, 10) <= 12 ? String(parseInt(decS, 10)) : '4';
+        return [
+          `_v = df[${c}].to_numpy(dtype=float)`,
+          '_n = len(_v)',
+          '_m = 1 << max(2, (_n - 1).bit_length())',
+          '_half = _m // 2 + 1',
+          `_k = max(2, min(_half, int(${keep} * _half + 0.5)))`,
+          '_s = np.fft.rfft(_v, n=_m)',
+          '_s[_k:] = 0',
+          `df[${c}] = np.round(np.fft.irfft(_s, n=_m)[:_n], ${dec})`
+        ];
       }
     },
 

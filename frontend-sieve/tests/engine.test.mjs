@@ -805,3 +805,80 @@ describe('diffRows', () => {
     assert.deepEqual(E.diffRows(null, out), { affected: null, changed: null });
   });
 });
+
+describe('fourier-smooth', () => {
+  // Slow wave + high-frequency wobble, same fixture as the backend unit test
+  // (test_transforms.py::test_fourier_smooth_attenuates_high_frequency): the
+  // low-pass must keep the slow wave and kill the wobble. Parity with numpy
+  // on real data is locked cell-for-cell by test_parity_fourier_smooth.
+  const N = 64;
+  const mk = (fill) => {
+    const rows = [];
+    for (let i = 0; i < N; i++) rows.push([fill(i)]);
+    return { columns: ['v'], rows };
+  };
+  const smooth = (d, params) => E.runFrom(d, [
+    { type: 'fourier-smooth', enabled: true, params: { column: 'v', keep: '0.25', decimals: '4', ...params } },
+  ]);
+
+  it('attenuates the high-frequency component', () => {
+    const out = smooth(mk((i) => String(Math.sin(i / 4) + 0.5 * Math.sin(i))), { decimals: '6' });
+    assert.equal(out.results[0].err, null);
+    for (let i = 0; i < N; i++){
+      const got = Number(out.outputs[1].rows[i][0]);
+      assert.ok(Math.abs(got - Math.sin(i / 4)) < 0.25, `row ${i}: ${got}`);
+    }
+  });
+  it('keeps row order and column shape (rowStable)', () => {
+    const d = mk((i) => String(Math.sin(i / 4) + 0.5 * Math.sin(i)));
+    const out = smooth(d);
+    assert.equal(out.results[0].err, null);
+    assert.equal(out.outputs[1].rowStable, true);
+    assert.deepEqual(out.outputs[1].columns, ['v']);
+    assert.equal(out.outputs[1].rows.length, N);
+  });
+  it('constant column is unchanged', () => {
+    const out = smooth(mk(() => '5'));
+    assert.equal(out.results[0].err, null);
+    assert.deepEqual(out.outputs[1].rows.map((r) => r[0]), Array(N).fill(5));
+  });
+  it('keep=1 inverts to the input (rounded)', () => {
+    const vals = [];
+    for (let i = 0; i < N; i++) vals.push(1.25 + i * 0.5);
+    const out = smooth(mk((i) => String(vals[i])), { keep: '1', decimals: '6' });
+    assert.equal(out.results[0].err, null);
+    for (let i = 0; i < N; i++){
+      assert.equal(Number(out.outputs[1].rows[i][0]), Number(vals[i].toFixed(6)));
+    }
+  });
+  it('refuses missing values', () => {
+    const d = { columns: ['v'], rows: [['1'], ['2'], [''], ['4'], ['5'], ['6'], ['7'], ['8']] };
+    const out = smooth(d);
+    assert.match(out.results[0].err || '', /missing/);
+  });
+  it('refuses non-numeric values', () => {
+    const d = { columns: ['v'], rows: [['1'], ['abc'], ['3'], ['4'], ['5'], ['6'], ['7'], ['8']] };
+    const out = smooth(d);
+    assert.match(out.results[0].err || '', /non-numeric/);
+  });
+  it('refuses fewer than 4 rows', () => {
+    const d = { columns: ['v'], rows: [['1'], ['2'], ['3']] };
+    const out = smooth(d);
+    assert.match(out.results[0].err || '', /at least 4/);
+  });
+  it('validates keep and decimals', () => {
+    const d = mk((i) => String(i + 1));
+    assert.match(smooth(d, { keep: '0' }).results[0].err || '', /positive/);
+    assert.match(smooth(d, { keep: 'abc' }).results[0].err || '', /positive/);
+    assert.match(smooth(d, { decimals: 'x' }).results[0].err || '', /decimals/);
+    assert.match(smooth(d, { decimals: '13' }).results[0].err || '', /decimals/);
+  });
+  it('exports pandas code that mirrors the step', () => {
+    const lines = E.OPS['fourier-smooth'].code({ columns: ['v'] }, { column: 'v', keep: '0.25', decimals: '4' });
+    const src = lines.join('\n');
+    assert.match(src, /np\.fft\.rfft\(_v, n=_m\)/);
+    assert.match(src, /_s\[_k:\] = 0/);
+    assert.match(src, /np\.round\(np\.fft\.irfft\(_s, n=_m\)\[:_n\], 4\)/);
+    assert.match(src, /int\(0\.25 \* _half \+ 0\.5\)/);
+  });
+});

@@ -25,6 +25,7 @@ from transforms.extract_date_part import apply_extract_date_part
 from transforms.extract_text import apply_extract_text
 from transforms.fill_na import apply_fill_na
 from transforms.filter_rows import apply_filter_rows
+from transforms.fourier_smooth import apply_fourier_smooth
 from transforms.find_invalid import apply_find_invalid
 from transforms.find_replace_pattern import apply_find_replace_pattern
 from transforms.group_rare import apply_group_rare
@@ -78,6 +79,7 @@ _TRANSFORMS: Dict[str, TransformFn] = {
     "remove-special-chars": apply_remove_special_chars,
     "standardize-categories": apply_standardize_categories,
     "log-transform": apply_log_transform,
+    "fourier-smooth": apply_fourier_smooth,
 }
 
 

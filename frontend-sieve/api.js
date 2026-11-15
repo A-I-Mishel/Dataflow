@@ -512,6 +512,21 @@ export function sieveToBackend(sieveNodes) {
       const method = p.method === 'z' ? 'z-score' : p.method === 'minmax' ? 'min-max' : null;
       if (!method) { skipped.push({ type: t, reason: `unknown method "${p.method}"` }); continue; }
       nodes.push({ id: id(), type: 'normalize', config: { columns: [p.column], method } });
+    } else if (t === 'fourier-smooth') {
+      // Fully mirrored backend op (transforms/fourier_smooth.py): the JS FFT
+      // and numpy agree cell-for-cell because the step rounds its own output.
+      if (!need(p.column, 'no column selected')) continue;
+      const kf = Number(p.keep === '' || p.keep == null ? 0.25 : p.keep);
+      if (!Number.isFinite(kf) || kf <= 0) { skipped.push({ type: t, reason: 'frequencies to keep must be a positive number' }); continue; }
+      const decS = String(p.decimals ?? '').trim();
+      if (decS !== '' && !/^\d+$/.test(decS)) { skipped.push({ type: t, reason: 'invalid decimals' }); continue; }
+      const dec = decS === '' ? null : parseInt(decS, 10);
+      if (dec !== null && dec > 12) { skipped.push({ type: t, reason: 'decimals must be ≤ 12' }); continue; }
+      nodes.push({
+        id: id(),
+        type: 'fourier-smooth',
+        config: { columns: [p.column], keep: kf, ...(dec === null ? {} : { decimals: dec }) },
+      });
     } else if (t === 'convert-type' && p.to === 'date') {
       if (!need(p.column, 'no column selected')) continue;
       nodes.push({ id: id(), type: 'parse-date', config: { columns: [p.column], format: 'auto' } });

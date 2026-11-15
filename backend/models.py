@@ -93,6 +93,8 @@ class NodeConfig(BaseModel):
     custom_chars: Optional[str] = None
     # log-transform invalid-input handling ('null' or 'error').
     on_invalid: Optional[str] = None
+    # fourier-smooth: fraction of frequency bins kept (0-1], None = 0.25.
+    keep: Optional[float] = None
 
 
 class PipelineNode(BaseModel):
@@ -127,6 +129,7 @@ class PipelineNode(BaseModel):
         "remove-special-chars",
         "standardize-categories",
         "log-transform",
+        "fourier-smooth",
     ]
     config: NodeConfig
 
