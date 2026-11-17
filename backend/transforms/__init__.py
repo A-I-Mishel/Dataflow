@@ -1,27 +1,9 @@
 """FILE: backend/transforms/__init__.py
-PURPOSE: Re-exports all apply_* so engine.py imports from one place.
-WHERE TO EDIT: To add op: add 1 import + 1 __all__ entry here AND engine.py registry.
+PURPOSE: Package marker for the per-op transform modules.
+HOW IT FITS: engine.py and generator.py import each apply_* directly from its
+own module (e.g. "from transforms.drop_na import apply_drop_na"); there is
+deliberately no re-export hub here.
+WHERE TO EDIT: Nothing. To add an op: create transforms/<op>.py with
+apply_<op>, then register it in engine.py, generator.py, and the OpId
+Literal in models.py.
 """
-from transforms.drop_column import apply_drop_column
-from transforms.drop_duplicates import apply_drop_duplicates
-from transforms.drop_na import apply_drop_na
-from transforms.encode_categorical import apply_encode_categorical
-from transforms.fill_na import apply_fill_na
-from transforms.filter_rows import apply_filter_rows
-from transforms.fourier_smooth import apply_fourier_smooth
-from transforms.normalize import apply_normalize
-from transforms.rename_column import apply_rename_column
-from transforms.sort import apply_sort
-
-__all__: list[str] = [
-    "apply_drop_na",
-    "apply_fill_na",
-    "apply_drop_column",
-    "apply_drop_duplicates",
-    "apply_rename_column",
-    "apply_filter_rows",
-    "apply_normalize",
-    "apply_encode_categorical",
-    "apply_sort",
-    "apply_fourier_smooth",
-]

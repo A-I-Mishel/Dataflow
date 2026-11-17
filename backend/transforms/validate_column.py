@@ -198,10 +198,6 @@ def _rule_code(column: str, check: Dict[str, Any], invalid: int) -> str:
     return f"# unknown rule {rule!r}"
 
 
-def c_present(column: str) -> str:
-    return _present_expr(column)
-
-
 def apply_validate_column(df: pd.DataFrame, config: NodeConfig) -> Tuple[pd.DataFrame, str]:
     cols: Optional[List[str]] = config.columns
     if not cols or len(cols) != 1:

@@ -1,6 +1,6 @@
 """FILE: backend/constants.py
 PURPOSE: Shared constants, breaks circular imports.
-HOW IT FITS: Imported by models + session_store.
+HOW IT FITS: Imported by models + transforms/encode_categorical.
 WHERE TO EDIT: Already documented — skip.
 """
 """Shared backend constants.

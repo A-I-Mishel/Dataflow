@@ -4,7 +4,7 @@ unique per account, so the same template name may exist in both."""
 
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import uuid4
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))

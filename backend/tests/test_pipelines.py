@@ -5,7 +5,6 @@ from uuid import uuid4
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session

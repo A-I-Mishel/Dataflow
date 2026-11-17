@@ -29,4 +29,4 @@ jobs:
         with:
           node-version: "24"
       - run: node --check app.js && node --check api.js && node --check config.js
-      - run: node --test tests/engine.test.mjs tests/api.test.mjs
+      - run: node --test tests/engine.test.mjs tests/api.test.mjs tests/repro-frontend-bugs.mjs

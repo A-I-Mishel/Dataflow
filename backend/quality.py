@@ -1,6 +1,6 @@
 """FILE: backend/quality.py
 PURPOSE: Data-quality score 0-100, bit-identical to frontend engine.js.
-HOW IT FITS: Backend /profile + frontend preview both call same logic (twin contract).
+HOW IT FITS: Never called by endpoints — the runtime implementation is engine.js qualityScore in the browser. This module is the pandas parity twin, locked cell-for-cell by tests/test_quality.py (which drives frontend-sieve/tests/quality-run.mjs).
 WHERE TO EDIT: If changing score: change BOTH here and frontend engine.js qualityOf() or parity test fails.
 """
 """Dataset quality score (0-100), twinned cell-for-cell with the Sieve engine.

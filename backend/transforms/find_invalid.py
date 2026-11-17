@@ -6,7 +6,7 @@ WHERE TO EDIT (EXAM/BEGINNER): change the pandas line near the end + the f-strin
 EXAMPLE: df before/after + code "df = df.<op>(...)" — keep both in sync.
 """
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 from fastapi import HTTPException
